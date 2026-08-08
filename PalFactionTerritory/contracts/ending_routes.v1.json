@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "1.0.0",
+  "apiVersion": "1.0.0",
+  "contentPackSchema": "pwft.ending-routes.pack.v1",
+  "contentStatus": "mechanics_only_route_conditions_text_and_rewards_owned_by_player_content",
+  "storyContentIncluded": false,
+  "routeSlots": [
+    "pwft.ending.destroyer",
+    "pwft.ending.invader",
+    "pwft.ending.conqueror"
+  ],
+  "conditionKinds": [
+    "all_human_rank",
+    "all_pal_relation",
+    "progression_gate",
+    "city_status",
+    "faction_survival",
+    "unique_pal_owner",
+    "flag_equals"
+  ],
+  "effectKinds": [
+    "set_title",
+    "set_world_disposition",
+    "set_flag",
+    "set_faction_disposition",
+    "city_transition"
+  ],
+  "statePolicy": {
+    "storage": "mod-owned-progression-sidecar",
+    "oneCommittedEndingPerWorld": true,
+    "operationIdsAreIdempotent": true,
+    "postEndingPlayContinues": true
+  },
+  "authorityPolicy": {
+    "deterministicRuntimeOwnsConditionEvaluation": true,
+    "deterministicRuntimeOwnsCommit": true,
+    "contentPackMayDeclareRules": true,
+    "languageModelMayCommitEnding": false,
+    "languageModelMayMutateWorldState": false
+  },
+  "postEndingPolicy": {
+    "worldDispositions": [
+      "pacified",
+      "conditional",
+      "hostile"
+    ],
+    "pacifiedMeaning": "ordinary actors remain non-hostile until the player attacks",
+    "mapNpcShopAdaptersReadSameState": true
+  }
+}

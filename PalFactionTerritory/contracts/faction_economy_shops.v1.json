@@ -1,0 +1,166 @@
+{
+  "schemaVersion": "1.0.0",
+  "gameBuild": "Steam v1.0.1 / build 24181527",
+  "baselineId": "pwft.faction_economy_shops.v1",
+  "baselineStatus": "offline_shop_asset_and_catalog_ready_runtime_disabled_2026-07-29",
+  "designPolicy": {
+    "merchantOrganisationId": "pwft.commerce.merchant_guild",
+    "fixedCountersAreMerchantGuildEmployees": true,
+    "fixedCountersAreFactionMembers": false,
+    "oneCounterPerHumanFaction": true,
+    "allCountersUseItemShop": true,
+    "raynePalMerchantIsExcludedSpecialCase": true,
+    "counterColourRepresentsTradeAccount": true,
+    "merchantRelationshipHostilityEnabled": false,
+    "storyContentIncluded": false,
+    "dialogueContentIncluded": false
+  },
+  "merchantIslandBinding": {
+    "sourceContract": "faction_commerce.v1.json",
+    "placementId": "pwft.commerce.faction_market_island",
+    "referenceFastTravelPointId": "FTPoint90",
+    "rootLocation": null,
+    "rootRotation": null,
+    "liveGroundValidationRequired": true
+  },
+  "nativeItemShopAssets": {
+    "createData": {
+      "sourceAsset": "evidence/shop-assets-20260723/Pal/Content/Pal/DataTable/ItemShop/DT_ItemShopCreateData.uasset",
+      "sourceSha256": "68D29412856EB171BE9AD0C3526BCDB4C4ED7B9C29371087600E45FFA639D4BE",
+      "sourceRowCount": 38,
+      "outputAssetPath": "Pal/Content/Pal/DataTable/ItemShop/DT_ItemShopCreateData.uasset"
+    },
+    "createDataCommon": {
+      "sourceAsset": "evidence/shop-assets-20260723/Pal/Content/Pal/DataTable/ItemShop/DT_ItemShopCreateData_Common.uasset",
+      "sourceSha256": "1D07C572BED2E650F43EE69DBCC273EFC6991EB840EA846B5CFCAA74C53FA9B8",
+      "sourceRowCount": 38,
+      "outputAssetPath": "Pal/Content/Pal/DataTable/ItemShop/DT_ItemShopCreateData_Common.uasset"
+    },
+    "lotteryData": {
+      "sourceAsset": "evidence/shop-assets-20260723/Pal/Content/Pal/DataTable/ItemShop/DT_ItemShopLotteryData.uasset",
+      "sourceSha256": "109C817EE08FC5FE23716378AEA4FABBB1AD0BC486449FC8E90A179EBF33CDB9",
+      "sourceRowCount": 38,
+      "outputAssetPath": "Pal/Content/Pal/DataTable/ItemShop/DT_ItemShopLotteryData.uasset"
+    },
+    "lotteryDataCommon": {
+      "sourceAsset": "evidence/shop-assets-20260723/Pal/Content/Pal/DataTable/ItemShop/DT_ItemShopLotteryData_Common.uasset",
+      "sourceSha256": "43ED2489E2574B13CA718754D876E5DCAA4F001BDA576AF45D32F95EE3883464",
+      "sourceRowCount": 38,
+      "outputAssetPath": "Pal/Content/Pal/DataTable/ItemShop/DT_ItemShopLotteryData_Common.uasset"
+    },
+    "parser": "UAssetGUI v1.1.0 / UAssetAPI 8b8687a / VER_UE5_1 / Palworld_1_0_1.usmap",
+    "currencyItemId": "Money",
+    "productType": "Normal",
+    "productNum": 1,
+    "lotteryWeight": 100
+  },
+  "representatives": [
+    {
+      "representedFactionId": "pwft.faction.rayne_syndicate",
+      "slotIndex": 0,
+      "clothingColour": "#4B4B55",
+      "nativeCharacterId": "NPC_Male_Trader01_v10",
+      "nativeCharacterClassPath": "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Male_Trader01_v10.BP_NPC_Male_Trader01_v10_C",
+      "sourceNativeShopRowName": "CaravanShop5",
+      "lotteryRowName": "PFT_Economy_Rayne",
+      "productGroupRowName": "PFT_Economy_Rayne_Products",
+      "appearanceStatus": "asset_confirmed_live_colour_match_pending"
+    },
+    {
+      "representedFactionId": "pwft.faction.free_pal_alliance",
+      "slotIndex": 1,
+      "clothingColour": "#62A968",
+      "nativeCharacterId": "NPC_Male_Trader01_v04",
+      "nativeCharacterClassPath": "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Male_Trader01_v04.BP_NPC_Male_Trader01_v04_C",
+      "sourceNativeShopRowName": "CaravanShop4",
+      "lotteryRowName": "PFT_Economy_FPA",
+      "productGroupRowName": "PFT_Economy_FPA_Products",
+      "appearanceStatus": "asset_confirmed_live_colour_match_pending"
+    },
+    {
+      "representedFactionId": "pwft.faction.pidf",
+      "slotIndex": 2,
+      "clothingColour": "#3D72A8",
+      "nativeCharacterId": "NPC_Male_Trader01_v06",
+      "nativeCharacterClassPath": "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Male_Trader01_v06.BP_NPC_Male_Trader01_v06_C",
+      "sourceNativeShopRowName": "CaravanShop8",
+      "lotteryRowName": "PFT_Economy_PIDF",
+      "productGroupRowName": "PFT_Economy_PIDF_Products",
+      "appearanceStatus": "asset_confirmed_live_colour_match_pending"
+    },
+    {
+      "representedFactionId": "pwft.faction.pal_genetic_research_unit",
+      "slotIndex": 3,
+      "clothingColour": "#8A61A8",
+      "nativeCharacterId": "NPC_Male_Trader01_v07",
+      "nativeCharacterClassPath": "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Male_Trader01_v07.BP_NPC_Male_Trader01_v07_C",
+      "sourceNativeShopRowName": "CaravanShop22",
+      "lotteryRowName": "PFT_Economy_Genetics",
+      "productGroupRowName": "PFT_Economy_Genetics_Products",
+      "appearanceStatus": "asset_confirmed_live_colour_match_pending"
+    },
+    {
+      "representedFactionId": "pwft.faction.moonflower",
+      "slotIndex": 4,
+      "clothingColour": "#C95D91",
+      "nativeCharacterId": "NPC_Male_Trader01_v08",
+      "nativeCharacterClassPath": "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Male_Trader01_v08.BP_NPC_Male_Trader01_v08_C",
+      "sourceNativeShopRowName": "CaravanShop18",
+      "lotteryRowName": "PFT_Economy_Moonflower",
+      "productGroupRowName": "PFT_Economy_Moonflower_Products",
+      "appearanceStatus": "asset_confirmed_live_colour_match_pending"
+    },
+    {
+      "representedFactionId": "pwft.faction.eternal_pyre",
+      "slotIndex": 5,
+      "clothingColour": "#C65032",
+      "nativeCharacterId": "NPC_Male_Trader01_v05",
+      "nativeCharacterClassPath": "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Male_Trader01_v05.BP_NPC_Male_Trader01_v05_C",
+      "sourceNativeShopRowName": "CaravanShop12",
+      "lotteryRowName": "PFT_Economy_Pyre",
+      "productGroupRowName": "PFT_Economy_Pyre_Products",
+      "appearanceStatus": "asset_confirmed_live_colour_match_pending"
+    },
+    {
+      "representedFactionId": "pwft.faction.feybreak_army",
+      "slotIndex": 6,
+      "clothingColour": "#D6B547",
+      "nativeCharacterId": "NPC_Male_Trader01_v09",
+      "nativeCharacterClassPath": "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Male_Trader01_v09.BP_NPC_Male_Trader01_v09_C",
+      "sourceNativeShopRowName": "CaravanShop15",
+      "lotteryRowName": "PFT_Economy_Feybreak",
+      "productGroupRowName": "PFT_Economy_Feybreak_Products",
+      "appearanceStatus": "asset_confirmed_live_colour_match_pending"
+    }
+  ],
+  "procurementAdapter": {
+    "catalogSource": "faction_economy.v1.json commodity signals",
+    "nativeItemShopRequestedItemFilterAvailable": false,
+    "nativeItemShopProcurementPriceOverrideAvailable": false,
+    "playerMayUseNativeSellUIForOtherItems": true,
+    "unrequestedItemCommerceReputation": 0,
+    "targetPriceSettlementMode": "native_sale_plus_mod_bonus_after_confirmed_server_success",
+    "serverSuccessSignalStatus": "replication_probe_ready_settlement_disabled_live_acceptance_pending",
+    "moneyBonusMutationEnabled": false,
+    "commerceReputationSettlementEnabled": false
+  },
+  "generatedArtifacts": {
+    "catalog": "generated/faction-economy-shops/catalog.v1.json",
+    "createDataJson": "generated/faction-economy-shops/DT_ItemShopCreateData.PFT_Economy.json",
+    "createDataCommonJson": "generated/faction-economy-shops/DT_ItemShopCreateData_Common.PFT_Economy.json",
+    "lotteryDataJson": "generated/faction-economy-shops/DT_ItemShopLotteryData.PFT_Economy.json",
+    "lotteryDataCommonJson": "generated/faction-economy-shops/DT_ItemShopLotteryData_Common.PFT_Economy.json",
+    "compiledAssetRoot": "build/faction-economy-shops-data",
+    "pakArtifact": "artifacts/faction-economy-shops/PalFactionTerritory_FactionEconomyShops_P.pak"
+  },
+  "runtimeActivation": {
+    "customProductRowsReady": true,
+    "customProductRowsEnabled": true,
+    "nativeMerchantSpawnEnabled": true,
+    "nativeShopBindingEnabled": true,
+    "dynamicRestockEnabled": false,
+    "procurementMoneyBonusEnabled": false,
+    "procurementCommerceReputationEnabled": false,
+    "reason": "merchant_island_ground_refresh_and_server_sale_success_live_validation_pending"
+  }
+}

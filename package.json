@@ -1,0 +1,14 @@
+{
+  "name": "palworld-total-war-foundation",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "test": "node tools/verify-public.mjs",
+    "verify": "node tools/verify-public.mjs"
+  },
+  "devDependencies": {
+    "fengari-node-cli": "0.1.0",
+    "luaparse": "0.3.1"
+  }
+}

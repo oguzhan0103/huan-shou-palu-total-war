@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "1.0.0",
+  "contractId": "pwft.content-pack-manifest.v1",
+  "coreVersion": "1.0.0",
+  "designPolicy": {
+    "storyContentIncludedInBaseMod": false,
+    "inlineNarrativeTextAllowed": false,
+    "localizationKeysRequired": true,
+    "namespacedIdsRequired": true,
+    "atomicBatchRegistrationRequired": true,
+    "dependencyValidationRequired": true,
+    "conflictValidationRequired": true,
+    "deterministicLoadOrderRequired": true
+  },
+  "manifestFields": [
+    "schemaVersion",
+    "contentPackId",
+    "contentVersion",
+    "namespace",
+    "localizationNamespace",
+    "dependencies",
+    "conflicts",
+    "loadAfter",
+    "capabilities",
+    "localizationKeys"
+  ],
+  "dependencyFields": [
+    "contentPackId",
+    "minimumVersion"
+  ],
+  "coreCapabilities": [
+    "pwft.quest.templates",
+    "pwft.faction.join-sources",
+    "pwft.pal.discourse",
+    "pwft.faction.commerce",
+    "pwft.faction.guards",
+    "pwft.world.unique-pals",
+    "pwft.world.city-states",
+    "pwft.world.endings"
+  ]
+}

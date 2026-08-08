@@ -1,0 +1,359 @@
+{
+  "schemaVersion": "1.0.0",
+  "gameBuild": "Steam v1.0.1 / build 24181527",
+  "baselineId": "pwft.territory_partition.v1",
+  "baselineStatus": "user_approved_frozen_baseline",
+  "approvedAt": "2026-07-21",
+  "changePolicy": "Only supersede individual entries after a new explicit user decision.",
+  "nativePlaceNameIndexPolicy": "Each assignment may declare nativeRegionNameIds. Those IDs, the native map mask, owner faction, and entry-card presentation resolve from this same territory record. Empty IDs are deliberately kept as original UI until live capture verifies them.",
+  "status": "first_version_faction_partition_complete",
+  "territoryGroups": [
+    {
+      "id": "pwft.territory_group.feybreak_composite_pal_tribe",
+      "ownerFactionId": "pwft.faction.feybreak_composite_pal_tribe",
+      "ownerDisplayNameZhHans": "天坠之地综合帕鲁部落",
+      "regionIds": [
+        "M-O",
+        "M-P",
+        "M-Q",
+        "M-S"
+      ],
+      "leader": {
+        "palInternalId": "IceHorse_Dark",
+        "displayNameZhHans": "唤夜兽",
+        "displayNameEn": "Frostallion Noct",
+        "sourceMarkerId": "B52",
+        "encounterType": "sealed_realm_alpha",
+        "encounterNameZhHans": "黑天马的封域",
+        "encounterNameEn": "Sealed Realm of the Black Pegasus",
+        "publicMapCoordinates": "-1082, -1320",
+        "plannedMapX": 28.7475,
+        "plannedMapY": 66.9785,
+        "placementStatus": "feybreak_encounter_confirmed_exact_native_mask_pending",
+        "noteZhHans": "已确认用户记忆中的强大帕鲁是唤夜兽；它位于天坠之地的黑天马封域，需要通过封域入口进入。作为四区共主记录，不强行绑定单一地块。"
+      },
+      "decisionSource": "user_confirmed_2026-07-21",
+      "assignmentStatus": "multi_region_owner_and_leader_confirmed"
+    }
+  ],
+  "assignments": [
+    {
+      "regionId": "M-A",
+      "nativeMaskAsset": "T_MapMask_a",
+      "ownerFactionId": "pwft.faction.rayne_syndicate",
+      "ownerDisplayNameZhHans": "雷恩盗猎团",
+      "ownerShortNameZhHans": "盗猎集团",
+      "includedTowerMarkerId": "T1",
+      "includedTowerLeaderZhHans": "佐伊",
+      "includedTowerDisplayNameZhHans": "雷恩盗猎团高塔",
+      "decisionSource": "user_confirmed_2026-07-21",
+      "assignmentStatus": "whole_region_owner_confirmed_native_tower_inside_region",
+      "geographyValidation": {
+        "towerPointNativeMaskRegionId": "M-A",
+        "conflict": false,
+        "noteZhHans": "佐伊与雷恩盗猎团高塔点位落在 M-A 原生遮罩内，和区域归属一致。"
+      }
+    },
+    {
+      "regionId": "M-C",
+      "nativeMaskAsset": "T_MapMask_c",
+      "ownerFactionId": "pwft.faction.pidf",
+      "ownerDisplayNameZhHans": "帕洛斯群岛自卫队",
+      "ownerShortNameZhHans": "自卫队",
+      "coreSettlementId": "S3",
+      "coreSettlementDisplayNameZhHans": "沙漠之镇",
+      "decisionSource": "user_confirmed_2026-07-21",
+      "assignmentStatus": "owner_confirmed_core_city_cross_border_exception_frozen_in_v1",
+      "geographyValidation": {
+        "settlementNativeMaskRegionId": "M-D",
+        "conflict": true,
+        "resolutionType": "political_settlement_enclave_without_changing_native_mask",
+        "noteZhHans": "第一版保留用户决策：沙漠之镇作为 M-C 的政治核心城市，但不改变其位于 M-D 原生遮罩内的地理事实；运行时按聚落级控制例外处理。"
+      }
+    },
+    {
+      "regionId": "M-D",
+      "nativeMaskAsset": "T_MapMask_d",
+      "ownerFactionId": "pwft.faction.desert_pal_tribe",
+      "ownerDisplayNameZhHans": "沙漠帕鲁部落",
+      "ownerShortNameZhHans": "沙漠部落",
+      "regionalBoss": {
+        "palInternalId": "Anubis",
+        "displayNameZhHans": "阿努比斯",
+        "displayNameEn": "Anubis",
+        "sourceMarkerId": "B36",
+        "sourceRegionId": "M-N",
+        "targetRegionId": "M-D",
+        "plannedMapX": 72.8,
+        "plannedMapY": 15.03,
+        "placementStatus": "region_confirmed_exact_spawn_pending",
+        "noteZhHans": "地图先以 M-D 区域标注锚点显示；实际头目刷新坐标待后续指定或实机选点。"
+      },
+      "decisionSource": "user_confirmed_2026-07-21",
+      "assignmentStatus": "owner_and_regional_boss_confirmed_exact_spawn_pending"
+    },
+    {
+      "regionId": "M-N",
+      "nativeMaskAsset": "T_MapMask_p",
+      "ownerFactionId": "pwft.faction.pal_genetic_research_unit",
+      "ownerDisplayNameZhHans": "基因研究部队",
+      "ownerShortNameZhHans": "雪山势力",
+      "includedTowerMarkerId": "T5",
+      "includedTowerLeaderZhHans": "维克托",
+      "includedTowerDisplayNameZhHans": "基因研究部队高塔",
+      "decisionSource": "user_confirmed_2026-07-21",
+      "assignmentStatus": "owner_confirmed_with_user_directed_border_inclusion",
+      "geographyValidation": {
+        "towerPointNativeMaskRegionId": "M-E",
+        "targetRegionId": "M-N",
+        "conflict": true,
+        "resolutionDirection": "include_snow_mountain_tower_in_M-N_during_border_finalization",
+        "noteZhHans": "维克托高塔点位按当前原生遮罩落在 M-E；用户确认 M-N 与 M-E 交界问题不影响设定，最终边界应把雪山高塔统一纳入 M-N。"
+      }
+    },
+    {
+      "regionId": "M-E",
+      "nativeMaskAsset": "T_MapMask_e",
+      "ownerFactionId": "pwft.faction.snow_pal_tribe",
+      "ownerDisplayNameZhHans": "雪地帕鲁部落",
+      "ownerShortNameZhHans": "雪地部落",
+      "regionalBoss": {
+        "palInternalId": "IceHorse",
+        "displayNameZhHans": "唤冬兽",
+        "displayNameEn": "Frostallion",
+        "sourceMarkerId": "B51",
+        "sourceRegionId": "M-E",
+        "targetRegionId": "M-E",
+        "placementStatus": "native_location_retained_promoted_to_regional_core",
+        "noteZhHans": "唤冬兽原本就在 M-E 原生遮罩内，保留本体点位并提升为雪地帕鲁部落核心。"
+      },
+      "decisionSource": "user_confirmed_2026-07-21",
+      "assignmentStatus": "owner_and_regional_core_confirmed_native_location_retained"
+    },
+    {
+      "regionId": "M-F",
+      "nativeMaskAsset": "T_MapMask_f",
+      "ownerFactionId": "pwft.faction.moonflower",
+      "ownerDisplayNameZhHans": "月花众",
+      "ownerShortNameZhHans": "樱岛势力",
+      "includedTowerMarkerId": "T6",
+      "includedTowerLeaderZhHans": "沙夜",
+      "includedTowerDisplayNameZhHans": "月花众高塔",
+      "decisionSource": "user_confirmed_2026-07-21",
+      "assignmentStatus": "whole_region_owner_confirmed_native_tower_inside_region",
+      "geographyValidation": {
+        "towerPointNativeMaskRegionId": "M-F",
+        "conflict": false,
+        "noteZhHans": "沙夜与月花众高塔点位落在 M-F 原生遮罩内，和整块归樱岛势力的决策一致。"
+      }
+    },
+    {
+      "regionId": "M-G",
+      "nativeMaskAsset": "T_MapMask_i",
+      "ownerFactionId": "pwft.faction.eternal_pyre",
+      "ownerDisplayNameZhHans": "永炎同心会",
+      "ownerShortNameZhHans": "永炎同心会",
+      "includedTowerMarkerId": "T3",
+      "includedTowerLeaderZhHans": "阿克塞尔",
+      "includedTowerDisplayNameZhHans": "永炎同心会高塔",
+      "decisionSource": "user_confirmed_2026-07-21",
+      "assignmentStatus": "whole_region_owner_confirmed_native_tower_inside_region",
+      "geographyValidation": {
+        "towerPointNativeMaskRegionId": "M-G",
+        "conflict": false,
+        "noteZhHans": "阿克塞尔与永炎同心会高塔点位落在 M-G 原生遮罩内，和区域归属一致。"
+      }
+    },
+    {
+      "regionId": "M-H",
+      "nativeMaskAsset": "T_MapMask_j",
+      "ownerFactionId": "pwft.faction.fire_pal_tribe",
+      "ownerDisplayNameZhHans": "火焰属性帕鲁部落",
+      "ownerShortNameZhHans": "火焰部落",
+      "regionalBoss": {
+        "palInternalId": "KingBahamut",
+        "displayNameZhHans": "焰煌",
+        "displayNameEn": "Blazamut",
+        "sourceMarkerId": "B42",
+        "sourceRegionId": "M-G",
+        "targetRegionId": "M-H",
+        "plannedMapX": 44.22,
+        "plannedMapY": 42.3,
+        "placementStatus": "region_confirmed_exact_spawn_pending",
+        "noteZhHans": "焰煌本体 Alpha 点位位于 M-G；按用户设定调整为 M-H 火焰属性帕鲁部落首领，具体刷新点等待统一选址。"
+      },
+      "decisionSource": "user_confirmed_2026-07-21",
+      "assignmentStatus": "owner_and_regional_boss_confirmed_exact_spawn_pending"
+    },
+    {
+      "regionId": "M-I",
+      "nativeMaskAsset": "T_MapMask_k",
+      "ownerFactionId": "pwft.faction.dark_nocturnal_pal_tribe",
+      "ownerDisplayNameZhHans": "暗属性帕鲁部落",
+      "ownerShortNameZhHans": "暗属性部落",
+      "ecologyScopeZhHans": "本体中主要在夜晚刷新的暗属性帕鲁",
+      "temporalControlPolicy": {
+        "clockSource": "native_day_night_cycle",
+        "dayState": "safe_zone",
+        "nightState": "faction_controlled",
+        "dayRelationOverride": "Neutral",
+        "nightRelationPolicy": "follow_player_faction_relation",
+        "publicFastTravelDayPolicy": "allowed_if_native_unlocked",
+        "publicFastTravelNightPolicy": "block_only_when_current_relation_is_hostile",
+        "transitionStatus": "design_confirmed_runtime_hook_pending"
+      },
+      "decisionSource": "user_confirmed_2026-07-21",
+      "assignmentStatus": "owner_and_day_night_control_policy_confirmed"
+    },
+    {
+      "regionId": "M-B",
+      "nativeMaskAsset": "T_MapMask_b",
+      "ownerFactionId": null,
+      "ownerDisplayNameZhHans": "中立区",
+      "ownerShortNameZhHans": "中立区",
+      "relationState": "Neutral",
+      "decisionSource": "user_provisional_2026-07-21",
+      "assignmentStatus": "provisional_neutral_zone"
+    },
+    {
+      "regionId": "M-J",
+      "nativeMaskAsset": "T_MapMask_l",
+      "ownerFactionId": null,
+      "ownerDisplayNameZhHans": "中立区",
+      "ownerShortNameZhHans": "中立区",
+      "relationState": "Neutral",
+      "decisionSource": "user_provisional_2026-07-21",
+      "assignmentStatus": "provisional_neutral_zone"
+    },
+    {
+      "regionId": "M-K",
+      "nativeMaskAsset": "T_MapMask_m",
+      "ownerFactionId": null,
+      "ownerDisplayNameZhHans": "中立区",
+      "ownerShortNameZhHans": "中立区",
+      "relationState": "Neutral",
+      "decisionSource": "user_provisional_2026-07-21",
+      "assignmentStatus": "provisional_neutral_zone"
+    },
+    {
+      "regionId": "M-M",
+      "nativeMaskAsset": "T_MapMask_o",
+      "ownerFactionId": null,
+      "ownerDisplayNameZhHans": "中立区",
+      "ownerShortNameZhHans": "中立区",
+      "relationState": "Neutral",
+      "decisionSource": "user_provisional_2026-07-21",
+      "assignmentStatus": "provisional_neutral_zone"
+    },
+    {
+      "regionId": "M-L",
+      "nativeMaskAsset": "T_MapMask_n",
+      "ownerFactionId": "pwft.faction.free_pal_alliance",
+      "ownerDisplayNameZhHans": "帕鲁保护团体",
+      "ownerShortNameZhHans": "帕鲁保护团体",
+      "includedTowerMarkerId": "T2",
+      "includedTowerLeaderZhHans": "莉莉",
+      "includedTowerDisplayNameZhHans": "帕鲁保护团体高塔",
+      "decisionSource": "user_confirmed_2026-07-21",
+      "assignmentStatus": "whole_region_owner_confirmed_native_tower_inside_region",
+      "geographyValidation": {
+        "towerPointNativeMaskRegionId": "M-L",
+        "conflict": false,
+        "noteZhHans": "莉莉与帕鲁保护团体高塔点位落在 M-L 原生遮罩内，和区域归属一致。"
+      }
+    },
+    {
+      "regionId": "M-O",
+      "nativeMaskAsset": "T_MapMask_q",
+      "ownerFactionId": "pwft.faction.feybreak_composite_pal_tribe",
+      "ownerDisplayNameZhHans": "天坠之地综合帕鲁部落",
+      "ownerShortNameZhHans": "天坠帕鲁部落",
+      "territoryGroupId": "pwft.territory_group.feybreak_composite_pal_tribe",
+      "decisionSource": "user_confirmed_2026-07-21",
+      "assignmentStatus": "whole_region_owner_confirmed_as_multi_region_group"
+    },
+    {
+      "regionId": "M-P",
+      "nativeMaskAsset": "T_MapMask_r",
+      "ownerFactionId": "pwft.faction.feybreak_composite_pal_tribe",
+      "ownerDisplayNameZhHans": "天坠之地综合帕鲁部落",
+      "ownerShortNameZhHans": "天坠帕鲁部落",
+      "territoryGroupId": "pwft.territory_group.feybreak_composite_pal_tribe",
+      "decisionSource": "user_confirmed_2026-07-21",
+      "assignmentStatus": "whole_region_owner_confirmed_as_multi_region_group"
+    },
+    {
+      "regionId": "M-Q",
+      "nativeMaskAsset": "T_MapMask_s",
+      "ownerFactionId": "pwft.faction.feybreak_composite_pal_tribe",
+      "ownerDisplayNameZhHans": "天坠之地综合帕鲁部落",
+      "ownerShortNameZhHans": "天坠帕鲁部落",
+      "territoryGroupId": "pwft.territory_group.feybreak_composite_pal_tribe",
+      "decisionSource": "user_confirmed_2026-07-21",
+      "assignmentStatus": "whole_region_owner_confirmed_as_multi_region_group"
+    },
+    {
+      "regionId": "M-R",
+      "nativeMaskAsset": "T_MapMask_t",
+      "ownerFactionId": "pwft.faction.feybreak_army",
+      "ownerDisplayNameZhHans": "天坠军",
+      "ownerShortNameZhHans": "天坠人类势力",
+      "includedTowerMarkerId": "T7",
+      "includedTowerLeaderZhHans": "比约恩",
+      "includedTowerDisplayNameZhHans": "天坠军高塔",
+      "decisionSource": "user_confirmed_2026-07-21",
+      "assignmentStatus": "whole_region_owner_confirmed_native_tower_inside_region",
+      "geographyValidation": {
+        "towerPointNativeMaskRegionId": "M-R",
+        "conflict": false,
+        "noteZhHans": "比约恩与天坠军高塔点位落在 M-R 原生遮罩内，和人类势力区域归属一致。"
+      }
+    },
+    {
+      "regionId": "M-S",
+      "nativeMaskAsset": "T_MapMask_u",
+      "ownerFactionId": "pwft.faction.feybreak_composite_pal_tribe",
+      "ownerDisplayNameZhHans": "天坠之地综合帕鲁部落",
+      "ownerShortNameZhHans": "天坠帕鲁部落",
+      "territoryGroupId": "pwft.territory_group.feybreak_composite_pal_tribe",
+      "decisionSource": "user_confirmed_2026-07-21",
+      "assignmentStatus": "whole_region_owner_confirmed_as_multi_region_group"
+    },
+    {
+      "regionId": "M-T",
+      "nativeMaskAsset": "T_MapMask_v",
+      "mapId": "main",
+      "ownerFactionId": null,
+      "ownerDisplayNameZhHans": "中立区",
+      "ownerShortNameZhHans": "中立区",
+      "relationState": "Neutral",
+      "futureReviewTriggerZhHans": "用户推进到该区域后重新决定",
+      "decisionSource": "user_provisional_2026-07-21",
+      "assignmentStatus": "provisional_neutral_zone_frozen_in_v1"
+    },
+    {
+      "regionId": "T-A",
+      "nativeMaskAsset": "T_MapMask_WorldTree_a",
+      "mapId": "tree",
+      "ownerFactionId": null,
+      "ownerDisplayNameZhHans": "中立区",
+      "ownerShortNameZhHans": "中立区",
+      "relationState": "Neutral",
+      "futureReviewTriggerZhHans": "用户推进到世界树后重新决定",
+      "decisionSource": "user_provisional_2026-07-21",
+      "assignmentStatus": "provisional_neutral_zone_frozen_in_v1"
+    },
+    {
+      "regionId": "T-B",
+      "nativeMaskAsset": "T_MapMask_WorldTree_b",
+      "mapId": "tree",
+      "ownerFactionId": null,
+      "ownerDisplayNameZhHans": "中立区",
+      "ownerShortNameZhHans": "中立区",
+      "relationState": "Neutral",
+      "futureReviewTriggerZhHans": "用户推进到世界树后重新决定",
+      "decisionSource": "user_provisional_2026-07-21",
+      "assignmentStatus": "provisional_neutral_zone_frozen_in_v1"
+    }
+  ]
+}

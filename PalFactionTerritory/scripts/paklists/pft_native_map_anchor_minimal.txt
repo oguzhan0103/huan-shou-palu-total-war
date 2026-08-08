@@ -1,0 +1,4 @@
+"E:\mod\PalworldModdingKit\Saved\Cooked\Windows\Pal\Content\Mods\PalFactionTerritory0\ModActor.uasset" "../../../Pal/Content/Mods/PalFactionTerritory0/ModActor.uasset"
+"E:\mod\PalworldModdingKit\Saved\Cooked\Windows\Pal\Content\Mods\PalFactionTerritory0\ModActor.uexp" "../../../Pal/Content/Mods/PalFactionTerritory0/ModActor.uexp"
+"E:\mod\PalworldModdingKit\Saved\Cooked\Windows\Pal\Content\Mods\PalFactionTerritory0\UI\Materials\M_PFT_NativeMapLayerProbe.uasset" "../../../Pal/Content/Mods/PalFactionTerritory0/UI/Materials/M_PFT_NativeMapLayerProbe.uasset"
+"E:\mod\PalworldModdingKit\Saved\Cooked\Windows\Pal\Content\Mods\PalFactionTerritory0\UI\Materials\M_PFT_NativeMapLayerProbe.uexp" "../../../Pal/Content/Mods/PalFactionTerritory0/UI/Materials/M_PFT_NativeMapLayerProbe.uexp"

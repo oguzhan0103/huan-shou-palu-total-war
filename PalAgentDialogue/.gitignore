@@ -1,0 +1,13 @@
+/target/
+/bridge-data/
+/release/
+/.env
+/.env.*
+!/.env.example
+*.log
+*.tmp
+*.bak
+*.local.json
+.DS_Store
+Thumbs.db
+

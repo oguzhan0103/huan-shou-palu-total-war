@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/pal-agent-dialogue/ue4ss-dialogue-request.v1.schema.json",
+  "title": "PalAgentDialogue UE4SS Request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "requestId", "createdAt", "characterId", "sessionId",
+    "worldKey", "playerKey", "locale", "playerText"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "requestId": { "$ref": "#/$defs/id" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "characterId": { "$ref": "#/$defs/id" },
+    "sessionId": { "$ref": "#/$defs/id" },
+    "worldKey": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "playerKey": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "locale": { "type": "string", "minLength": 1, "maxLength": 32 },
+    "playerText": { "type": "string", "minLength": 1, "maxLength": 8000 },
+    "contextKeys": {
+      "type": "array", "maxItems": 64, "uniqueItems": true,
+      "items": { "$ref": "#/$defs/key" }
+    },
+    "allowedChoices": {
+      "type": "array", "maxItems": 32,
+      "items": { "$ref": "#/$defs/choice" }
+    },
+    "allowedResultTags": {
+      "type": "array", "maxItems": 64, "uniqueItems": true,
+      "items": { "$ref": "#/$defs/key" }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string", "minLength": 1, "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+    "key": {
+      "type": "string", "minLength": 1, "maxLength": 256,
+      "pattern": "^[A-Za-z0-9._:/-]+$"
+    },
+    "choice": {
+      "type": "object", "additionalProperties": false,
+      "required": ["choiceId", "textKey"],
+      "properties": {
+        "choiceId": { "$ref": "#/$defs/id" },
+        "textKey": { "$ref": "#/$defs/key" }
+      }
+    }
+  }
+}
+

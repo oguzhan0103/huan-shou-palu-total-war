@@ -1,0 +1,74 @@
+[
+    {
+        "Type": "Sheet",
+        "Location": {
+            "X": -345900.00,
+            "Y": 191500.00,
+            "Z": -100.00
+        },
+        "Rotation": {
+            "Pitch": 0.0,
+            "Yaw": -36.87,
+            "Roll": 0.0
+        },
+        "SpawnerName": "PWFT_Small_Settlement_Raid_QA_001",
+        "SpawnGroupList": [{
+            "Weight": 100,
+            "PalList": [{
+                "PalId": "NegativeKoala",
+                "Level": 30,
+                "Level_Max": 30,
+                "Num": 1,
+                "Num_Max": 1
+            }]
+        }]
+    },
+    {
+        "Type": "Sheet",
+        "Location": { "X": -346300.00, "Y": 191500.00, "Z": -100.00 },
+        "Rotation": { "Pitch": 0.0, "Yaw": -36.87, "Roll": 0.0 },
+        "SpawnerName": "PWFT_Small_Settlement_Raid_QA_002",
+        "SpawnGroupList": [{
+            "Weight": 100,
+            "PalList": [{
+                "PalId": "MysteryMask",
+                "Level": 30,
+                "Level_Max": 30,
+                "Num": 1,
+                "Num_Max": 1
+            }]
+        }]
+    },
+    {
+        "Type": "Sheet",
+        "Location": { "X": -345900.00, "Y": 192000.00, "Z": -100.00 },
+        "Rotation": { "Pitch": 0.0, "Yaw": -36.87, "Roll": 0.0 },
+        "SpawnerName": "PWFT_Small_Settlement_Raid_QA_003",
+        "SpawnGroupList": [{
+            "Weight": 100,
+            "PalList": [{
+                "PalId": "NegativeKoala",
+                "Level": 30,
+                "Level_Max": 30,
+                "Num": 1,
+                "Num_Max": 1
+            }]
+        }]
+    },
+    {
+        "Type": "Sheet",
+        "Location": { "X": -346300.00, "Y": 192000.00, "Z": -100.00 },
+        "Rotation": { "Pitch": 0.0, "Yaw": -36.87, "Roll": 0.0 },
+        "SpawnerName": "PWFT_Small_Settlement_Raid_QA_004",
+        "SpawnGroupList": [{
+            "Weight": 100,
+            "PalList": [{
+                "PalId": "MysteryMask",
+                "Level": 30,
+                "Level_Max": 30,
+                "Num": 1,
+                "Num_Max": 1
+            }]
+        }]
+    }
+]

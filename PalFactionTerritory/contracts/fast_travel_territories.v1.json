@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "1.0.0",
+  "gameBuild": "Steam v1.0.1 / build 24181527",
+  "classificationPolicy": {
+    "sourceDataset": "https://github.com/deafdudecomputers/PalworldSaveTools/blob/e4e1439b274c1140eed5690051ce59ab14b68027/resources/game_data/fast_travel_points.json",
+    "sourceDatasetSha256": "4361025dd056ba595b59a8bf76bf714437154e270f69f45e2c8c67bea2f42981",
+    "geometryManifest": "artifacts/island-territory-v2/island_geometry_manifest.v2.json",
+    "geometryManifestSha256": "d3890191398db088ff6b1bc0b366b8adfc73ab7f9f346f218071b282483abee6",
+    "projection": {
+      "minX": -1099400,
+      "minY": -724400,
+      "maxX": 349400,
+      "maxY": 724400,
+      "textureSize": 1024
+    },
+    "rule": "Project each pinned public fast-travel world coordinate into the approved whole-island geometry packs. A nonzero island channel assigns the destination to that island; zero-channel destinations remain native and unrestricted by faction territory.",
+    "sourcePointCount": 143,
+    "mappedPointCount": 109,
+    "neutralOverridePointCount": 1,
+    "unmappedPointCount": 33,
+    "manualNeutralOverrides": [
+      {
+        "fastTravelPointId": "FTPoint90",
+        "displayNameZhHans": "泰拉瑞亚密域",
+        "reason": "user_selected_merchant_island_public_access_2026-07-29"
+      }
+    ]
+  },
+  "territories": [
+    {
+      "islandId": "pwft.island.central_southeast_archipelago",
+      "fastTravelPointIds": [
+        "FTPoint21", "FTPoint22", "FTPoint23", "FTPoint24", "FTPoint27", "FTPoint28",
+        "FTPoint45", "FTPoint52", "FTPoint53", "FTPoint54", "FTPoint55", "FTPoint61",
+        "FTPoint62", "FTPoint87", "FTPoint96", "WatchTower_1", "WatchTower_10"
+      ]
+    },
+    {
+      "islandId": "pwft.island.central_forest_archipelago",
+      "fastTravelPointIds": [
+        "FTPoint31", "FTPoint32", "FTPoint33", "FTPoint34", "FTPoint40", "FTPoint41",
+        "FTPoint91", "FTPoint92", "WatchTower_3"
+      ]
+    },
+    {
+      "islandId": "pwft.island.desert",
+      "fastTravelPointIds": [
+        "FTPoint101", "FTPoint102", "FTPoint103", "FTPoint104", "FTPoint105",
+        "FTPoint106", "FTPoint107", "FTPoint108", "FTPoint11", "FTPoint12",
+        "FTPoint13", "FTPoint57", "FTPoint63", "FTPoint85", "FTPoint86",
+        "FTPoint9", "FTPoint97", "WatchTower_4", "WatchTower_5"
+      ]
+    },
+    {
+      "islandId": "pwft.island.snow",
+      "fastTravelPointIds": [
+        "FTPoint113", "FTPoint114", "FTPoint115", "FTPoint14", "FTPoint15",
+        "FTPoint16", "FTPoint17", "FTPoint18", "FTPoint20", "FTPoint48",
+        "WatchTower_7", "WatchTower_8"
+      ]
+    },
+    {
+      "islandId": "pwft.island.sakurajima",
+      "fastTravelPointIds": [
+        "FTPoint116", "FTPoint64", "FTPoint65", "FTPoint67", "FTPoint68",
+        "FTPoint69", "FTPoint70", "WatchTower_12"
+      ]
+    },
+    {
+      "islandId": "pwft.island.volcano",
+      "fastTravelPointIds": [
+        "FTPoint1", "FTPoint109", "FTPoint110", "FTPoint111", "FTPoint112",
+        "FTPoint26", "FTPoint3", "FTPoint4", "FTPoint5", "FTPoint6", "FTPoint7",
+        "FTPoint8", "FTPoint88", "WatchTower_13", "WatchTower_15"
+      ]
+    },
+    {
+      "islandId": "pwft.island.feybreak",
+      "fastTravelPointIds": [
+        "FTPoint117", "FTPoint118", "FTPoint119", "FTPoint120", "FTPoint121",
+        "FTPoint122", "FTPoint123", "FTPoint124", "FTPoint125", "FTPoint126",
+        "FTPoint127", "FTPoint128", "FTPoint129", "FTPoint71", "FTPoint72",
+        "FTPoint73", "FTPoint74", "FTPoint75", "FTPoint76", "FTPoint78",
+        "FTPoint79", "FTPoint80", "FTPoint81", "FTPoint83", "WatchTower_17",
+        "WatchTower_18", "WatchTower_19", "WatchTower_20", "WatchTower_21"
+      ]
+    }
+  ]
+}

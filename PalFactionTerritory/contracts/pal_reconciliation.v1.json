@@ -1,0 +1,127 @@
+{
+  "schemaVersion": "1.0.0",
+  "gameBuild": "Steam v1.0.1 / build 24181527",
+  "baselineStatus": "user_confirmed_token_discourse_mechanics_2026-08-05",
+  "contentStatus": "mechanics_only_content_author_registration_required",
+  "designPolicy": {
+    "storyContentIncluded": false,
+    "taskTextIncluded": false,
+    "dialogueContentIncluded": false,
+    "tokenNamesIncluded": false,
+    "physicalTokenItemsRequired": false,
+    "palMembershipAllowed": false,
+    "reputationDecreaseEnabled": false,
+    "palworldSaveMutationAllowed": false
+  },
+  "humanCityStateIds": [
+    "pwft.faction.rayne_syndicate",
+    "pwft.faction.free_pal_alliance",
+    "pwft.faction.eternal_pyre",
+    "pwft.faction.pidf",
+    "pwft.faction.pal_genetic_research_unit",
+    "pwft.faction.moonflower",
+    "pwft.faction.feybreak_army"
+  ],
+  "palFactionIds": [
+    "pwft.faction.desert_pal_tribe",
+    "pwft.faction.snow_pal_tribe",
+    "pwft.faction.fire_pal_tribe",
+    "pwft.faction.feybreak_composite_pal_tribe",
+    "pwft.faction.dark_nocturnal_pal_tribe"
+  ],
+  "raidEligibility": {
+    "playerSideMustWin": true,
+    "participationRule": "authoritative_raid_leader_kill_credit",
+    "oneTokenPerRaidEvent": true,
+    "randomAcrossAllHumanCityStates": true,
+    "duplicateCityStateResultsAllowed": true,
+    "failedRaidAwardsToken": false,
+    "missingLeaderKillCreditAwardsToken": false
+  },
+  "raidResultAdapterPolicy": {
+    "normalizedAdapterEnabled": true,
+    "nativeBindingEnabled": false,
+    "leaderDesignation": "first-spawn-of-final-wave",
+    "eventAuthority": "pal-invader-incident-group-guid-v1",
+    "spawnAuthority": "pal-invader-on-character-spawned-v1",
+    "deathAuthority": "pal-damage-reaction-dead-info-v1",
+    "outcomeAuthority": "pal-invader-end-wave-clear-v1",
+    "acceptedLeaderKillAttribution": [
+      "direct-local-player",
+      "local-player-owned-pal"
+    ],
+    "remoteOrUnresolvedAttributionAwardsToken": false,
+    "timerCleanupMaySettleRaid": false,
+    "conflictingEvidenceBehavior": "block-event-fail-closed"
+  },
+  "tokenPolicy": {
+    "quotaSource": "content_pack_per_pal_faction",
+    "quotaMustBePositiveInteger": true,
+    "oneTokenPerDiscourseAttempt": true,
+    "eachDropCreatesIndependentInstance": true,
+    "virtualLedgerIsAuthoritative": true,
+    "optionalPhysicalItemBindingAllowed": true,
+    "furtherWinsAfterQuotaAwardToken": false
+  },
+  "questPolicy": {
+    "contentPackProvidesQuest": true,
+    "questCompletionRequiredBeforeDiscourse": true,
+    "duplicateCityMayReuseQuestOrUseVariant": true,
+    "questCompletionDirectlyMutatesAffinity": false
+  },
+  "discoursePolicy": {
+    "requiresAllHumanLords": true,
+    "explicitIrreversibleConfirmationRequired": true,
+    "preConfirmationCancelConsumesToken": false,
+    "playerAbortAfterConfirmationConsumesToken": true,
+    "technicalFailureConsumesToken": false,
+    "interruptedActiveSessionRecovery": "technical_refund",
+    "completedSessionConsumesToken": true,
+    "modelMayMutateAffinityDirectly": false,
+    "deterministicRuleEngineOwnsAffinity": true,
+    "positiveAffinityOnly": true,
+    "targetReputation": 0,
+    "maximumRelation": "Friendly",
+    "exhaustedBeforeTargetPermanentlyLocksFaction": true
+  },
+  "offlineDialogueTreePolicy": {
+    "runtimeEnabled": true,
+    "nativePresenterEnabled": false,
+    "representativeRegistrationRequired": true,
+    "explicitIrreversibleConfirmationRequired": true,
+    "baseStoryContentIncluded": false,
+    "inlineTextAllowed": false,
+    "localizationKeysRequired": true,
+    "treeSelection": "city-state-exact-then-wildcard",
+    "duplicateCityMayReuseTree": true,
+    "deterministicRuleEngineOwnsOutcome": true,
+    "agentMayMutateState": false,
+    "graphMustBeAcyclic": true,
+    "allNodesMustBeReachable": true,
+    "allPathsMustReachTerminal": true,
+    "maximumNodesPerTree": 64,
+    "supportedTerminalOutcomes": [
+      "completed",
+      "player_abort"
+    ],
+    "technicalFailureRoute": "service-refund-outside-authored-tree"
+  },
+  "contentRegistration": {
+    "requiredPerPalFaction": true,
+    "requiredFields": [
+      "contentPackId",
+      "contentVersion",
+      "tokenQuota",
+      "maximumAffinityPerDiscourse"
+    ],
+    "quotaChangesRequireMigrationId": true,
+    "quotaCannotDropBelowAwardedCount": true
+  },
+  "runtimeActivation": {
+    "coreEnabled": true,
+    "nativeRaidResultBindingEnabled": false,
+    "nativeDialoguePresenterEnabled": false,
+    "agentAdapterEnabled": false,
+    "persistenceFollowsFactionProgressionSidecar": true
+  }
+}

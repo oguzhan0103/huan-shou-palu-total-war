@@ -1,0 +1,1159 @@
+local FactionEconomyMerchantRuntime = {}
+
+local API_VERSION = "1.0.0"
+
+-- Build 24467282 live evidence proves this authored merchant spawner creates
+-- a real individual handle, actor, controller, and interaction lifecycle.
+-- The generic BP_MonoNPCSpawner and PalNPCManager ordinary-Trader routes do
+-- not create a usable actor when instantiated by the runtime.
+local PROVEN_MERCHANT_CHARACTER_ID = "NPC_Male_DarkTrader"
+local PROVEN_MERCHANT_CHARACTER_CLASS_PATH =
+    "/Game/Pal/Blueprint/Character/NPC/Fat/"
+        .. "BP_NPC_DarkTrader.BP_NPC_DarkTrader_C"
+local PROVEN_MERCHANT_SPAWNER_CLASS_PATH =
+    "/Game/Pal/Blueprint/Spawner/HumanNPCBoss/"
+        .. "BP_MonoNPCSpawnerBossBase_BOSS_DarkTrader."
+        .. "BP_MonoNPCSpawnerBossBase_BOSS_DarkTrader_C"
+local ITEM_SHOP_FLOW_ASSET_PATH =
+    "/Game/Pal/Blueprint/FlowGraph/NPCTalkFlow/CommonNode/"
+        .. "FNBP_OpenItemShop"
+local ITEM_SHOP_FLOW_OBJECT_PATH =
+    ITEM_SHOP_FLOW_ASSET_PATH .. ".FNBP_OpenItemShop"
+local ITEM_SHOP_FLOW_CLASS_PATH =
+    ITEM_SHOP_FLOW_ASSET_PATH .. ".FNBP_OpenItemShop_C"
+local ITEM_SHOP_WIDGET_ASSET_PATH =
+    "/Game/Pal/Blueprint/UI/ItemShop/WBP_ItemShop"
+local ITEM_SHOP_WIDGET_OBJECT_PATH =
+    ITEM_SHOP_WIDGET_ASSET_PATH .. ".WBP_ItemShop"
+local ITEM_SHOP_WIDGET_CLASS_PATH =
+    ITEM_SHOP_WIDGET_ASSET_PATH .. ".WBP_ItemShop_C"
+local ITEM_SHOP_PARAMETER_ASSET_PATH =
+    "/Game/Pal/Blueprint/UI/ItemShop/"
+        .. "BP_PalUIDispatchParameter_ItemShop"
+local ITEM_SHOP_PARAMETER_OBJECT_PATH =
+    ITEM_SHOP_PARAMETER_ASSET_PATH
+        .. ".BP_PalUIDispatchParameter_ItemShop"
+local ITEM_SHOP_PARAMETER_CLASS_PATH =
+    ITEM_SHOP_PARAMETER_ASSET_PATH
+        .. ".BP_PalUIDispatchParameter_ItemShop_C"
+
+local function copy(value)
+    if type(value) ~= "table" then
+        return value
+    end
+    local result = {}
+    for key, item in pairs(value) do
+        result[copy(key)] = copy(item)
+    end
+    return result
+end
+
+local function result(ok, reason, extra)
+    local value = extra or {}
+    value.ok = ok
+    value.reason = reason
+    return value
+end
+
+local function is_valid_uobject(object)
+    if object == nil then
+        return false
+    end
+    local ok, valid = pcall(function()
+        return object:IsValid()
+    end)
+    return ok and valid == true
+end
+
+local function require_non_empty_string(value, name)
+    assert(
+        type(value) == "string" and value ~= "",
+        name .. " must be a non-empty string"
+    )
+    return value
+end
+
+local function offset_location(root, rotation, offset)
+    local yaw = math.rad((rotation and rotation.Yaw) or 0)
+    local forward_x = math.cos(yaw)
+    local forward_y = math.sin(yaw)
+    local right_x = -forward_y
+    local right_y = forward_x
+    return {
+        X = root.X
+            + forward_x * (offset.forward or 0)
+            + right_x * (offset.right or 0),
+        Y = root.Y
+            + forward_y * (offset.forward or 0)
+            + right_y * (offset.right or 0),
+        Z = root.Z + (offset.up or 0),
+    }
+end
+
+local function validate(
+    shop_catalog,
+    commerce_contract,
+    faction_api,
+    commerce_bridge,
+    native_adapter
+)
+    assert(type(shop_catalog) == "table", "economy shop catalog is required")
+    assert(type(shop_catalog.shop_catalog) == "function", "invalid economy shop catalog")
+    assert(type(commerce_contract) == "table", "commerce contract is required")
+    assert(type(faction_api) == "table", "faction API is required")
+    assert(type(commerce_bridge) == "table", "commerce bridge is required")
+    assert(
+        type(commerce_bridge.register_vendor_actor) == "function",
+        "commerce bridge lacks vendor registration"
+    )
+    assert(
+        #commerce_contract.merchantIsland.slotOffsets == 7,
+        "economy market requires seven merchant-island slots"
+    )
+    local contract = shop_catalog.contract
+    assert(type(contract) == "table", "economy shop contract is required")
+    assert(
+        contract.designPolicy.fixedCountersAreMerchantGuildEmployees == true,
+        "economy counters must remain Merchant Guild employees"
+    )
+    assert(
+        contract.designPolicy.fixedCountersAreFactionMembers == false,
+        "economy counters cannot become faction members"
+    )
+    assert(
+        contract.designPolicy.allCountersUseItemShop == true,
+        "economy counters must use ItemShop"
+    )
+    assert(
+        contract.designPolicy.raynePalMerchantIsExcludedSpecialCase == true,
+        "the Rayne Pal merchant must remain outside the economy market"
+    )
+    if native_adapter ~= nil then
+        assert(
+            type(native_adapter.spawn_merchant) == "function"
+                or type(native_adapter.spawn_merchant_async)
+                    == "function"
+                or type(
+                    native_adapter.spawn_merchant_via_npc_manager
+                ) == "function",
+            "native adapter lacks merchant spawn lifecycle"
+        )
+        assert(
+            type(native_adapter.despawn) == "function",
+            "native adapter lacks despawn"
+        )
+    end
+end
+
+function FactionEconomyMerchantRuntime.create(
+    shop_catalog,
+    commerce_contract,
+    faction_api,
+    commerce_bridge,
+    native_adapter,
+    options
+)
+    validate(
+        shop_catalog,
+        commerce_contract,
+        faction_api,
+        commerce_bridge,
+        native_adapter
+    )
+    options = options or {}
+    local records = {}
+    for _, faction_id in ipairs(shop_catalog.representativeOrder) do
+        records[faction_id] = {
+            actor = nil,
+            owned = false,
+            pending = false,
+            pendingHandle = nil,
+            nativeHandle = nil,
+            lastError = nil,
+        }
+    end
+    return setmetatable({
+        version = API_VERSION,
+        shopCatalog = shop_catalog,
+        commerceContract = copy(commerce_contract),
+        factionApi = faction_api,
+        commerceBridge = commerce_bridge,
+        adapter = native_adapter,
+        activationAuthorized = options.activationAuthorized == true,
+        records = records,
+        -- Keep the native dispatch parameter alive while the corresponding
+        -- ItemShop is on PalHUDService's stack.  The service owns the UI, but
+        -- retaining the exact authored parameter also prevents Lua/UE4SS GC
+        -- from invalidating it before the close lifecycle has completed.
+        nativeItemShopHudParams = {},
+        activationCount = 0,
+        deactivationCount = 0,
+        rollbackCount = 0,
+        capabilities = {
+            sevenMerchantGuildCounters = true,
+            economyCatalogShopRows = true,
+            representedFactionSettlement = true,
+            neutralPublicMarketIsland = true,
+            transactionalActivationRollback = true,
+            nativeItemShopFlowDispatch = false,
+            directHudPush = true,
+            raynePalMerchantExcluded = true,
+            storyContentIncluded = false,
+            PalworldSaveMutation = false,
+        },
+    }, { __index = FactionEconomyMerchantRuntime })
+end
+
+function FactionEconomyMerchantRuntime:merchant_plan(
+    faction_id,
+    root_location,
+    root_rotation
+)
+    faction_id = require_non_empty_string(faction_id, "faction ID")
+    local record = self.records[faction_id]
+    if record == nil then
+        return nil, "unknown-economy-shop-faction"
+    end
+    if type(root_location) ~= "table"
+        or type(root_rotation) ~= "table" then
+        return nil, "market-island-placement-pending"
+    end
+    local shop, reason = self.shopCatalog:shop_catalog(faction_id)
+    if shop == nil then
+        return nil, reason
+    end
+    local slot = self.commerceContract.merchantIsland.slotOffsets[
+        shop.slotIndex + 1
+    ]
+    assert(type(slot) == "table", "economy merchant slot is missing")
+    return {
+        runtimeId = "economy-fixed:" .. faction_id,
+        mode = "fixed-market",
+        factionId = faction_id,
+        representedFactionId = faction_id,
+        merchantOrganisationId = shop.merchantOrganisationId,
+        -- The catalog retains each faction's presentation metadata, while
+        -- the executable baseline deliberately reuses the one merchant
+        -- lifecycle already proven in the current game build.
+        characterId = PROVEN_MERCHANT_CHARACTER_ID,
+        -- Keep the known Dark Trader identifiers as content metadata, but
+        -- instantiate the neutral base pawn directly.  Build 24467282 live
+        -- verification proved the boss-spawner variant creates hostile boss
+        -- pawns, whereas the deferred BP_NPC_DarkTrader_C route creates a
+        -- stable salesperson with the required controller and interaction.
+        uniqueNpcId = "DarkTrader",
+        characterClassPath = PROVEN_MERCHANT_CHARACTER_CLASS_PATH,
+        expectedActorClassToken = "BP_NPC_DarkTrader_C",
+        spawnerClassPath = PROVEN_MERCHANT_SPAWNER_CLASS_PATH,
+        spawnerSaveKey = "PFT" .. "_Economy_" .. string.gsub(
+            faction_id,
+            "[^%w_]",
+            "_"
+        ),
+        salesChannel = "ItemShop",
+        shopRowName = shop.lotteryRowName,
+        productGroupRowName = shop.productGroupRowName,
+        -- Seven unique rows and faction registrations distinguish counters;
+        -- their shared neutral merchant model is the 1.0 baseline.
+        nativeSpawnerRequired = false,
+        npcManagerServerSpawnRequired = false,
+        provenNativeSpawnerRoute = "DirectDarkTraderDeferredActor",
+        clothingColour = shop.clothingColour,
+        commercialTruce = true,
+        location = offset_location(
+            root_location,
+            root_rotation,
+            slot
+        ),
+        rotation = copy(root_rotation),
+    }
+end
+
+function FactionEconomyMerchantRuntime:market_plan(
+    root_location,
+    root_rotation
+)
+    local plans = {}
+    for _, faction_id in ipairs(
+        self.shopCatalog.representativeOrder
+    ) do
+        local plan, reason = self:merchant_plan(
+            faction_id,
+            root_location,
+            root_rotation
+        )
+        if plan == nil then
+            return nil, reason
+        end
+        table.insert(plans, plan)
+    end
+    return plans, nil
+end
+
+function FactionEconomyMerchantRuntime:bind_existing(
+    faction_id,
+    actor
+)
+    faction_id = require_non_empty_string(faction_id, "faction ID")
+    local record = self.records[faction_id]
+    if record == nil then
+        return result(false, "unknown-economy-shop-faction")
+    end
+    if actor == nil then
+        return result(false, "invalid-existing-economy-merchant")
+    end
+    if record.actor ~= nil then
+        return result(true, "economy-merchant-already-bound", {
+            factionId = faction_id,
+            actor = record.actor,
+        })
+    end
+    local registered, detail =
+        self.commerceBridge:register_vendor_actor(
+            faction_id,
+            actor,
+            {
+                mode = "fixed-market",
+                commercialTruce = true,
+                merchantOrganisationId =
+                    self.shopCatalog.contract.designPolicy
+                        .merchantOrganisationId,
+                representedFactionId = faction_id,
+                economyCatalogBinding = true,
+            }
+        )
+    if not registered then
+        return result(false, "commerce-vendor-registration-failed", {
+            detail = detail,
+        })
+    end
+    record.actor = actor
+    record.owned = false
+    return result(true, "existing-economy-merchant-bound", {
+        factionId = faction_id,
+        actor = actor,
+    })
+end
+
+function FactionEconomyMerchantRuntime:_rollback(spawned, reason)
+    for index = #spawned, 1, -1 do
+        local entry = spawned[index]
+        if type(self.commerceBridge.unregister_vendor_actor)
+            == "function" then
+            pcall(
+                self.commerceBridge.unregister_vendor_actor,
+                self.commerceBridge,
+                entry.actor
+            )
+        end
+        pcall(
+            self.adapter.despawn,
+            self.adapter,
+            entry.actor,
+            reason
+        )
+        local record = self.records[entry.factionId]
+        record.actor = nil
+        record.owned = false
+    end
+    self.rollbackCount = self.rollbackCount + 1
+end
+
+function FactionEconomyMerchantRuntime:_activation_gate()
+    local activation = self.shopCatalog.contract.runtimeActivation
+    if not self.activationAuthorized
+        or activation.customProductRowsEnabled ~= true
+        or activation.nativeMerchantSpawnEnabled ~= true
+        or activation.nativeShopBindingEnabled ~= true then
+        return false, "economy-market-runtime-disabled"
+    end
+    if self.adapter == nil then
+        return false, "native-merchant-adapter-pending"
+    end
+    return true, nil
+end
+
+function FactionEconomyMerchantRuntime:_uses_async_merchant_spawner(plan)
+    return self.adapter ~= nil
+        and type(self.adapter.spawn_merchant_async) == "function"
+        and (
+            self.adapter.asyncMerchantSpawnerEnabled == true
+            or (type(plan) == "table"
+                and plan.nativeSpawnerRequired == true)
+        )
+end
+
+function FactionEconomyMerchantRuntime:_uses_npc_manager_spawn(plan)
+    return self.adapter ~= nil
+        and type(
+            self.adapter.spawn_merchant_via_npc_manager
+        ) == "function"
+        and type(plan) == "table"
+        and plan.npcManagerServerSpawnRequired == true
+end
+
+function FactionEconomyMerchantRuntime:_register_ready_actor(
+    plan,
+    actor,
+    owned,
+    native_handle
+)
+    local record = self.records[plan.factionId]
+    local registered, detail =
+        self.commerceBridge:register_vendor_actor(
+            plan.factionId,
+            actor,
+            {
+                mode = "fixed-market",
+                commercialTruce = true,
+                merchantOrganisationId =
+                    plan.merchantOrganisationId,
+                representedFactionId = plan.factionId,
+                economyCatalogBinding = true,
+            }
+        )
+    if not registered then
+        record.pending = false
+        record.pendingHandle = nil
+        record.lastError = detail
+        return false, detail
+    end
+    -- This is a hard acceptance gate.  UE4SS may report inherited Lua
+    -- methods inconsistently through type(instance.method), so invoke the
+    -- adapter directly and roll the merchant back unless the second vendor
+    -- row/network setup succeeds after faction registration.
+    local refresh_ok, refreshed, detail_or_error = pcall(function()
+        if type(self.adapter.capabilities) == "table"
+            and self.adapter.capabilities
+                .directNativeBlueprintSpawn == true then
+            local configured, configure_error =
+                self.adapter:_configure_vendor(actor, plan)
+            if not configured then
+                return false, configure_error
+            end
+            local requested, network_detail =
+                self.adapter:_request_network_shop_setup(actor)
+            self.adapter:_log(string.format(
+                "MERCHANT_SHOP_REFRESHED actor=%s row=%s requested=%s detail=%s source=runtime-post-registration",
+                tostring(actor),
+                tostring(plan.shopRowName),
+                tostring(requested),
+                tostring(network_detail)
+            ))
+            return requested, network_detail
+        end
+        return self.adapter:refresh_merchant_shop(actor, plan)
+    end)
+    if not refresh_ok or refreshed ~= true then
+        if type(self.commerceBridge.unregister_vendor_actor)
+            == "function" then
+            pcall(
+                self.commerceBridge.unregister_vendor_actor,
+                self.commerceBridge,
+                actor
+            )
+        end
+        record.pending = false
+        record.pendingHandle = nil
+        record.lastError = tostring(
+            refresh_ok and detail_or_error or refreshed
+        )
+        return false, "registered-shop-refresh-failed:"
+            .. tostring(record.lastError)
+    end
+    local refresh_detail = tostring(detail_or_error)
+    record.actor = actor
+    record.owned = owned == true
+    record.pending = false
+    record.pendingHandle = nil
+    record.nativeHandle = native_handle
+    record.lastError = nil
+    record.shopRefreshDetail = refresh_detail
+    self.activationCount = self.activationCount + 1
+    return true, nil
+end
+
+function FactionEconomyMerchantRuntime:activate_faction(
+    faction_id,
+    root_location,
+    root_rotation
+)
+    local enabled, disabled_reason = self:_activation_gate()
+    if not enabled then
+        return result(false, disabled_reason)
+    end
+    local plan, plan_error = self:merchant_plan(
+        faction_id,
+        root_location,
+        root_rotation
+    )
+    if plan == nil then
+        return result(false, plan_error)
+    end
+    local record = self.records[plan.factionId]
+    if record.actor ~= nil then
+        return result(true, "economy-merchant-already-active", {
+            factionId = plan.factionId,
+            actor = record.actor,
+            spawned = {},
+        })
+    end
+    if record.pending then
+        return result(true, "economy-merchant-activation-pending", {
+            factionId = plan.factionId,
+            pendingHandle = record.pendingHandle,
+            spawned = {},
+        })
+    end
+    if self:_uses_npc_manager_spawn(plan)
+        or self:_uses_async_merchant_spawner(plan) then
+        record.pending = true
+        record.lastError = nil
+        local callbacks = {
+            onReady = function(actor, handle)
+                local registered, detail =
+                    self:_register_ready_actor(
+                        plan,
+                        actor,
+                        true,
+                        handle
+                    )
+                if not registered then
+                    pcall(
+                        self.adapter.despawn,
+                        self.adapter,
+                        handle,
+                        "economy-vendor-registration-failed"
+                    )
+                end
+            end,
+            onError = function(reason, native_handle)
+                local cleanup_handle = native_handle
+                    or record.pendingHandle
+                if cleanup_handle ~= nil then
+                    pcall(
+                        self.adapter.despawn,
+                        self.adapter,
+                        cleanup_handle,
+                        "economy-merchant-async-failed"
+                    )
+                end
+                record.pending = false
+                record.pendingHandle = nil
+                record.nativeHandle = nil
+                record.lastError = reason
+            end,
+        }
+        local spawn_method = self:_uses_npc_manager_spawn(plan)
+                and self.adapter.spawn_merchant_via_npc_manager
+            or self.adapter.spawn_merchant_async
+        local ok, handle_or_error = pcall(
+            spawn_method,
+            self.adapter,
+            plan,
+            callbacks
+        )
+        if not ok or handle_or_error == nil then
+            record.pending = false
+            record.lastError = tostring(handle_or_error)
+            return result(false, "economy-merchant-spawn-failed", {
+                factionId = plan.factionId,
+                detail = tostring(handle_or_error),
+            })
+        end
+        if record.actor == nil and record.pending then
+            record.pendingHandle = handle_or_error
+        end
+        return result(true, "economy-merchant-activation-queued", {
+            factionId = plan.factionId,
+            pendingHandle = handle_or_error,
+            plan = plan,
+            spawned = {},
+        })
+    end
+    local ok, actor_or_error = pcall(
+        self.adapter.spawn_merchant,
+        self.adapter,
+        plan
+    )
+    if not ok or actor_or_error == nil then
+        return result(false, "economy-merchant-spawn-failed", {
+            factionId = plan.factionId,
+            detail = tostring(actor_or_error),
+        })
+    end
+    local registered, detail = self:_register_ready_actor(
+        plan,
+        actor_or_error,
+        true
+    )
+    if not registered then
+        pcall(
+            self.adapter.despawn,
+            self.adapter,
+            actor_or_error,
+            "economy-vendor-registration-failed"
+        )
+        return result(
+            false,
+            "commerce-vendor-registration-failed",
+            {
+                factionId = plan.factionId,
+                detail = detail,
+            }
+        )
+    end
+    return result(true, "economy-merchant-activated", {
+        factionId = plan.factionId,
+        actor = actor_or_error,
+        plan = plan,
+        spawned = {
+            {
+                factionId = plan.factionId,
+                actor = actor_or_error,
+            },
+        },
+    })
+end
+
+function FactionEconomyMerchantRuntime:deactivate_faction(
+    faction_id,
+    reason
+)
+    faction_id = require_non_empty_string(faction_id, "faction ID")
+    local record = self.records[faction_id]
+    if record == nil then
+        return result(false, "unknown-economy-shop-faction")
+    end
+    if record.actor == nil then
+        if record.pending and record.pendingHandle ~= nil then
+            local ok, outcome_or_error = pcall(
+                self.adapter.despawn,
+                self.adapter,
+                record.pendingHandle,
+                reason or "economy-merchant-pending-cancelled"
+            )
+            if not ok
+                or (type(outcome_or_error) == "table"
+                    and outcome_or_error.ok == false) then
+                return result(
+                    false,
+                    "economy-merchant-pending-cancel-failed",
+                    {
+                        factionId = faction_id,
+                        detail = tostring(outcome_or_error),
+                    }
+                )
+            end
+            record.pending = false
+            record.pendingHandle = nil
+            record.nativeHandle = nil
+            record.lastError = nil
+            self.deactivationCount = self.deactivationCount + 1
+            return result(
+                true,
+                "economy-merchant-pending-cancelled",
+                { factionId = faction_id }
+            )
+        end
+        return result(true, "economy-merchant-already-inactive", {
+            factionId = faction_id,
+        })
+    end
+    if not record.owned then
+        return result(false, "external-economy-merchant-preserved", {
+            factionId = faction_id,
+            actor = record.actor,
+        })
+    end
+    if type(self.commerceBridge.unregister_vendor_actor)
+        == "function" then
+        pcall(
+            self.commerceBridge.unregister_vendor_actor,
+            self.commerceBridge,
+            record.actor
+        )
+    end
+    local actor = record.actor
+    self.nativeItemShopHudParams[actor] = nil
+    local despawn_target = record.nativeHandle or actor
+    local ok, outcome_or_error = pcall(
+        self.adapter.despawn,
+        self.adapter,
+        despawn_target,
+        reason or "economy-merchant-deactivated"
+    )
+    if not ok
+        or (type(outcome_or_error) == "table"
+            and outcome_or_error.ok == false) then
+        return result(false, "economy-merchant-despawn-failed", {
+            factionId = faction_id,
+            detail = tostring(outcome_or_error),
+        })
+    end
+    record.actor = nil
+    record.owned = false
+    record.nativeHandle = nil
+    self.deactivationCount = self.deactivationCount + 1
+    return result(true, "economy-merchant-deactivated", {
+        factionId = faction_id,
+        actor = actor,
+    })
+end
+
+function FactionEconomyMerchantRuntime:activate_market(
+    root_location,
+    root_rotation
+)
+    local enabled, disabled_reason = self:_activation_gate()
+    if not enabled then
+        return result(false, disabled_reason)
+    end
+    local plans, plan_error = self:market_plan(
+        root_location,
+        root_rotation
+    )
+    if plans == nil then
+        return result(false, plan_error)
+    end
+    local spawned = {}
+    for _, plan in ipairs(plans) do
+        local record = self.records[plan.factionId]
+        if record.actor == nil and not record.pending
+            and (
+                self:_uses_npc_manager_spawn(plan)
+                or self:_uses_async_merchant_spawner(plan)
+            ) then
+            local outcome = self:activate_faction(
+                plan.factionId,
+                root_location,
+                root_rotation
+            )
+            if not outcome.ok then
+                for _, queued_faction_id in ipairs(spawned) do
+                    self:deactivate_faction(
+                        queued_faction_id,
+                        "economy-market-activation-rollback"
+                    )
+                end
+                self.rollbackCount = self.rollbackCount + 1
+                return outcome
+            end
+            table.insert(spawned, plan.factionId)
+        elseif record.actor == nil then
+            local ok, actor_or_error = pcall(
+                self.adapter.spawn_merchant,
+                self.adapter,
+                plan
+            )
+            if not ok or actor_or_error == nil then
+                self:_rollback(
+                    spawned,
+                    "economy-market-activation-rollback"
+                )
+                return result(false, "economy-merchant-spawn-failed", {
+                    factionId = plan.factionId,
+                    detail = tostring(actor_or_error),
+                })
+            end
+            -- Use the same post-registration shop refresh gate as the
+            -- single-counter route.  The former inline registration skipped
+            -- the second SetupShopData/network bind for seven-counter markets.
+            local registered, detail = self:_register_ready_actor(
+                plan,
+                actor_or_error,
+                true
+            )
+            if not registered then
+                pcall(
+                    self.adapter.despawn,
+                    self.adapter,
+                    actor_or_error,
+                    "economy-vendor-registration-failed"
+                )
+                self:_rollback(
+                    spawned,
+                    "economy-market-activation-rollback"
+                )
+                return result(
+                    false,
+                    "commerce-vendor-registration-failed",
+                    {
+                        factionId = plan.factionId,
+                        detail = detail,
+                    }
+                )
+            end
+            table.insert(spawned, {
+                factionId = plan.factionId,
+                actor = actor_or_error,
+            })
+        end
+    end
+    local async_market = #plans > 0
+        and (
+            self:_uses_npc_manager_spawn(plans[1])
+            or self:_uses_async_merchant_spawner(plans[1])
+        )
+    if not async_market then
+        self.activationCount = self.activationCount + 1
+    end
+    return result(true,
+        async_market
+            and "economy-market-activation-queued"
+            or "economy-market-activated", {
+        spawned = spawned,
+    })
+end
+
+function FactionEconomyMerchantRuntime:deactivate_market(reason)
+    local removed = {}
+    local preserved = {}
+    for faction_id, record in pairs(self.records) do
+        if record.pending and record.pendingHandle ~= nil then
+            pcall(
+                self.adapter.despawn,
+                self.adapter,
+                record.pendingHandle,
+                reason or "economy-market-deactivated"
+            )
+            table.insert(removed, faction_id)
+            record.pending = false
+            record.pendingHandle = nil
+            record.nativeHandle = nil
+            record.lastError = nil
+        elseif record.actor ~= nil then
+            if record.owned then
+                if type(self.commerceBridge.unregister_vendor_actor)
+                    == "function" then
+                    pcall(
+                        self.commerceBridge.unregister_vendor_actor,
+                        self.commerceBridge,
+                        record.actor
+                    )
+                end
+                pcall(
+                    self.adapter.despawn,
+                    self.adapter,
+                    record.nativeHandle or record.actor,
+                    reason or "economy-market-deactivated"
+                )
+                table.insert(removed, faction_id)
+                self.nativeItemShopHudParams[record.actor] = nil
+                record.actor = nil
+                record.owned = false
+                record.nativeHandle = nil
+            else
+                table.insert(preserved, faction_id)
+            end
+        end
+    end
+    self.deactivationCount = self.deactivationCount + 1
+    return result(true, "economy-market-deactivated", {
+        removedFactionIds = removed,
+        preservedExternalFactionIds = preserved,
+    })
+end
+
+function FactionEconomyMerchantRuntime:status()
+    local active_count = 0
+    local owned_count = 0
+    local pending_count = 0
+    for _, record in pairs(self.records) do
+        if record.actor ~= nil then
+            active_count = active_count + 1
+            if record.owned then
+                owned_count = owned_count + 1
+            end
+        end
+        if record.pending then
+            pending_count = pending_count + 1
+        end
+    end
+    local activation = self.shopCatalog.contract.runtimeActivation
+    return {
+        version = self.version,
+        representativeCount = #self.shopCatalog.representativeOrder,
+        activeCount = active_count,
+        ownedCount = owned_count,
+        pendingCount = pending_count,
+        adapterReady = self.adapter ~= nil,
+        activationAuthorized = self.activationAuthorized,
+        nativeMerchantSpawnEnabled =
+            activation.nativeMerchantSpawnEnabled,
+        customProductRowsEnabled =
+            activation.customProductRowsEnabled,
+        nativeShopBindingEnabled =
+            activation.nativeShopBindingEnabled,
+        activationCount = self.activationCount,
+        deactivationCount = self.deactivationCount,
+        rollbackCount = self.rollbackCount,
+        placementStatus =
+            self.commerceContract.merchantIsland.placementStatus,
+        runtimeStatus = self.activationAuthorized
+                and activation.customProductRowsEnabled
+                and activation.nativeMerchantSpawnEnabled
+                and activation.nativeShopBindingEnabled
+                and "ready-for-placement-adapter"
+            or "disabled-pending-live-acceptance",
+    }
+end
+
+local function find_or_load_class(asset_path, class_path, object_path)
+    if type(StaticFindObject) ~= "function" then
+        return nil, "StaticFindObject-unavailable"
+    end
+    local found, class_object = pcall(function()
+        return StaticFindObject(class_path)
+    end)
+    if found and is_valid_uobject(class_object) then
+        return class_object, nil
+    end
+    if type(LoadAsset) ~= "function" then
+        return nil, "LoadAsset-unavailable"
+    end
+    local last_loaded = nil
+    for _, load_path in ipairs({
+        object_path or ITEM_SHOP_FLOW_OBJECT_PATH,
+        asset_path,
+        class_path,
+    }) do
+        local loaded, loaded_asset = pcall(function()
+            return LoadAsset(load_path)
+        end)
+        last_loaded = loaded_asset
+        if loaded and is_valid_uobject(loaded_asset) then
+            local generated_ok, generated_class = pcall(function()
+                return loaded_asset.GeneratedClass
+            end)
+            if generated_ok and is_valid_uobject(generated_class) then
+                return generated_class, nil
+            end
+        end
+        found, class_object = pcall(function()
+            return StaticFindObject(class_path)
+        end)
+        if found and is_valid_uobject(class_object) then
+            return class_object, nil
+        end
+    end
+    return nil, "asset-load-failed:" .. tostring(last_loaded)
+end
+
+-- Reproduce FNBP_OpenItemShop.OpenItemShop_Internal byte-for-byte at the
+-- reflected UObject boundary.  A standalone FNBP node has no running FlowAsset
+-- and therefore resolves PalUtility.GetHUDService(self) against an invalid
+-- world context.  Use the local player as the authored WorldContextObject,
+-- create BP_PalUIDispatchParameter_ItemShop with the HUD service as Outer, set
+-- the two fields seen in the cooked Blueprint bytecode, and let PalHUDService
+-- own the native WBP_ItemShop stack lifecycle.
+function FactionEconomyMerchantRuntime:_open_native_item_shop(
+    actor,
+    player_actor
+)
+    local vendor = nil
+    local vendor_ok = pcall(function()
+        vendor = actor.BP_PalShopVenderDataComponent
+    end)
+    if not vendor_ok or vendor == nil then
+        return false, "merchant-vendor-component-unavailable"
+    end
+    local shop = nil
+    local shop_ok = pcall(function()
+        shop = vendor.MyItemShop
+    end)
+    if not shop_ok or shop == nil then
+        return false, "merchant-item-shop-unavailable"
+    end
+    local widget_class, widget_class_error = find_or_load_class(
+        ITEM_SHOP_WIDGET_ASSET_PATH,
+        ITEM_SHOP_WIDGET_CLASS_PATH,
+        ITEM_SHOP_WIDGET_OBJECT_PATH
+    )
+    if widget_class == nil then
+        return false, "item-shop-native-widget-"
+            .. tostring(widget_class_error)
+    end
+    local parameter_class, parameter_class_error = find_or_load_class(
+        ITEM_SHOP_PARAMETER_ASSET_PATH,
+        ITEM_SHOP_PARAMETER_CLASS_PATH,
+        ITEM_SHOP_PARAMETER_OBJECT_PATH
+    )
+    if parameter_class == nil then
+        return false, "item-shop-native-parameter-"
+            .. tostring(parameter_class_error)
+    end
+    local utility_ok, utility = pcall(function()
+        return StaticFindObject("/Script/Pal.Default__PalUtility")
+    end)
+    if not utility_ok or not is_valid_uobject(utility) then
+        return false, "item-shop-native-pal-utility-unavailable"
+    end
+    local hud_ok, hud_service = pcall(function()
+        return utility:GetHUDService(player_actor)
+    end)
+    if not hud_ok or not is_valid_uobject(hud_service) then
+        return false, "item-shop-native-hud-service-unavailable:"
+            .. tostring(hud_service)
+    end
+
+    local gameplay_ok, gameplay = pcall(function()
+        return StaticFindObject(
+            "/Script/Engine.Default__GameplayStatics"
+        )
+    end)
+    if not gameplay_ok or not is_valid_uobject(gameplay) then
+        return false, "item-shop-native-gameplay-statics-unavailable"
+    end
+    local parameter_ok, parameter = pcall(function()
+        return gameplay:SpawnObject(parameter_class, hud_service)
+    end)
+    if not parameter_ok or not is_valid_uobject(parameter) then
+        return false, "item-shop-native-parameter-spawn-failed:"
+            .. tostring(parameter)
+    end
+    local configured, configure_error = pcall(function()
+        -- EPalItemShopTabType::Buy is byte value 1 in the cooked flow.
+        parameter.OpenTabType = 1
+        parameter.shop = shop
+    end)
+    if not configured then
+        return false, "item-shop-native-parameter-configure-failed:"
+            .. tostring(configure_error)
+    end
+    self.nativeItemShopHudParams[actor] = parameter
+    local pushed, ui_id_or_error = pcall(function()
+        return hud_service:Push(widget_class, parameter)
+    end)
+    if not pushed then
+        self.nativeItemShopHudParams[actor] = nil
+        return false, "item-shop-native-hud-push-failed:"
+            .. tostring(ui_id_or_error)
+    end
+    return true, "PalHUDService.Push(WBP_ItemShop_C,native-parameter)", {
+        shop = shop,
+        hudService = hud_service,
+        dispatchParameter = parameter,
+        widgetClass = widget_class,
+        uiId = ui_id_or_error,
+    }
+end
+
+-- Runtime-created Dark Trader pawns have the authored interaction component
+-- and shop action, but Palworld does not insert a pawn without an
+-- IndividualHandle into the local player's overlap-driven interaction list.
+-- Route F to the same native OnTriggerInteract entry only when the player is
+-- close to one of this runtime's registered Merchant Guild actors.  The
+-- distance gate keeps every unrelated NPC and world interaction untouched.
+function FactionEconomyMerchantRuntime:interact_nearest(
+    player_actor,
+    max_distance
+)
+    if player_actor == nil then
+        return result(false, "local-player-unavailable")
+    end
+    max_distance = tonumber(max_distance) or 350
+    if max_distance <= 0 then
+        return result(false, "invalid-interaction-distance")
+    end
+    local player_ok, player_location = pcall(function()
+        return player_actor:K2_GetActorLocation()
+    end)
+    if not player_ok or player_location == nil then
+        return result(false, "local-player-location-unavailable")
+    end
+    local player_x = tonumber(player_location.X)
+    local player_y = tonumber(player_location.Y)
+    local player_z = tonumber(player_location.Z)
+    if player_x == nil or player_y == nil or player_z == nil then
+        return result(false, "invalid-local-player-location")
+    end
+
+    local nearest_actor = nil
+    local nearest_faction_id = nil
+    local nearest_distance_squared = nil
+    local max_distance_squared = max_distance * max_distance
+    for faction_id, record in pairs(self.records) do
+        if record.actor ~= nil then
+            local actor_ok, actor_location = pcall(function()
+                return record.actor:K2_GetActorLocation()
+            end)
+            if actor_ok and actor_location ~= nil then
+                local actor_x = tonumber(actor_location.X)
+                local actor_y = tonumber(actor_location.Y)
+                local actor_z = tonumber(actor_location.Z)
+                if actor_x ~= nil and actor_y ~= nil
+                    and actor_z ~= nil then
+                    local dx = actor_x - player_x
+                    local dy = actor_y - player_y
+                    local dz = actor_z - player_z
+                    local distance_squared = dx * dx + dy * dy + dz * dz
+                    if distance_squared <= max_distance_squared
+                        and (
+                            nearest_distance_squared == nil
+                            or distance_squared
+                                < nearest_distance_squared
+                        ) then
+                        nearest_actor = record.actor
+                        nearest_faction_id = faction_id
+                        nearest_distance_squared = distance_squared
+                    end
+                end
+            end
+        end
+    end
+    if nearest_actor == nil then
+        return result(false, "no-economy-merchant-in-range")
+    end
+    local interaction = nil
+    local component_ok = pcall(function()
+        interaction = nearest_actor.BP_NPCInteractionComponent
+    end)
+    if not component_ok or interaction == nil then
+        return result(false, "merchant-interaction-component-unavailable", {
+            factionId = nearest_faction_id,
+            actor = nearest_actor,
+        })
+    end
+    -- Build 24467282 exposes OnTriggerInteract(Other,
+    -- EPalInteractiveObjectIndicatorType).  Runtime-created merchants use the
+    -- ordinary NPC "Talk" route, whose reflected enum value is 39.  Passing
+    -- only Other is rejected by UE4SS before the native function runs.
+    local talk_indicator_type = 39
+    local triggered, trigger_error = pcall(function()
+        interaction:OnTriggerInteract(player_actor, talk_indicator_type)
+    end)
+    if not triggered then
+        return result(false, "merchant-native-interaction-failed", {
+            factionId = nearest_faction_id,
+            actor = nearest_actor,
+            detail = tostring(trigger_error),
+        })
+    end
+    local item_shop_opened, item_shop_route, item_shop_detail =
+        self:_open_native_item_shop(nearest_actor, player_actor)
+    if not item_shop_opened then
+        return result(false, "merchant-item-shop-open-failed", {
+            factionId = nearest_faction_id,
+            actor = nearest_actor,
+            distance = math.sqrt(nearest_distance_squared),
+            route = "PalNPCInteractionComponent.OnTriggerInteract",
+            indicatorType = talk_indicator_type,
+            detail = tostring(item_shop_route),
+        })
+    end
+    return result(true, "merchant-native-item-shop-dispatched", {
+        factionId = nearest_faction_id,
+        actor = nearest_actor,
+        distance = math.sqrt(nearest_distance_squared),
+        route = "PalNPCInteractionComponent.OnTriggerInteract -> "
+            .. tostring(item_shop_route),
+        indicatorType = talk_indicator_type,
+        shop = item_shop_detail and item_shop_detail.shop,
+        dispatchParameter = item_shop_detail
+            and item_shop_detail.dispatchParameter,
+        uiId = item_shop_detail and item_shop_detail.uiId,
+    })
+end
+
+return FactionEconomyMerchantRuntime

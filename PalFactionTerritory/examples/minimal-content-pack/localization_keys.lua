@@ -1,0 +1,57 @@
+local Keys = {
+    questTitle = "example.minimal.loc.quest.title",
+    questSummary = "example.minimal.loc.quest.summary",
+    questBeginObjective = "example.minimal.loc.quest.stage.begin.objective",
+    questChooseObjective = "example.minimal.loc.quest.stage.choose.objective",
+    questResolveObjective = "example.minimal.loc.quest.stage.resolve.objective",
+    questPreserveChoice = "example.minimal.loc.quest.branch.preserve.choice",
+    questTransferChoice = "example.minimal.loc.quest.branch.transfer.choice",
+    uniquePalName = "example.minimal.loc.world.unique.keystone.name",
+    cityName = "example.minimal.loc.world.city.primary.name",
+    preserveRouteName = "example.minimal.loc.ending.route.preserve.name",
+    transferRouteName = "example.minimal.loc.ending.route.transfer.name",
+    removeRouteName = "example.minimal.loc.ending.route.remove.name",
+    preserveTitle = "example.minimal.loc.ending.title.preserve",
+    transferTitle = "example.minimal.loc.ending.title.transfer",
+    removeTitle = "example.minimal.loc.ending.title.remove",
+    palRepresentativeName = "example.minimal.loc.pal.representative.name",
+    palRepresentativePrompt = "example.minimal.loc.pal.representative.prompt",
+    palOpening = "example.minimal.loc.pal.node.opening",
+    palCompleteChoice = "example.minimal.loc.pal.choice.complete",
+    palAbortChoice = "example.minimal.loc.pal.choice.abort",
+    palComplete = "example.minimal.loc.pal.node.complete",
+    palAbort = "example.minimal.loc.pal.node.abort",
+}
+
+-- This catalog contains identifiers only. Actual localized strings belong in
+-- an author-owned localization layer and are intentionally absent here.
+local Catalog = {
+    Keys.questTitle,
+    Keys.questSummary,
+    Keys.questBeginObjective,
+    Keys.questChooseObjective,
+    Keys.questResolveObjective,
+    Keys.questPreserveChoice,
+    Keys.questTransferChoice,
+    Keys.uniquePalName,
+    Keys.cityName,
+    Keys.preserveRouteName,
+    Keys.transferRouteName,
+    Keys.removeRouteName,
+    Keys.preserveTitle,
+    Keys.transferTitle,
+    Keys.removeTitle,
+    Keys.palRepresentativeName,
+    Keys.palRepresentativePrompt,
+    Keys.palOpening,
+    Keys.palCompleteChoice,
+    Keys.palAbortChoice,
+    Keys.palComplete,
+    Keys.palAbort,
+}
+
+return {
+    namespace = "example.minimal.loc",
+    byName = Keys,
+    catalog = Catalog,
+}

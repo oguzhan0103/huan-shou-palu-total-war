@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>势力操作台 · 幻兽帕鲁全面战争</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">PALPAGOS FACTION NETWORK</p>
+        <h1>势力操作台</h1>
+        <p class="subtitle">外部好感度账本 · 商人商会交易监控</p>
+      </div>
+      <div class="connection">
+        <span id="connection-dot" class="connection-dot"></span>
+        <div>
+          <strong id="connection-text">正在连接游戏账本</strong>
+          <small id="profile-text">等待世界与玩家身份</small>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section id="waiting" class="waiting-card">
+        <div class="pulse"></div>
+        <div>
+          <h2>操作台已经就绪</h2>
+          <p>进入任意世界后，Mod 会自动创建该世界与玩家独立的外部账本。</p>
+        </div>
+      </section>
+
+      <section id="dashboard" class="dashboard hidden">
+        <div class="summary-grid">
+          <article class="metric-card">
+            <span>人类领主</span>
+            <strong id="human-lords">0 / 7</strong>
+            <small>全部达成后解锁帕鲁和解</small>
+          </article>
+          <article class="metric-card">
+            <span>帕鲁友好</span>
+            <strong id="pal-friendly">0 / 5</strong>
+            <small>只允许从红色转为蓝色</small>
+          </article>
+          <article class="metric-card accent">
+            <span>结局三门槛</span>
+            <strong id="ending-status">未解锁</strong>
+            <small id="revision-text">账本修订 0</small>
+          </article>
+          <article class="metric-card">
+            <span>已确认交易</span>
+            <strong id="transaction-total">0</strong>
+            <small id="updated-text">尚无更新时间</small>
+          </article>
+        </div>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">HUMAN CITY-STATES</p>
+              <h2>人类势力</h2>
+            </div>
+            <span class="legend">成员 0 · 核心 300 · 领队 700 · 领主 1200</span>
+          </div>
+          <div id="human-factions" class="faction-grid"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">PAL TRIBES</p>
+              <h2>帕鲁部落</h2>
+            </div>
+            <span class="legend">有限信物 · 论道机会 · 最高友好</span>
+          </div>
+          <div id="pal-factions" class="faction-grid compact"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">MERCHANT GUILD LEDGER</p>
+              <h2>商会交易流水</h2>
+            </div>
+            <button id="refresh-button" type="button">立即刷新</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>时间</th>
+                  <th>势力</th>
+                  <th>方向</th>
+                  <th>商品</th>
+                  <th>好感度</th>
+                  <th>结算状态</th>
+                </tr>
+              </thead>
+              <tbody id="transactions"></tbody>
+            </table>
+            <p id="empty-transactions" class="empty">尚无已确认交易。普通浏览、打开商店和失败交易不会增加好感度。</p>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <footer>
+      <span>只读操作台</span>
+      <span>好感度由 Mod 规则引擎结算，界面不能伪造数值</span>
+    </footer>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

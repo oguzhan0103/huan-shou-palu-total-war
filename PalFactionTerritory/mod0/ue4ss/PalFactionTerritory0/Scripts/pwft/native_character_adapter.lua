@@ -1,0 +1,1756 @@
+local NativeCharacterAdapter = {}
+
+local SHOP_PROPERTIES = {
+    ItemShop = {
+        lottery = "itemShopLotteryType",
+        row = "itemShopSimpleLotteryTableName",
+        restock = "ItemShopRestockMinute",
+    },
+    PalShop = {
+        lottery = "palShopLotteryType",
+        row = "palShopSimpleLotteryTableName",
+        restock = "PalShopRestockMinute",
+    },
+}
+
+local function require_non_empty_string(value, name)
+    assert(
+        type(value) == "string" and value ~= "",
+        name .. " must be a non-empty string"
+    )
+    return value
+end
+
+local function is_valid_object(object)
+    if object == nil then
+        return false
+    end
+    local ok, valid = pcall(function()
+        return object:IsValid()
+    end)
+    return ok and valid == true
+end
+
+local function safe_full_name(object)
+    if not is_valid_object(object) then
+        return "<invalid>"
+    end
+    local ok, value = pcall(function()
+        return object:GetFullName()
+    end)
+    return ok and tostring(value) or "<unreadable>"
+end
+
+local function safe_property(object, name)
+    if object == nil then
+        return nil
+    end
+    local ok, value = pcall(function()
+        return object[name]
+    end)
+    return ok and value or nil
+end
+
+local function safe_unwrap(value)
+    if value == nil then
+        return nil
+    end
+    local ok, unwrapped = pcall(function()
+        return value:get()
+    end)
+    if ok and unwrapped ~= nil then
+        return unwrapped
+    end
+    return value
+end
+
+local function copy_vector(value, defaults)
+    assert(type(value) == "table", "spawn vector is required")
+    return {
+        X = value.X or defaults.X,
+        Y = value.Y or defaults.Y,
+        Z = value.Z or defaults.Z,
+    }
+end
+
+local function class_to_asset_path(class_path)
+    local package_path, object_name = string.match(
+        class_path,
+        "^(.*)%.([^%.]+)_C$"
+    )
+    if package_path == nil or object_name == nil then
+        return nil
+    end
+    return package_path .. "." .. object_name
+end
+
+local function class_to_package_path(class_path)
+    return string.match(class_path, "^(.*)%.[^%.]+_C$")
+end
+
+local function class_token(class_path)
+    return string.match(class_path, "%.([^%.]+)$")
+end
+
+local function make_result(ok, reason, extra)
+    local value = extra or {}
+    value.ok = ok
+    value.reason = reason
+    return value
+end
+
+function NativeCharacterAdapter.create(options)
+    options = options or {}
+    local instance = {
+        version = "1.0.0",
+        staticFindObject =
+            options.staticFindObject or _G.StaticFindObject,
+        loadAsset = options.loadAsset or _G.LoadAsset,
+        findAllOf = options.findAllOf or _G.FindAllOf,
+        -- UE4SS exposes FName through the Lua global resolver on the live
+        -- build, but it is not necessarily materialised as a raw _G field.
+        fName = options.fName or FName,
+        worldContextProvider = options.worldContextProvider,
+        collisionHandlingOverride =
+            options.collisionHandlingOverride or 2,
+        restockMinutes = options.restockMinutes or 30,
+        refreshVendorOnSpawn =
+            options.refreshVendorOnSpawn ~= false,
+        controllerClassPath = options.controllerClassPath,
+        merchantSpawnerClassPath =
+            options.merchantSpawnerClassPath,
+        merchantDefaultActionClassPath =
+            options.merchantDefaultActionClassPath,
+        asyncMerchantSpawnerEnabled =
+            options.asyncMerchantSpawnerEnabled == true,
+        merchantLevel = options.merchantLevel or 30,
+        nativeSetupRetryMs =
+            options.nativeSetupRetryMs or 500,
+        nativeSetupMaxAttempts =
+            options.nativeSetupMaxAttempts or 40,
+        nativeActorFallbackAttempt =
+            options.nativeActorFallbackAttempt or 2,
+        nativeActorFallbackRadius =
+            options.nativeActorFallbackRadius or 2500,
+        executeWithDelay =
+            options.executeWithDelay or _G.ExecuteWithDelay,
+        executeInGameThread =
+            options.executeInGameThread or _G.ExecuteInGameThread,
+        logger = options.logger,
+        records = {},
+        -- SetupInteraction binds BP_InteractableSphere delegates.  Keep a
+        -- per-actor latch so a commerce refresh/re-entry cannot bind the same
+        -- Blueprint delegate twice; SetActive_Interact_ToAll remains safe to
+        -- repeat when an already prepared actor needs reactivation.
+        interactionReadyActors = {},
+        spawnAttemptCount = 0,
+        merchantSpawnCount = 0,
+        guardSpawnCount = 0,
+        despawnCount = 0,
+        failureCount = 0,
+        capabilities = {
+            directNativeBlueprintSpawn = true,
+            palNpcManagerServerSpawn = true,
+            nativeMerchantSpawnerLifecycle =
+                options.asyncMerchantSpawnerEnabled == true,
+            asynchronousMerchantReadiness = true,
+            itemShopBinding = true,
+            palShopBinding = true,
+            guardBlueprintSpawn = true,
+            guardProviderFactory = true,
+            noPermanentLoop = true,
+            PalworldSaveMutation = false,
+        },
+    }
+    assert(
+        type(instance.collisionHandlingOverride) == "number",
+        "collision handling override must be numeric"
+    )
+    assert(
+        type(instance.restockMinutes) == "number"
+            and instance.restockMinutes > 0,
+        "shop restock minutes must be positive"
+    )
+    assert(
+        type(instance.nativeSetupRetryMs) == "number"
+            and instance.nativeSetupRetryMs > 0,
+        "native setup retry milliseconds must be positive"
+    )
+    assert(
+        type(instance.nativeSetupMaxAttempts) == "number"
+            and instance.nativeSetupMaxAttempts > 0,
+        "native setup attempt count must be positive"
+    )
+    -- UE4SS can report an inherited Lua method as unavailable when queried
+    -- through type(instance.method).  Publish the post-registration refresh
+    -- as an explicit instance field so the commerce runtime always performs
+    -- the second SetupShopData/network bind after it registers the faction.
+    instance.refresh_merchant_shop = function(adapter, actor, plan)
+        return NativeCharacterAdapter.refresh_merchant_shop(
+            adapter,
+            actor,
+            plan
+        )
+    end
+    return setmetatable(
+        instance,
+        { __index = NativeCharacterAdapter }
+    )
+end
+
+function NativeCharacterAdapter:_log(message)
+    if type(self.logger) == "function" then
+        self.logger(
+            "[NativeCharacterAdapter] " .. tostring(message)
+        )
+    end
+end
+
+function NativeCharacterAdapter:_resolve_world_context()
+    if type(self.worldContextProvider) == "function" then
+        local ok, context_or_error = pcall(
+            self.worldContextProvider
+        )
+        if ok and is_valid_object(context_or_error) then
+            return context_or_error, nil
+        end
+        return nil, "world-context-provider-failed:"
+            .. tostring(context_or_error)
+    end
+    if type(self.findAllOf) ~= "function" then
+        return nil, "FindAllOf-unavailable"
+    end
+    for _, class_name in ipairs({
+        "PalPlayerController",
+        "PlayerController",
+    }) do
+        local ok, controllers = pcall(
+            self.findAllOf,
+            class_name
+        )
+        if ok and type(controllers) == "table" then
+            for _, controller in pairs(controllers) do
+                if is_valid_object(controller) then
+                    local local_ok, is_local = pcall(function()
+                        if controller.IsLocalPlayerController ~= nil then
+                            return controller:IsLocalPlayerController()
+                        end
+                        return true
+                    end)
+                    if local_ok and is_local then
+                        return controller, nil
+                    end
+                end
+            end
+        end
+    end
+    return nil, "local-player-controller-unavailable"
+end
+
+function NativeCharacterAdapter:_find_default_object(path)
+    if type(self.staticFindObject) ~= "function" then
+        return nil, "StaticFindObject-unavailable"
+    end
+    local ok, object_or_error = pcall(
+        self.staticFindObject,
+        path
+    )
+    if not ok or not is_valid_object(object_or_error) then
+        return nil, "default-object-unavailable:" .. path
+            .. ":" .. tostring(object_or_error)
+    end
+    return object_or_error, nil
+end
+
+function NativeCharacterAdapter:_load_class(class_path)
+    require_non_empty_string(
+        class_path,
+        "native character class path"
+    )
+    if type(self.staticFindObject) ~= "function" then
+        return nil, "StaticFindObject-unavailable"
+    end
+    local ok, class_or_error = pcall(
+        self.staticFindObject,
+        class_path
+    )
+    if ok and is_valid_object(class_or_error) then
+        return class_or_error, nil
+    end
+    local asset_path = class_to_asset_path(class_path)
+    local package_path = class_to_package_path(class_path)
+    if asset_path == nil or package_path == nil then
+        return nil, "invalid-native-class-path:" .. class_path
+    end
+    if type(self.loadAsset) == "function" then
+        for _, load_path in ipairs({
+            asset_path,
+            package_path,
+            class_path,
+        }) do
+            local loaded_ok, loaded = pcall(
+                self.loadAsset,
+                load_path
+            )
+            if loaded_ok and is_valid_object(loaded) then
+                local generated_class = safe_property(
+                    loaded,
+                    "GeneratedClass"
+                )
+                if is_valid_object(generated_class) then
+                    return generated_class, nil
+                end
+                local loaded_name = safe_full_name(loaded)
+                local expected_token = class_token(class_path)
+                if expected_token ~= nil
+                    and string.find(
+                        loaded_name,
+                        expected_token,
+                        1,
+                        true
+                    ) ~= nil then
+                    return loaded, nil
+                end
+            end
+            ok, class_or_error = pcall(
+                self.staticFindObject,
+                class_path
+            )
+            if ok and is_valid_object(class_or_error) then
+                return class_or_error, nil
+            end
+        end
+    end
+    return nil, "native-character-class-unavailable:"
+        .. class_path
+end
+
+function NativeCharacterAdapter:_make_name(value)
+    require_non_empty_string(value, "native name value")
+    if type(self.fName) == "function" then
+        local ok, native_name = pcall(self.fName, value)
+        if ok and native_name ~= nil then
+            return native_name, nil
+        end
+    end
+    local string_library, library_error =
+        self:_find_default_object(
+            "/Script/Engine.Default__KismetStringLibrary"
+        )
+    if string_library == nil then
+        return nil, "native-name-construction-unavailable:"
+            .. tostring(library_error)
+    end
+    local ok, native_name = pcall(function()
+        return string_library:Conv_StringToName(value)
+    end)
+    if not ok or native_name == nil then
+        return nil, "native-name-conversion-failed:"
+            .. tostring(native_name)
+    end
+    return native_name, nil
+end
+
+function NativeCharacterAdapter:_make_transform(plan)
+    local math_library, library_error =
+        self:_find_default_object(
+            "/Script/Engine.Default__KismetMathLibrary"
+        )
+    if math_library == nil then
+        return nil, library_error
+    end
+    local location = copy_vector(
+        plan.location,
+        { X = 0, Y = 0, Z = 0 }
+    )
+    local rotation = copy_vector(
+        plan.rotation or {},
+        { X = 0, Y = 0, Z = 0 }
+    )
+    rotation = {
+        Pitch = plan.rotation
+                and plan.rotation.Pitch
+            or 0,
+        Yaw = plan.rotation
+                and plan.rotation.Yaw
+            or 0,
+        Roll = plan.rotation
+                and plan.rotation.Roll
+            or 0,
+    }
+    local ok, transform_or_error = pcall(function()
+        return math_library:MakeTransform(
+            location,
+            rotation,
+            { X = 1.0, Y = 1.0, Z = 1.0 }
+        )
+    end)
+    if not ok or transform_or_error == nil then
+        return nil, "spawn-transform-construction-failed:"
+            .. tostring(transform_or_error)
+    end
+    return transform_or_error, nil
+end
+
+function NativeCharacterAdapter:_configure_vendor(actor, plan)
+    if plan.salesChannel ~= "ItemShop"
+        and plan.salesChannel ~= "PalShop" then
+        return false, "unsupported-sales-channel:"
+            .. tostring(plan.salesChannel)
+    end
+    local vendor = safe_property(
+        actor,
+        "BP_PalShopVenderDataComponent"
+    )
+    if not is_valid_object(vendor) then
+        return false, "vendor-component-unavailable"
+    end
+    local properties = SHOP_PROPERTIES[plan.salesChannel]
+    local lottery_property = properties.lottery
+    local row_property = properties.row
+    local restock_property = properties.restock
+    local row_name = safe_property(vendor, row_property)
+    if row_name == nil then
+        return false, "shop-row-struct-unavailable:"
+            .. row_property
+    end
+    local native_row_name, name_error =
+        self:_make_name(plan.shopRowName)
+    if native_row_name == nil then
+        return false, name_error
+    end
+    local ok, configure_error = pcall(function()
+        vendor[lottery_property] = 1
+        row_name.Key = native_row_name
+        vendor[restock_property] = self.restockMinutes
+    end)
+    if not ok then
+        return false, "vendor-configuration-failed:"
+            .. tostring(configure_error)
+    end
+    if self.refreshVendorOnSpawn
+        and type(vendor.SetupShopData) == "function" then
+        local refreshed, refresh_error = pcall(function()
+            vendor:SetupShopData()
+        end)
+        if not refreshed then
+            return false, "vendor-refresh-failed:"
+                .. tostring(refresh_error)
+        end
+    end
+    return true, nil
+end
+
+function NativeCharacterAdapter:_ensure_default_controller(actor)
+    local controller = nil
+    local read_ok = pcall(function()
+        controller = actor:GetController()
+    end)
+    if read_ok and is_valid_object(controller) then
+        return controller, "existing"
+    end
+
+    -- UE4SS can resolve reflected/native functions through __namecall even
+    -- when reading the same member as a Lua property yields nil.  Calling the
+    -- method directly is therefore the authoritative capability probe.
+    local spawned, spawn_error = pcall(function()
+        actor:SpawnDefaultController()
+    end)
+    if not spawned then
+        return nil, "SpawnDefaultController-unavailable-or-failed:"
+            .. tostring(spawn_error)
+    end
+    local reread_ok = pcall(function()
+        controller = actor:GetController()
+    end)
+    if reread_ok and is_valid_object(controller) then
+        return controller, "spawned"
+    end
+    return nil, "controller-not-ready"
+end
+
+function NativeCharacterAdapter:_configure_salesperson_controller(
+    controller,
+    plan
+)
+    if not is_valid_object(controller) then
+        return false, "merchant-controller-unavailable"
+    end
+    local action_class_path = plan.defaultActionClassPath
+        or self.merchantDefaultActionClassPath
+    require_non_empty_string(
+        action_class_path,
+        "merchant default action class path"
+    )
+    local action_class, action_error =
+        self:_load_class(action_class_path)
+    if action_class == nil then
+        return false, action_error
+    end
+    local property_ok, property_error = pcall(function()
+        controller.DefaultActionClass = action_class
+    end)
+    local override_ok, override_error = pcall(function()
+        controller:OverrideDefaultAction(action_class)
+    end)
+    if not property_ok and not override_ok then
+        return false, "salesperson-action-override-failed:"
+            .. tostring(property_error)
+            .. "|" .. tostring(override_error)
+    end
+    -- ReceiveBeginPlay normally calls SetAutoDefaultAIAction for an NPC
+    -- controller created by a native Pal spawner.  A directly spawned pawn
+    -- already passed that point before this adapter replaces the action
+    -- class, so run the same Blueprint setup explicitly before starting it.
+    local auto_ok, auto_error = pcall(function()
+        controller:SetAutoDefaultAIAction()
+    end)
+    -- A directly spawned controller may already have started its Blueprint
+    -- default action. Restart it after the override so the merchant enters
+    -- the same salesperson action used by authored shop NPC spawners.
+    local start_ok, start_error = pcall(function()
+        controller:StartDefaultAIAction()
+    end)
+    self:_log(string.format(
+        "SALESPERSON_ACTION_CONFIGURED controller=%s property=%s override=%s auto=%s autoDetail=%s start=%s startDetail=%s action=%s",
+        safe_full_name(controller),
+        tostring(property_ok),
+        tostring(override_ok),
+        tostring(auto_ok),
+        tostring(auto_error),
+        tostring(start_ok),
+        tostring(start_error),
+        tostring(action_class_path)
+    ))
+    return true, nil
+end
+
+function NativeCharacterAdapter:_initialize_merchant_interaction(actor)
+    local interaction = safe_property(
+        actor,
+        "BP_NPCInteractionComponent"
+    )
+    if not is_valid_object(interaction) then
+        return false, "npc-interaction-component-unavailable"
+    end
+    local sphere = safe_property(actor, "BP_InteractableSphere")
+    if not is_valid_object(sphere) then
+        return false, "npc-interactable-sphere-unavailable"
+    end
+
+    local already_bound =
+        self.interactionReadyActors[actor] == true
+    local flags_ok = true
+    local flags_error = "already-bound"
+    local initialize_ok = true
+    local initialize_error = "already-bound"
+    local replicate_ok = true
+    local replicate_error = "already-bound"
+    local setup_ok = true
+    local setup_error = "already-bound"
+    if not already_bound then
+        flags_ok, flags_error = pcall(function()
+            interaction.bDisableTalk = false
+            interaction.bDisableTalkWhenCaptured = false
+        end)
+        initialize_ok, initialize_error = pcall(function()
+            interaction:Initialize()
+        end)
+        replicate_ok, replicate_error = pcall(function()
+            interaction:OnRep_DisableTalk()
+        end)
+        -- BP_NPC_Base_C.SetupInteraction is the authored path that binds
+        -- BP_InteractableSphere.OnTriggerInteract and installs the indicator
+        -- interface.  Component Initialize alone does not create that route.
+        setup_ok, setup_error = pcall(function()
+            actor:SetupInteraction()
+        end)
+    end
+    local active_ok, active_error = pcall(function()
+        actor:SetActive_Interact_ToAll(true)
+    end)
+    self:_log(string.format(
+        "MERCHANT_INTERACTION_INITIALIZED actor=%s component=%s flags=%s flagsDetail=%s initialize=%s initializeDetail=%s replicate=%s replicateDetail=%s disableTalk=%s capturedDisable=%s",
+        safe_full_name(actor),
+        safe_full_name(interaction),
+        tostring(flags_ok),
+        tostring(flags_error),
+        tostring(initialize_ok),
+        tostring(initialize_error),
+        tostring(replicate_ok),
+        tostring(replicate_error),
+        tostring(safe_property(interaction, "bDisableTalk")),
+        tostring(safe_property(
+            interaction,
+            "bDisableTalkWhenCaptured"
+        ))
+    ))
+    self:_log(string.format(
+        "MERCHANT_INTERACTION_ROUTE_READY actor=%s sphere=%s alreadyBound=%s setup=%s setupDetail=%s active=%s activeDetail=%s",
+        safe_full_name(actor),
+        safe_full_name(sphere),
+        tostring(already_bound),
+        tostring(setup_ok),
+        tostring(setup_error),
+        tostring(active_ok),
+        tostring(active_error)
+    ))
+    if not flags_ok or not initialize_ok
+        or not setup_ok or not active_ok then
+        return false, "npc-interaction-initialize-failed:"
+            .. tostring(flags_error)
+            .. "|" .. tostring(initialize_error)
+            .. "|" .. tostring(setup_error)
+            .. "|" .. tostring(active_error)
+    end
+    self.interactionReadyActors[actor] = true
+    return true, nil
+end
+
+function NativeCharacterAdapter:_request_network_shop_setup(actor)
+    local utility, utility_error = self:_find_default_object(
+        "/Script/Pal.Default__PalUtility"
+    )
+    if utility == nil then
+        return false, utility_error
+    end
+    local transmitter_ok, transmitter = pcall(function()
+        return utility:GetNetworkTransmitter(actor)
+    end)
+    if not transmitter_ok or not is_valid_object(transmitter) then
+        return false, "network-transmitter-unavailable:"
+            .. tostring(transmitter)
+    end
+    local shop_ok, network_shop = pcall(function()
+        return transmitter:GetShop()
+    end)
+    if not shop_ok or not is_valid_object(network_shop) then
+        network_shop = safe_property(transmitter, "Shop")
+    end
+    if not is_valid_object(network_shop) then
+        return false, "network-shop-component-unavailable"
+    end
+    local setup_ok, setup_error = pcall(function()
+        network_shop:SetupShopDataForActor_ToServer(actor)
+    end)
+    if not setup_ok then
+        return false, "network-shop-setup-failed:"
+            .. tostring(setup_error)
+    end
+    return true, safe_full_name(network_shop)
+end
+
+function NativeCharacterAdapter:refresh_merchant_shop(actor, plan)
+    if not is_valid_object(actor) then
+        return false, "merchant-actor-unavailable"
+    end
+    if type(plan) ~= "table" then
+        return false, "merchant-plan-unavailable"
+    end
+    local configured, configure_error =
+        self:_configure_vendor(actor, plan)
+    if not configured then
+        return false, configure_error
+    end
+    local requested, detail =
+        self:_request_network_shop_setup(actor)
+    self:_log(string.format(
+        "MERCHANT_SHOP_REFRESHED actor=%s row=%s requested=%s detail=%s",
+        safe_full_name(actor),
+        tostring(plan.shopRowName),
+        tostring(requested),
+        tostring(detail)
+    ))
+    return requested, detail
+end
+
+function NativeCharacterAdapter:_destroy_untracked(actor)
+    if not is_valid_object(actor) then
+        return
+    end
+    pcall(function()
+        actor:K2_DestroyActor()
+    end)
+end
+
+function NativeCharacterAdapter:_configure_merchant_spawner(
+    spawner,
+    plan,
+    controller_class,
+    default_action_class
+)
+    local save_key = plan.spawnerSaveKey
+        or ("PFT_Economy_" .. string.gsub(
+            plan.runtimeId,
+            "[^%w_]",
+            "_"
+        ))
+    local save_name, save_name_error = self:_make_name(save_key)
+    local character_name, character_name_error =
+        self:_make_name(plan.characterId)
+    local unique_name, unique_name_error = self:_make_name(
+        plan.uniqueNpcId or plan.characterId
+    )
+    if save_name == nil
+        or character_name == nil
+        or unique_name == nil then
+        return false, save_name_error
+            or character_name_error
+            or unique_name_error
+    end
+    local ok, configure_error = pcall(function()
+        spawner.IsBossSpawner = false
+        spawner.Ignore_FarCheck = true
+        spawner.Ignore_DistanceLocationReset = true
+        spawner.IgnoreBaseCampCheck = true
+        spawner.Debug_Disable = false
+        spawner.SaveKeyName = save_name
+        spawner.CharaName = character_name
+        spawner.UniqueNPCID = unique_name
+        spawner.ControllerClass = controller_class
+        spawner.DefaultActionClass = default_action_class
+        spawner.Level = plan.merchantLevel or self.merchantLevel
+    end)
+    if not ok then
+        return false, "native-spawner-template-write-failed:"
+            .. tostring(configure_error)
+    end
+    return true, nil
+end
+
+function NativeCharacterAdapter:_find_spawner_actor(record)
+    if not is_valid_object(record.spawner) then
+        return nil, nil, "native-spawner-unavailable"
+    end
+    local handle = safe_property(record.spawner, "SpawnedHandle")
+    if is_valid_object(handle) then
+        local actor_ok, actor = pcall(function()
+            return handle:TryGetIndividualActor()
+        end)
+        if actor_ok and is_valid_object(actor) then
+            return actor, handle, "spawner-handle"
+        end
+    end
+    if record.attempt < self.nativeActorFallbackAttempt
+        or type(self.findAllOf) ~= "function" then
+        return nil, handle, "native-handle-not-ready"
+    end
+    local token = class_token(record.characterClassPath)
+    if token == nil then
+        return nil, handle, "native-character-token-unavailable"
+    end
+    local scan_ok, actors = pcall(self.findAllOf, token)
+    if not scan_ok or type(actors) ~= "table" then
+        return nil, handle, "native-actor-scan-failed:"
+            .. tostring(actors)
+    end
+    local nearest = nil
+    local nearest_distance_squared = nil
+    for _, actor in pairs(actors) do
+        if is_valid_object(actor)
+            and string.find(
+                safe_full_name(actor),
+                token,
+                1,
+                true
+            ) ~= nil then
+            local vendor = safe_property(
+                actor,
+                "BP_PalShopVenderDataComponent"
+            )
+            local location_ok, location = pcall(function()
+                return actor:K2_GetActorLocation()
+            end)
+            if is_valid_object(vendor)
+                and location_ok
+                and location ~= nil then
+                local dx = location.X - record.location.X
+                local dy = location.Y - record.location.Y
+                local dz = location.Z - record.location.Z
+                local distance_squared = dx * dx + dy * dy + dz * dz
+                if nearest_distance_squared == nil
+                    or distance_squared < nearest_distance_squared then
+                    nearest = actor
+                    nearest_distance_squared = distance_squared
+                end
+            end
+        end
+    end
+    if nearest == nil then
+        return nil, handle, "native-actor-scan-empty"
+    end
+    local maximum = self.nativeActorFallbackRadius
+        * self.nativeActorFallbackRadius
+    if nearest_distance_squared > maximum then
+        return nil, handle, "native-actor-scan-too-far:"
+            .. tostring(math.sqrt(nearest_distance_squared))
+    end
+    return nearest, handle, "nearby-scan:distance="
+        .. tostring(math.sqrt(nearest_distance_squared))
+end
+
+function NativeCharacterAdapter:_complete_async_merchant(
+    record,
+    actor,
+    handle,
+    actor_source
+)
+    local expected_token = record.plan.expectedActorClassToken
+        or class_token(record.characterClassPath)
+    local actor_name = safe_full_name(actor)
+    if expected_token == nil
+        or string.find(actor_name, expected_token, 1, true) == nil then
+        return false, "native-character-class-mismatch:"
+            .. actor_name
+    end
+    local configured, configure_error =
+        self:_configure_vendor(actor, record.plan)
+    if not configured then
+        return false, configure_error
+    end
+    local network_setup, network_detail =
+        self:_request_network_shop_setup(actor)
+    local controller = nil
+    pcall(function()
+        controller = actor:GetController()
+    end)
+    record.actor = actor
+    record.handle = handle
+    record.pending = false
+    record.ready = true
+    record.controller = controller
+    record.controllerSource = "native-spawner"
+    record.networkSetup = network_setup
+    record.networkDetail = network_detail
+    self.merchantSpawnCount = self.merchantSpawnCount + 1
+    self:_log(string.format(
+        "NATIVE_MERCHANT_READY runtime=%s actor=%s actorSource=%s controller=%s networkSetup=%s networkDetail=%s shopRow=%s salesChannel=%s",
+        record.runtimeId,
+        actor_name,
+        tostring(actor_source),
+        safe_full_name(controller),
+        tostring(network_setup),
+        tostring(network_detail),
+        tostring(record.plan.shopRowName),
+        tostring(record.plan.salesChannel)
+    ))
+    if type(record.callbacks.onReady) == "function" then
+        local callback_ok, callback_error = pcall(
+            record.callbacks.onReady,
+            actor,
+            record
+        )
+        if not callback_ok then
+            self:_log(
+                "NATIVE_MERCHANT_READY_CALLBACK_FAILED runtime="
+                    .. record.runtimeId
+                    .. " reason=" .. tostring(callback_error)
+            )
+        end
+    end
+    return true, nil
+end
+
+function NativeCharacterAdapter:_schedule_npc_manager_merchant_poll(record)
+    if type(self.executeWithDelay) ~= "function" then
+        self:_fail_async_merchant(
+            record,
+            "ExecuteWithDelay-unavailable"
+        )
+        return
+    end
+    local callback = function()
+        local execute = function()
+            if record.cancelled or record.ready or record.failed then
+                return
+            end
+            record.attempt = record.attempt + 1
+            local actor = nil
+            local reason = "native-manager-spawn-callback-pending"
+            if not is_valid_object(record.handle)
+                and record.spawnId ~= nil then
+                local handle_ok, handle_or_error = pcall(function()
+                    return record.characterManager:GetIndividualHandle(
+                        record.spawnId
+                    )
+                end)
+                if handle_ok and is_valid_object(handle_or_error) then
+                    record.handle = handle_or_error
+                    if not record.handleReadyLogged then
+                        record.handleReadyLogged = true
+                        self:_log(string.format(
+                            "NATIVE_MANAGER_MERCHANT_HANDLE_READY runtime=%s source=spawn-callback-id handle=%s",
+                            record.runtimeId,
+                            safe_full_name(record.handle)
+                        ))
+                    end
+                elseif not handle_ok then
+                    reason = "native-manager-handle-resolve-failed:"
+                        .. tostring(handle_or_error)
+                else
+                    reason = "native-manager-handle-not-ready"
+                end
+            end
+            local actor_ok = false
+            local actor_or_error = nil
+            if is_valid_object(record.handle) then
+                actor_ok, actor_or_error = pcall(function()
+                    return record.handle:TryGetIndividualActor()
+                end)
+                reason = "native-manager-actor-not-ready"
+            end
+            if actor_ok and is_valid_object(actor_or_error) then
+                actor = actor_or_error
+                local complete, complete_error =
+                    self:_complete_async_merchant(
+                        record,
+                        actor,
+                        record.handle,
+                        "PalNPCManager.SpawnNPCForServer"
+                    )
+                if complete then
+                    return
+                end
+                reason = complete_error
+            elseif is_valid_object(record.handle) and not actor_ok then
+                reason = "native-manager-handle-read-failed:"
+                    .. tostring(actor_or_error)
+            end
+            if record.attempt >= self.nativeSetupMaxAttempts then
+                self:_fail_async_merchant(record, reason)
+                return
+            end
+            if record.attempt == 1
+                or record.attempt % 5 == 0 then
+                self:_log(string.format(
+                    "NATIVE_MANAGER_MERCHANT_RETRY runtime=%s attempt=%d reason=%s",
+                    record.runtimeId,
+                    record.attempt,
+                    tostring(reason)
+                ))
+            end
+            self:_schedule_npc_manager_merchant_poll(record)
+        end
+        if type(self.executeInGameThread) == "function" then
+            self.executeInGameThread(execute)
+        else
+            execute()
+        end
+    end
+    table.insert(record.pollCallbacks, callback)
+    self.executeWithDelay(self.nativeSetupRetryMs, callback)
+end
+
+function NativeCharacterAdapter:spawn_merchant_via_npc_manager(
+    plan,
+    callbacks
+)
+    assert(type(plan) == "table", "native spawn plan is required")
+    callbacks = callbacks or {}
+    local runtime_id = require_non_empty_string(
+        plan.runtimeId,
+        "native spawn runtime ID"
+    )
+    require_non_empty_string(plan.characterId, "native character ID")
+    require_non_empty_string(
+        plan.characterClassPath,
+        "native character class path"
+    )
+    require_non_empty_string(plan.shopRowName, "native shop row name")
+    assert(
+        type(plan.location) == "table",
+        "native character location is required"
+    )
+    if self.records[runtime_id] ~= nil then
+        error("native-runtime-id-already-active:" .. runtime_id)
+    end
+    self.spawnAttemptCount = self.spawnAttemptCount + 1
+    local world_context, context_error = self:_resolve_world_context()
+    if world_context == nil then
+        self.failureCount = self.failureCount + 1
+        error(context_error)
+    end
+    local utility, utility_error = self:_find_default_object(
+        "/Script/Pal.Default__PalUtility"
+    )
+    if utility == nil then
+        self.failureCount = self.failureCount + 1
+        error(utility_error)
+    end
+    local manager_ok, npc_manager = pcall(function()
+        return utility:GetNPCManager(world_context)
+    end)
+    if not manager_ok or not is_valid_object(npc_manager) then
+        self.failureCount = self.failureCount + 1
+        error("NPC-manager-unavailable:" .. tostring(npc_manager))
+    end
+    local character_manager_ok, character_manager = pcall(function()
+        return utility:GetCharacterManager(world_context)
+    end)
+    if not character_manager_ok
+        or not is_valid_object(character_manager) then
+        self.failureCount = self.failureCount + 1
+        error("character-manager-unavailable:"
+            .. tostring(character_manager))
+    end
+    local controller_class = safe_property(
+        npc_manager,
+        "NPCAIControllerBaseClass"
+    )
+    if not is_valid_object(controller_class) then
+        self.failureCount = self.failureCount + 1
+        error("NPC-controller-class-unavailable")
+    end
+    local character_name, name_error =
+        self:_make_name(plan.characterId)
+    if character_name == nil then
+        self.failureCount = self.failureCount + 1
+        error(name_error)
+    end
+    local record = {
+        runtimeId = runtime_id,
+        actor = nil,
+        handle = nil,
+        spawnId = nil,
+        spawnCallback = nil,
+        characterManager = character_manager,
+        spawner = nil,
+        nativeManagerSpawn = true,
+        characterId = plan.characterId,
+        characterClassPath = plan.characterClassPath,
+        merchant = true,
+        pending = true,
+        ready = false,
+        failed = false,
+        cancelled = false,
+        attempt = 0,
+        location = copy_vector(
+            plan.location,
+            { X = 0, Y = 0, Z = 0 }
+        ),
+        plan = plan,
+        callbacks = callbacks,
+        pollCallbacks = {},
+    }
+    -- NPCSpawnCallback__DelegateSignature returns an FPalInstanceID, not
+    -- the PalIndividualCharacterHandle.  Keep this closure alive on the
+    -- record, then resolve the handle through PalCharacterManager.
+    record.spawnCallback = function(id_parameter)
+        if record.cancelled or record.failed then
+            return
+        end
+        local spawn_id = safe_unwrap(id_parameter)
+        if spawn_id == nil then
+            self:_log(
+                "NATIVE_MANAGER_MERCHANT_CALLBACK_FAILED runtime="
+                    .. runtime_id .. " reason=empty-instance-id"
+            )
+            return
+        end
+        record.spawnId = spawn_id
+        self:_log(
+            "NATIVE_MANAGER_MERCHANT_CALLBACK runtime="
+                .. runtime_id .. " instanceId=received"
+        )
+    end
+    local spawn_ok, handle_or_error = pcall(function()
+        return npc_manager:SpawnNPCForServer({
+            ControllerClass = controller_class,
+            CharacterID = character_name,
+            Level = plan.merchantLevel or self.merchantLevel,
+            Location = copy_vector(
+                plan.location,
+                { X = 0, Y = 0, Z = 0 }
+            ),
+            Yaw = plan.rotation and plan.rotation.Yaw or 0.0,
+            Squad = nil,
+        }, record.spawnCallback)
+    end)
+    if not spawn_ok then
+        self.failureCount = self.failureCount + 1
+        error("NPC-manager-merchant-spawn-failed:"
+            .. tostring(handle_or_error))
+    end
+    if is_valid_object(handle_or_error) then
+        record.handle = handle_or_error
+        record.handleReadyLogged = true
+    end
+    self.records[runtime_id] = record
+    self:_log(string.format(
+        "NATIVE_MANAGER_MERCHANT_REQUESTED runtime=%s manager=%s returnHandle=%s callbackPending=%s character=%s shopRow=%s spawnCall=SpawnNPCForServer",
+        runtime_id,
+        safe_full_name(npc_manager),
+        safe_full_name(record.handle),
+        tostring(record.spawnId == nil),
+        plan.characterId,
+        plan.shopRowName
+    ))
+    self:_schedule_npc_manager_merchant_poll(record)
+    return record
+end
+
+function NativeCharacterAdapter:_fail_async_merchant(record, reason)
+    if record.failed or record.ready or record.cancelled then
+        return
+    end
+    record.pending = false
+    record.failed = true
+    record.lastError = reason
+    self.failureCount = self.failureCount + 1
+    self:_log(string.format(
+        "NATIVE_MERCHANT_FAILED runtime=%s attempts=%d reason=%s",
+        record.runtimeId,
+        record.attempt,
+        tostring(reason)
+    ))
+    if type(record.callbacks.onError) == "function" then
+        pcall(record.callbacks.onError, reason, record)
+    end
+end
+
+function NativeCharacterAdapter:_schedule_async_merchant_poll(record)
+    if type(self.executeWithDelay) ~= "function" then
+        self:_fail_async_merchant(
+            record,
+            "ExecuteWithDelay-unavailable"
+        )
+        return
+    end
+    local callback = function()
+        local execute = function()
+            if record.cancelled or record.ready or record.failed then
+                return
+            end
+            if not is_valid_object(record.spawner) then
+                self:_fail_async_merchant(
+                    record,
+                    "native-spawner-unavailable"
+                )
+                return
+            end
+            record.attempt = record.attempt + 1
+            local actor, handle, reason =
+                self:_find_spawner_actor(record)
+            if actor ~= nil then
+                local complete, complete_error =
+                    self:_complete_async_merchant(
+                        record,
+                        actor,
+                        handle,
+                        reason
+                    )
+                if complete then
+                    return
+                end
+                reason = complete_error
+            elseif not record.spawnRequested then
+                local spawned = safe_property(
+                    record.spawner,
+                    "Spawned"
+                )
+                local loading = safe_property(
+                    record.spawner,
+                    "IsLoading"
+                )
+                if spawned ~= true and loading ~= true then
+                    -- APalNPCSpawnerBase exposes SpawnRequest_ByOutside as
+                    -- the public Blueprint lifecycle entry.  Calling the
+                    -- concrete Blueprint's Spawn helper directly skips the
+                    -- group/individual-handle initialisation used by native
+                    -- NPC spawners on Build 24467282.
+                    -- The current public Boss Respawner implementation uses
+                    -- deleteAlive=true.  A live Build 24467282 probe with
+                    -- false accepted the request but never created a group,
+                    -- IndividualHandle, or actor for a transient spawner.
+                    local boss_dark_trader_route =
+                        record.plan.provenNativeSpawnerRoute
+                            == "BossDarkTrader"
+                    local spawn_route = boss_dark_trader_route
+                            and "Spawn() proven BossDarkTrader route"
+                        or "SpawnRequest_ByOutside(true)"
+                    local spawn_ok, spawn_error
+                    if boss_dark_trader_route then
+                        spawn_ok, spawn_error = pcall(function()
+                            record.spawner:Spawn()
+                        end)
+                    else
+                        spawn_ok, spawn_error = pcall(function()
+                            record.spawner:SpawnRequest_ByOutside(true)
+                        end)
+                        if not spawn_ok then
+                            spawn_route =
+                                "Spawn() compatibility fallback"
+                            spawn_ok, spawn_error = pcall(function()
+                                record.spawner:Spawn()
+                            end)
+                        end
+                    end
+                    if spawn_ok then
+                        record.spawnRequested = true
+                        record.spawnRequestRoute = spawn_route
+                        self:_log(string.format(
+                            "NATIVE_MERCHANT_SPAWN_REQUESTED runtime=%s attempt=%d route=%s spawner=%s",
+                            record.runtimeId,
+                            record.attempt,
+                            spawn_route,
+                            safe_full_name(record.spawner)
+                        ))
+                    else
+                        reason = "native-spawn-call-failed:"
+                            .. tostring(spawn_error)
+                    end
+                end
+            end
+            if record.attempt >= self.nativeSetupMaxAttempts then
+                self:_fail_async_merchant(record, reason)
+                return
+            end
+            if record.attempt == 1
+                or record.attempt % 5 == 0 then
+                self:_log(string.format(
+                    "NATIVE_MERCHANT_RETRY runtime=%s attempt=%d reason=%s",
+                    record.runtimeId,
+                    record.attempt,
+                    tostring(reason)
+                ))
+            end
+            self:_schedule_async_merchant_poll(record)
+        end
+        if type(self.executeInGameThread) == "function" then
+            self.executeInGameThread(execute)
+        else
+            execute()
+        end
+    end
+    table.insert(record.pollCallbacks, callback)
+    self.executeWithDelay(self.nativeSetupRetryMs, callback)
+end
+
+function NativeCharacterAdapter:spawn_merchant_async(plan, callbacks)
+    assert(type(plan) == "table", "native spawn plan is required")
+    callbacks = callbacks or {}
+    local runtime_id = require_non_empty_string(
+        plan.runtimeId,
+        "native spawn runtime ID"
+    )
+    require_non_empty_string(
+        plan.characterId,
+        "native character ID"
+    )
+    require_non_empty_string(
+        plan.characterClassPath,
+        "native character class path"
+    )
+    require_non_empty_string(
+        plan.shopRowName,
+        "native shop row name"
+    )
+    assert(
+        type(plan.location) == "table",
+        "native character location is required"
+    )
+    if self.records[runtime_id] ~= nil then
+        error("native-runtime-id-already-active:" .. runtime_id)
+    end
+    self.spawnAttemptCount = self.spawnAttemptCount + 1
+    local world_context, context_error =
+        self:_resolve_world_context()
+    if world_context == nil then
+        self.failureCount = self.failureCount + 1
+        error(context_error)
+    end
+    local spawner_class_path = plan.spawnerClassPath
+        or self.merchantSpawnerClassPath
+    local controller_class_path = plan.controllerClassPath
+        or self.controllerClassPath
+    local default_action_class_path =
+        plan.defaultActionClassPath
+            or self.merchantDefaultActionClassPath
+    require_non_empty_string(
+        spawner_class_path,
+        "native merchant spawner class path"
+    )
+    require_non_empty_string(
+        controller_class_path,
+        "native merchant controller class path"
+    )
+    require_non_empty_string(
+        default_action_class_path,
+        "native merchant default action class path"
+    )
+    local spawner_class, spawner_error =
+        self:_load_class(spawner_class_path)
+    local controller_class, controller_error =
+        self:_load_class(controller_class_path)
+    local default_action_class, action_error =
+        self:_load_class(default_action_class_path)
+    if spawner_class == nil
+        or controller_class == nil
+        or default_action_class == nil then
+        self.failureCount = self.failureCount + 1
+        error(spawner_error or controller_error or action_error)
+    end
+    local transform, transform_error = self:_make_transform(plan)
+    if transform == nil then
+        self.failureCount = self.failureCount + 1
+        error(transform_error)
+    end
+    local gameplay, gameplay_error = self:_find_default_object(
+        "/Script/Engine.Default__GameplayStatics"
+    )
+    if gameplay == nil then
+        self.failureCount = self.failureCount + 1
+        error(gameplay_error)
+    end
+    local begin_ok, deferred = pcall(function()
+        return gameplay:BeginDeferredActorSpawnFromClass(
+            world_context,
+            spawner_class,
+            transform,
+            self.collisionHandlingOverride,
+            nil
+        )
+    end)
+    if not begin_ok or not is_valid_object(deferred) then
+        self.failureCount = self.failureCount + 1
+        error("deferred-merchant-spawner-failed:"
+            .. tostring(deferred))
+    end
+    local configured, configure_error =
+        self:_configure_merchant_spawner(
+            deferred,
+            plan,
+            controller_class,
+            default_action_class
+        )
+    if not configured then
+        self:_destroy_untracked(deferred)
+        self.failureCount = self.failureCount + 1
+        error(configure_error)
+    end
+    local finish_ok, finished = pcall(function()
+        return gameplay:FinishSpawningActor(deferred, transform)
+    end)
+    if not finish_ok then
+        self:_destroy_untracked(deferred)
+        self.failureCount = self.failureCount + 1
+        error("finish-merchant-spawner-failed:"
+            .. tostring(finished))
+    end
+    local spawner = is_valid_object(finished) and finished or deferred
+    configured, configure_error = self:_configure_merchant_spawner(
+        spawner,
+        plan,
+        controller_class,
+        default_action_class
+    )
+    if not configured then
+        self:_destroy_untracked(spawner)
+        self.failureCount = self.failureCount + 1
+        error(configure_error)
+    end
+    local record = {
+        runtimeId = runtime_id,
+        actor = nil,
+        spawner = spawner,
+        characterId = plan.characterId,
+        characterClassPath = plan.characterClassPath,
+        merchant = true,
+        pending = true,
+        ready = false,
+        failed = false,
+        cancelled = false,
+        spawnRequested = false,
+        spawnRequestRoute = nil,
+        attempt = 0,
+        location = copy_vector(
+            plan.location,
+            { X = 0, Y = 0, Z = 0 }
+        ),
+        plan = plan,
+        callbacks = callbacks,
+        pollCallbacks = {},
+    }
+    self.records[runtime_id] = record
+    self:_log(string.format(
+        "NATIVE_MERCHANT_SPAWNER_READY runtime=%s spawner=%s character=%s shopRow=%s",
+        runtime_id,
+        safe_full_name(spawner),
+        plan.characterId,
+        plan.shopRowName
+    ))
+    self:_schedule_async_merchant_poll(record)
+    return record
+end
+
+function NativeCharacterAdapter:_spawn(plan, merchant)
+    assert(type(plan) == "table", "native spawn plan is required")
+    local runtime_id = require_non_empty_string(
+        plan.runtimeId,
+        "native spawn runtime ID"
+    )
+    require_non_empty_string(
+        plan.characterId,
+        "native character ID"
+    )
+    require_non_empty_string(
+        plan.characterClassPath,
+        "native character class path"
+    )
+    assert(
+        type(plan.location) == "table",
+        "native character location is required"
+    )
+    if self.records[runtime_id] ~= nil then
+        error("native-runtime-id-already-active:" .. runtime_id)
+    end
+    self.spawnAttemptCount = self.spawnAttemptCount + 1
+
+    local world_context, context_error =
+        self:_resolve_world_context()
+    if world_context == nil then
+        self.failureCount = self.failureCount + 1
+        error(context_error)
+    end
+    local character_class, class_error =
+        self:_load_class(plan.characterClassPath)
+    if character_class == nil then
+        self.failureCount = self.failureCount + 1
+        error(class_error)
+    end
+    local transform, transform_error =
+        self:_make_transform(plan)
+    if transform == nil then
+        self.failureCount = self.failureCount + 1
+        error(transform_error)
+    end
+    local gameplay, gameplay_error =
+        self:_find_default_object(
+            "/Script/Engine.Default__GameplayStatics"
+        )
+    if gameplay == nil then
+        self.failureCount = self.failureCount + 1
+        error(gameplay_error)
+    end
+
+    local begin_ok, deferred_or_error = pcall(function()
+        return gameplay:BeginDeferredActorSpawnFromClass(
+            world_context,
+            character_class,
+            transform,
+            self.collisionHandlingOverride,
+            nil
+        )
+    end)
+    if not begin_ok
+        or not is_valid_object(deferred_or_error) then
+        self.failureCount = self.failureCount + 1
+        error(
+            "deferred-character-spawn-failed:"
+                .. tostring(deferred_or_error)
+        )
+    end
+    local finish_ok, actor_or_error = pcall(function()
+        -- Ordinary merchants are normally born through a Pal NPC spawner,
+        -- which supplies their controller.  A deferred direct spawn needs the
+        -- same controller class and auto-possession policy before Finish so
+        -- the engine can create an interactable merchant pawn.
+        local controller_class_path = plan.controllerClassPath
+            or self.controllerClassPath
+        if controller_class_path ~= nil then
+            local controller_class = self:_load_class(
+                controller_class_path
+            )
+            if is_valid_object(controller_class) then
+                pcall(function()
+                    deferred_or_error.AIControllerClass = controller_class
+                end)
+                pcall(function()
+                    deferred_or_error.ControllerClass = controller_class
+                end)
+                pcall(function()
+                    -- EAutoPossessAI::PlacedInWorldOrSpawned
+                    deferred_or_error.AutoPossessAI = 3
+                end)
+            end
+        end
+        return gameplay:FinishSpawningActor(
+            deferred_or_error,
+            transform
+        )
+    end)
+    if not finish_ok then
+        self:_destroy_untracked(deferred_or_error)
+        self.failureCount = self.failureCount + 1
+        error(
+            "finish-character-spawn-failed:"
+                .. tostring(actor_or_error)
+        )
+    end
+    local actor = is_valid_object(actor_or_error)
+            and actor_or_error
+        or deferred_or_error
+    local expected_class_token =
+        class_token(plan.characterClassPath)
+    local actor_name = safe_full_name(actor)
+    if expected_class_token == nil
+        or not string.find(
+            actor_name,
+            expected_class_token,
+            1,
+            true
+        ) then
+        self:_destroy_untracked(actor)
+        self.failureCount = self.failureCount + 1
+        error(
+            "native-character-class-mismatch:"
+                .. tostring(actor_name)
+        )
+    end
+    local controller, controller_source =
+        self:_ensure_default_controller(actor)
+    local network_setup = false
+    local network_detail = "not-requested"
+    if merchant then
+        local action_configured, action_error =
+            self:_configure_salesperson_controller(
+                controller,
+                plan
+            )
+        if not action_configured then
+            self:_destroy_untracked(actor)
+            self.failureCount = self.failureCount + 1
+            error(action_error)
+        end
+        local interaction_ready, interaction_error =
+            self:_initialize_merchant_interaction(actor)
+        if not interaction_ready then
+            self:_destroy_untracked(actor)
+            self.failureCount = self.failureCount + 1
+            error(interaction_error)
+        end
+        require_non_empty_string(
+            plan.shopRowName,
+            "native shop row name"
+        )
+        local configured, configure_error =
+            self:_configure_vendor(actor, plan)
+        if not configured then
+            self:_destroy_untracked(actor)
+            self.failureCount = self.failureCount + 1
+            error(configure_error)
+        end
+        network_setup, network_detail =
+            self:_request_network_shop_setup(actor)
+        self.merchantSpawnCount =
+            self.merchantSpawnCount + 1
+    else
+        self.guardSpawnCount = self.guardSpawnCount + 1
+    end
+    self.records[runtime_id] = {
+        runtimeId = runtime_id,
+        actor = actor,
+        characterId = plan.characterId,
+        characterClassPath = plan.characterClassPath,
+        merchant = merchant,
+        controller = controller,
+        controllerSource = controller_source,
+        networkSetup = network_setup,
+        networkDetail = network_detail,
+    }
+    self:_log(string.format(
+        "SPAWNED runtime=%s kind=%s character=%s actor=%s controller=%s controllerSource=%s networkSetup=%s networkDetail=%s",
+        runtime_id,
+        merchant and "merchant" or "guard",
+        plan.characterId,
+        actor_name,
+        safe_full_name(controller),
+        tostring(controller_source),
+        tostring(network_setup),
+        tostring(network_detail)
+    ))
+    return actor
+end
+
+function NativeCharacterAdapter:spawn_merchant(plan)
+    return self:_spawn(plan, true)
+end
+
+function NativeCharacterAdapter:spawn_guard(plan)
+    return self:_spawn(plan, false)
+end
+
+function NativeCharacterAdapter:create_guard_provider(
+    character_id,
+    character_class_path
+)
+    require_non_empty_string(
+        character_id,
+        "guard provider character ID"
+    )
+    require_non_empty_string(
+        character_class_path,
+        "guard provider character class path"
+    )
+    local adapter = self
+    return {
+        deploy = function(faction_id, request_id, context)
+            context = context or {}
+            assert(
+                type(context.location) == "table",
+                "guard deployment context.location is required"
+            )
+            local runtime_id = "player-guard:"
+                .. require_non_empty_string(
+                    faction_id,
+                    "guard provider faction ID"
+                )
+                .. ":"
+                .. require_non_empty_string(
+                    request_id,
+                    "guard provider request ID"
+                )
+            local actor = adapter:spawn_guard({
+                runtimeId = runtime_id,
+                mode = "player-guard",
+                factionId = faction_id,
+                characterId = character_id,
+                characterClassPath = character_class_path,
+                location = context.location,
+                rotation = context.rotation
+                    or { Pitch = 0, Yaw = 0, Roll = 0 },
+            })
+            return {
+                runtimeId = runtime_id,
+                actor = actor,
+                followTarget = context.followTarget,
+                followBehaviourStatus =
+                    "native-follow-controller-pending-live-validation",
+            }
+        end,
+        recall = function(handle, reason)
+            if type(handle) ~= "table" then
+                return false
+            end
+            local outcome = adapter:despawn(
+                handle.actor,
+                reason or "guard-recall"
+            )
+            return outcome.ok
+        end,
+    }
+end
+
+function NativeCharacterAdapter:despawn(actor, reason)
+    if type(actor) == "table"
+        and actor.runtimeId ~= nil
+        and (actor.spawner ~= nil
+            or actor.nativeManagerSpawn == true) then
+        local record = actor
+        record.cancelled = true
+        record.pending = false
+        local destroyed = true
+        local destroy_error = nil
+        if is_valid_object(record.spawner) then
+            local despawn_ok = pcall(function()
+                record.spawner:Despawn()
+            end)
+            local destroy_ok, detail = pcall(function()
+                record.spawner:K2_DestroyActor()
+            end)
+            destroyed = despawn_ok or destroy_ok
+            destroy_error = detail
+        end
+        if record.nativeManagerSpawn == true
+            and is_valid_object(record.handle) then
+            pcall(function()
+                record.handle:Despawn()
+            end)
+            local actor_ok, managed_actor = pcall(function()
+                return record.handle:TryGetIndividualActor()
+            end)
+            if actor_ok and is_valid_object(managed_actor) then
+                record.actor = managed_actor
+            end
+        end
+        if is_valid_object(record.actor) then
+            self.interactionReadyActors[record.actor] = nil
+            pcall(function()
+                record.actor:K2_DestroyActor()
+            end)
+        end
+        self.records[record.runtimeId] = nil
+        if not destroyed then
+            return make_result(false, "native-spawner-despawn-failed", {
+                detail = tostring(destroy_error),
+            })
+        end
+        self.despawnCount = self.despawnCount + 1
+        self:_log(string.format(
+            "DESPAWNED runtime=%s reason=%s lifecycle=%s",
+            tostring(record.runtimeId),
+            tostring(reason or "unspecified"),
+            record.nativeManagerSpawn == true
+                    and "PalNPCManager.SpawnNPCForServer"
+                or "native-spawner"
+        ))
+        return make_result(true, "despawned", {
+            runtimeId = record.runtimeId,
+        })
+    end
+    if not is_valid_object(actor) then
+        return make_result(true, "already-despawned")
+    end
+    local removed_runtime_id = nil
+    for runtime_id, record in pairs(self.records) do
+        if record.actor == actor then
+            removed_runtime_id = runtime_id
+            break
+        end
+    end
+    local ok, destroy_error = pcall(function()
+        actor:K2_DestroyActor()
+    end)
+    if not ok then
+        return make_result(false, "native-despawn-failed", {
+            detail = tostring(destroy_error),
+        })
+    end
+    if removed_runtime_id ~= nil then
+        self.records[removed_runtime_id] = nil
+    end
+    self.interactionReadyActors[actor] = nil
+    self.despawnCount = self.despawnCount + 1
+    self:_log(string.format(
+        "DESPAWNED runtime=%s reason=%s",
+        tostring(removed_runtime_id or "untracked"),
+        tostring(reason or "unspecified")
+    ))
+    return make_result(true, "despawned", {
+        runtimeId = removed_runtime_id,
+    })
+end
+
+function NativeCharacterAdapter:status()
+    local active_count = 0
+    local pending_count = 0
+    for _, record in pairs(self.records) do
+        active_count = active_count + 1
+        if record.pending == true then
+            pending_count = pending_count + 1
+        end
+    end
+    return {
+        version = self.version,
+        activeCount = active_count,
+        pendingCount = pending_count,
+        spawnAttemptCount = self.spawnAttemptCount,
+        merchantSpawnCount = self.merchantSpawnCount,
+        guardSpawnCount = self.guardSpawnCount,
+        despawnCount = self.despawnCount,
+        failureCount = self.failureCount,
+        saveWrites = 0,
+    }
+end
+
+return NativeCharacterAdapter

@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "1.0.0",
+  "packId": "example.original.placeholder",
+  "version": "1.0.0",
+  "contentLicense": "CC0-1.0",
+  "characters": [
+    {
+      "characterId": "example_guide",
+      "displayNameKey": "example.guide.name",
+      "personaKey": "example.guide.persona",
+      "contentOrigin": "localization_keys_only",
+      "knowledgeKeys": [
+        "example.guide.met_player",
+        "example.guide.topic_available"
+      ],
+      "allowedResultTags": [
+        "heard_player",
+        "topic_discussed"
+      ],
+      "defaultChoices": [
+        {
+          "choiceId": "continue",
+          "textKey": "example.choice.continue"
+        },
+        {
+          "choiceId": "leave",
+          "textKey": "example.choice.leave"
+        }
+      ]
+    }
+  ]
+}
+

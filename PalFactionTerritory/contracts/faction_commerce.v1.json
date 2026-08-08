@@ -1,0 +1,295 @@
+{
+  "schemaVersion": "1.0.0",
+  "gameBuild": "Steam v1.0.1 / build 24181527",
+  "baselineStatus": "mechanics_complete_balance_provisional_2026-07-28",
+  "designPolicy": {
+    "storyContentIncluded": false,
+    "dialogueContentIncluded": false,
+    "humanFactionsOnly": true,
+    "fixedMerchantIslandRosterRequired": true,
+    "visitingFactionCaravansRequired": true,
+    "clothingColourDistinguishesFaction": true,
+    "fixedMarketCommercialTruceForHostileRecovery": true,
+    "visitingCaravansRequireNonHostileRelation": true,
+    "nativeSuccessfulTransactionsOnly": true,
+    "requestedItemAuthority": "faction_economy.v1.json commodity signals",
+    "requestedItemIdsCompatibilityFallbackOnly": true,
+    "merchantGuildEconomyCountersOwnedBy": "faction_economy_shops.v1.json",
+    "palworldSaveMutationAllowed": false
+  },
+  "merchantIsland": {
+    "id": "pwft.commerce.faction_market_island",
+    "displayNameZhHans": "七势力商人岛",
+    "placementStatus": "user_selected_ftpoint90_island_live_ground_validation_pending",
+    "selectionDecision": {
+      "decisionSource": "user_confirmed_2026-07-29",
+      "landmarkZhHans": "泰拉瑞亚密域旁的独立小岛",
+      "referenceFastTravelPointId": "FTPoint90",
+      "referenceFastTravelNameZhHans": "泰拉瑞亚密域",
+      "referenceWorldLocation": {
+        "X": -488718.2,
+        "Y": -35724.94,
+        "Z": -2096.6929
+      },
+      "factionTerritoryPolicy": "neutral_commercial_public_zone",
+      "publicFastTravelPolicy": "preserve_native_unrestricted",
+      "sourceDataset": "PalworldSaveTools fast_travel_points.json pinned at e4e1439b274c1140eed5690051ce59ab14b68027",
+      "liveValidationRequired": [
+        "flat_ground_root_location",
+        "root_rotation_toward_fast_travel_arrival",
+        "seven_slot_collision_and_navigation",
+        "dungeon_entrance_clearance"
+      ]
+    },
+    "merchantCount": 7,
+    "oneFixedBuyerPerHumanFaction": true,
+    "rootLocation": null,
+    "rootRotation": null,
+    "slotOffsets": [
+      { "forward": 0, "right": -900, "up": 0 },
+      { "forward": 0, "right": -600, "up": 0 },
+      { "forward": 0, "right": -300, "up": 0 },
+      { "forward": 0, "right": 0, "up": 0 },
+      { "forward": 0, "right": 300, "up": 0 },
+      { "forward": 0, "right": 600, "up": 0 },
+      { "forward": 0, "right": 900, "up": 0 }
+    ]
+  },
+  "transactionPolicy": {
+    "commerceWindowIdProvider": "external-world-day-adapter",
+    "buyAward": {
+      "goldPerReputation": 5000,
+      "minimumPerSuccessfulTransaction": 1,
+      "maximumPerSuccessfulTransaction": 5
+    },
+    "requestedSaleAward": {
+      "itemsPerReputation": 20,
+      "minimumPerSuccessfulTransaction": 1,
+      "maximumPerSuccessfulTransaction": 8,
+      "unrequestedItemAward": 0
+    },
+    "globalCapsOwnedBy": "faction_progression.v1.json",
+    "duplicateProtectionKey": "direction:shop-id:transaction-id"
+  },
+  "nativeAdapter": {
+    "buyRequestHook": "/Script/Pal.PalNetworkShopComponent:RequestBuyProduct_ToServer",
+    "buyResultHook": "/Script/Pal.PalNetworkShopComponent:RecieveBuyResult_ToClient",
+    "successfulBuyResult": "Successed",
+    "successfulBuyResultNumericValue": 0,
+    "sellRequestHook": "/Script/Pal.PalNetworkShopComponent:RequestSellItems_ToServer",
+    "sellUiAcceptanceHook": "/Script/Pal.PalUIItemShopBase:TrySell",
+    "sellUiSlotFields": [
+      "PalItemSlot.ItemId.StaticId",
+      "PalItemSlot.StackCount"
+    ],
+    "sellUiAcceptanceIsServerConfirmation": false,
+    "sellSettlementStatus": "server_inventory_replication_probe_ready_settlement_disabled_live_acceptance_pending"
+  },
+  "factions": [
+    {
+      "factionId": "pwft.faction.rayne_syndicate",
+      "merchantId": "pwft.merchant.rayne_syndicate",
+      "clothingColour": "#4B4B55",
+      "caravanGuardFactionId": "pwft.faction.rayne_syndicate",
+      "salesChannel": "PalShop",
+      "existingRuntimeBinding": "rayneMerchant",
+      "nativeCharacterId": "NPC_Male_DarkTrader",
+      "nativeCharacterClassPath": "/Game/Pal/Blueprint/Character/NPC/Fat/BP_NPC_DarkTrader.BP_NPC_DarkTrader_C",
+      "nativeShopRowName": "PFT_Rayne_AllPaldex",
+      "nativeAppearanceStatus": "live_confirmed",
+      "guardCharacterIds": [
+        "NPC_Hunter"
+      ],
+      "guardCharacterClassPaths": [
+        "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Hunter.BP_NPC_Hunter_C"
+      ],
+      "stockItemIds": [],
+      "requestedItemIds": [
+        "PalSphere_Master",
+        "PalSphere_Legend",
+        "PalOil",
+        "Leather2"
+      ]
+    },
+    {
+      "factionId": "pwft.faction.free_pal_alliance",
+      "merchantId": "pwft.merchant.free_pal_alliance",
+      "clothingColour": "#62A968",
+      "caravanGuardFactionId": "pwft.faction.free_pal_alliance",
+      "salesChannel": "ItemShop",
+      "existingRuntimeBinding": null,
+      "nativeCharacterId": "NPC_Male_Trader01_v04",
+      "nativeCharacterClassPath": "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Male_Trader01_v04.BP_NPC_Male_Trader01_v04_C",
+      "nativeShopRowName": "CaravanShop4",
+      "nativeAppearanceStatus": "asset_confirmed_live_colour_match_pending",
+      "guardCharacterIds": [
+        "NPC_Believer"
+      ],
+      "guardCharacterClassPaths": [
+        "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Believer.BP_NPC_Believer_C"
+      ],
+      "stockItemIds": [
+        "Medicines",
+        "LuxuryMedicines",
+        "Cloth2",
+        "Salad"
+      ],
+      "requestedItemIds": [
+        "Leather",
+        "Wool",
+        "Fiber",
+        "PalOil"
+      ]
+    },
+    {
+      "factionId": "pwft.faction.eternal_pyre",
+      "merchantId": "pwft.merchant.eternal_pyre",
+      "clothingColour": "#C65032",
+      "caravanGuardFactionId": "pwft.faction.eternal_pyre",
+      "salesChannel": "ItemShop",
+      "existingRuntimeBinding": null,
+      "nativeCharacterId": "NPC_Male_Trader01_v05",
+      "nativeCharacterClassPath": "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Male_Trader01_v05.BP_NPC_Male_Trader01_v05_C",
+      "nativeShopRowName": "CaravanShop12",
+      "nativeAppearanceStatus": "asset_confirmed_live_colour_match_pending",
+      "guardCharacterIds": [
+        "NPC_FireCult"
+      ],
+      "guardCharacterClassPaths": [
+        "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_FireCult.BP_NPC_FireCult_C"
+      ],
+      "stockItemIds": [
+        "Gunpowder2",
+        "Sulfur",
+        "Coal",
+        "CopperIngot"
+      ],
+      "requestedItemIds": [
+        "CrudeOil",
+        "Sulfur",
+        "Coal",
+        "CopperOre"
+      ]
+    },
+    {
+      "factionId": "pwft.faction.pidf",
+      "merchantId": "pwft.merchant.pidf",
+      "clothingColour": "#3D72A8",
+      "caravanGuardFactionId": "pwft.faction.pidf",
+      "salesChannel": "ItemShop",
+      "existingRuntimeBinding": null,
+      "nativeCharacterId": "NPC_Male_Trader01_v06",
+      "nativeCharacterClassPath": "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Male_Trader01_v06.BP_NPC_Male_Trader01_v06_C",
+      "nativeShopRowName": "CaravanShop8",
+      "nativeAppearanceStatus": "asset_confirmed_live_colour_match_pending",
+      "guardCharacterIds": [
+        "NPC_Police"
+      ],
+      "guardCharacterClassPaths": [
+        "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Police.BP_NPC_Police_C"
+      ],
+      "stockItemIds": [
+        "CarbonFiber",
+        "Cement",
+        "ElectronicCircuit",
+        "MachineParts2"
+      ],
+      "requestedItemIds": [
+        "CopperIngot",
+        "IronIngot",
+        "Gunpowder2",
+        "CarbonFiber"
+      ]
+    },
+    {
+      "factionId": "pwft.faction.pal_genetic_research_unit",
+      "merchantId": "pwft.merchant.pal_genetic_research_unit",
+      "clothingColour": "#8A61A8",
+      "caravanGuardFactionId": "pwft.faction.pal_genetic_research_unit",
+      "salesChannel": "ItemShop",
+      "existingRuntimeBinding": null,
+      "nativeCharacterId": "NPC_Male_Trader01_v07",
+      "nativeCharacterClassPath": "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Male_Trader01_v07.BP_NPC_Male_Trader01_v07_C",
+      "nativeShopRowName": "CaravanShop22",
+      "nativeAppearanceStatus": "asset_confirmed_live_colour_match_pending",
+      "guardCharacterIds": [
+        "NPC_Male_Scientist01"
+      ],
+      "guardCharacterClassPaths": [
+        "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Male_Scientist.BP_NPC_Male_Scientist_C"
+      ],
+      "stockItemIds": [
+        "MindControlDrug",
+        "LuxuryMedicines",
+        "ElectronicCircuit",
+        "PAL_Growth_Stone_XL"
+      ],
+      "requestedItemIds": [
+        "PalOil",
+        "ElectricOrgan",
+        "PalCrystal_Ex",
+        "AIcore"
+      ]
+    },
+    {
+      "factionId": "pwft.faction.moonflower",
+      "merchantId": "pwft.merchant.moonflower",
+      "clothingColour": "#C95D91",
+      "caravanGuardFactionId": "pwft.faction.moonflower",
+      "salesChannel": "ItemShop",
+      "existingRuntimeBinding": null,
+      "nativeCharacterId": "NPC_Male_Trader01_v08",
+      "nativeCharacterClassPath": "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Male_Trader01_v08.BP_NPC_Male_Trader01_v08_C",
+      "nativeShopRowName": "CaravanShop18",
+      "nativeAppearanceStatus": "asset_confirmed_live_colour_match_pending",
+      "guardCharacterIds": [
+        "NPC_Male_Ninja01"
+      ],
+      "guardCharacterClassPaths": [
+        "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Male_Ninja01.BP_NPC_Male_Ninja01_C"
+      ],
+      "stockItemIds": [
+        "LuxuryMedicines",
+        "HighGrade_Processed_Wood",
+        "Cloth2",
+        "NightStone"
+      ],
+      "requestedItemIds": [
+        "Leather2",
+        "Bone",
+        "Horn",
+        "Pal_crystal_L"
+      ]
+    },
+    {
+      "factionId": "pwft.faction.feybreak_army",
+      "merchantId": "pwft.merchant.feybreak_army",
+      "clothingColour": "#D6B547",
+      "caravanGuardFactionId": "pwft.faction.feybreak_army",
+      "salesChannel": "ItemShop",
+      "existingRuntimeBinding": null,
+      "nativeCharacterId": "NPC_Male_Trader01_v09",
+      "nativeCharacterClassPath": "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Male_Trader01_v09.BP_NPC_Male_Trader01_v09_C",
+      "nativeShopRowName": "CaravanShop15",
+      "nativeAppearanceStatus": "asset_confirmed_live_colour_match_pending",
+      "guardCharacterIds": [
+        "NPC_Male_Soldier04"
+      ],
+      "guardCharacterClassPaths": [
+        "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Male_Soldier04.BP_NPC_Male_Soldier04_C"
+      ],
+      "stockItemIds": [
+        "SkyIslandOre",
+        "ManganeseIngot",
+        "ElectronicCircuit",
+        "AIcore"
+      ],
+      "requestedItemIds": [
+        "SkyIslandOre",
+        "ManganeseOre",
+        "CrudeOil",
+        "CarbonFiber"
+      ]
+    }
+  ]
+}

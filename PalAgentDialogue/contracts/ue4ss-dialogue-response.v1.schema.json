@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/pal-agent-dialogue/ue4ss-dialogue-response.v1.schema.json",
+  "title": "PalAgentDialogue UE4SS Response v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "requestId", "createdAt", "characterId", "provider",
+    "dialogue", "proposedChoice", "resultTags"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "requestId": { "$ref": "#/$defs/id" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "characterId": { "$ref": "#/$defs/id" },
+    "provider": { "enum": ["ollama", "openai-compatible", "mock"] },
+    "dialogue": { "type": "string", "minLength": 1, "maxLength": 4000 },
+    "proposedChoice": {
+      "oneOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }]
+    },
+    "resultTags": {
+      "type": "array", "maxItems": 64, "uniqueItems": true,
+      "items": { "$ref": "#/$defs/key" }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string", "minLength": 1, "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+    "key": {
+      "type": "string", "minLength": 1, "maxLength": 256,
+      "pattern": "^[A-Za-z0-9._:/-]+$"
+    }
+  }
+}

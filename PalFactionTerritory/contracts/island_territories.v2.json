@@ -1,0 +1,216 @@
+{
+  "schemaVersion": "2.0.0",
+  "gameBuild": "Steam v1.0.1 / build 24181527",
+  "baselineId": "pwft.island_territory_layers.v2",
+  "baselineStatus": "user_approved_active_baseline",
+  "approvedAt": "2026-07-22",
+  "designPolicy": {
+    "mapModes": [
+      "Original",
+      "Human",
+      "Pal"
+    ],
+    "toggleOrder": "Original -> Human -> Pal -> Original",
+    "geometryUnit": "whole island or whole archipelago",
+    "seaVisual": "transparent",
+    "unownedIslandVisual": "transparent",
+    "entryPresentationLayer": "Human",
+    "palFactionDefaultRelation": "Hostile",
+    "relationshipColors": {
+      "Hostile": "#D34A4A",
+      "Friendly": "#4D86D9",
+      "Player": "#4FAF68"
+    }
+  },
+  "neutralGeometryExclusions": [
+    {
+      "id": "pwft.neutral.market_island",
+      "displayNameZhHans": "七势力商人岛",
+      "sourceIslandId": "pwft.island.volcano",
+      "seedFastTravelPointId": "FTPoint90",
+      "seedWorldLocation": {
+        "X": -488718.2,
+        "Y": -35724.94,
+        "Z": -2096.6929
+      },
+      "policy": "remove_connected_land_component_from_all_faction_overlays",
+      "decisionSource": "user_confirmed_2026-07-29"
+    }
+  ],
+  "islands": [
+    {
+      "id": "pwft.island.central_southeast_archipelago",
+      "displayNameZhHans": "东南群岛",
+      "geometrySourceRegionIds": [
+        "M-A",
+        "M-I"
+      ],
+      "humanOwnerFactionId": "pwft.faction.rayne_syndicate",
+      "palOwnerFactionId": "pwft.faction.dark_nocturnal_pal_tribe",
+      "nativeRegionNameIds": [
+        "Grass_001",
+        "Grass_001_Crunch",
+        "Grass_002",
+        "Grass_FixedDungeon_001",
+        "Grass_FixedDungeon_002",
+        "Grass_FixedDungeon_003",
+        "Grass_FixedDungeon_004",
+        "Grass_FixedDungeon_005",
+        "Grass_FixedDungeon_006",
+        "Grass_FixedDungeon_007",
+        "Grass_UnderGroundCave_001",
+        "Grass_UnderGroundCave_002",
+        "Grass_UnderGroundCave_003",
+        "Grass_UnderGroundCave_004",
+        "Grass_Village_001",
+        "Tower_Grass",
+        "Grass_3",
+        "Grass_4",
+        "Grass_5",
+        "Grass_6",
+        "Grass_7",
+        "Grass_8",
+        "Grass_9"
+      ],
+      "decisionSource": "user_confirmed_2026-07-22"
+    },
+    {
+      "id": "pwft.island.central_forest_archipelago",
+      "displayNameZhHans": "中央森林群岛",
+      "geometrySourceRegionIds": [
+        "M-L"
+      ],
+      "humanOwnerFactionId": "pwft.faction.free_pal_alliance",
+      "palOwnerFactionId": null,
+      "nativeRegionNameIds": [
+        "Forest_001",
+        "Forest_002",
+        "Forest_FixedDungeon_001",
+        "Forest_FixedDungeon_002",
+        "Forest_FixedDungeon_003",
+        "Forest_FixedDungeon_004",
+        "Forest_FixedDungeon_005",
+        "Forest_Ruin",
+        "Forest_UnderGroundCave_001",
+        "Tower_Forest"
+      ],
+      "decisionSource": "user_confirmed_2026-07-22"
+    },
+    {
+      "id": "pwft.island.desert",
+      "displayNameZhHans": "沙漠岛",
+      "geometrySourceRegionIds": [
+        "M-C",
+        "M-D"
+      ],
+      "humanOwnerFactionId": "pwft.faction.pidf",
+      "palOwnerFactionId": "pwft.faction.desert_pal_tribe",
+      "nativeRegionNameIds": [
+        "Desert_001",
+        "Desert_Small",
+        "Desert_UndergroundCave_001",
+        "Desert_UndergroundCave_002",
+        "Desert_UndergroundCave_003",
+        "Desert_Village_001",
+        "Tower_Desert"
+      ],
+      "decisionSource": "user_confirmed_2026-07-22"
+    },
+    {
+      "id": "pwft.island.snow",
+      "displayNameZhHans": "雪山岛",
+      "geometrySourceRegionIds": [
+        "M-E",
+        "M-N"
+      ],
+      "humanOwnerFactionId": "pwft.faction.pal_genetic_research_unit",
+      "palOwnerFactionId": "pwft.faction.snow_pal_tribe",
+      "nativeRegionNameIds": [
+        "Frost_001",
+        "Frost_Small",
+        "Frost_UnderGroundCave_001",
+        "Frost_UnderGroundCave_002",
+        "Tower_Snowy",
+        "Frost_2",
+        "Frost_3"
+      ],
+      "decisionSource": "user_confirmed_2026-07-22"
+    },
+    {
+      "id": "pwft.island.sakurajima",
+      "displayNameZhHans": "樱岛",
+      "geometrySourceRegionIds": [
+        "M-F"
+      ],
+      "humanOwnerFactionId": "pwft.faction.moonflower",
+      "palOwnerFactionId": null,
+      "nativeRegionNameIds": [
+        "Sakurajim_Mushroom",
+        "Sakurajima_RockSand",
+        "Sakurajima_Sakura",
+        "Sakurajima_WhiteSand",
+        "Tower_Sakurajima"
+      ],
+      "decisionSource": "user_confirmed_2026-07-22"
+    },
+    {
+      "id": "pwft.island.volcano",
+      "displayNameZhHans": "火山岛",
+      "geometrySourceRegionIds": [
+        "M-G",
+        "M-H"
+      ],
+      "humanOwnerFactionId": "pwft.faction.eternal_pyre",
+      "palOwnerFactionId": "pwft.faction.fire_pal_tribe",
+      "nativeRegionNameIds": [
+        "Volcano_001",
+        "Volcano_UnderGroundCave_001",
+        "Volcano_UnderGroundCave_002",
+        "Volcano_Village_001",
+        "Tower_Volcano",
+        "Volcano_2",
+        "Volcano_3",
+        "Volcano_4"
+      ],
+      "decisionSource": "user_confirmed_2026-07-22"
+    },
+    {
+      "id": "pwft.island.feybreak",
+      "displayNameZhHans": "天坠之地",
+      "geometrySourceRegionIds": [
+        "M-O",
+        "M-P",
+        "M-Q",
+        "M-R",
+        "M-S"
+      ],
+      "humanOwnerFactionId": "pwft.faction.feybreak_army",
+      "palOwnerFactionId": "pwft.faction.feybreak_composite_pal_tribe",
+      "nativeRegionNameIds": [
+        "Darkisland03",
+        "Darkisland05",
+        "Darkisland08",
+        "Darkisland11",
+        "Darkisland_Boss",
+        "Darkisland_FT01",
+        "Darkisland_FT03",
+        "Darkisland_FT04",
+        "Darkisland_FT05",
+        "Darkisland_FT07",
+        "Darkisland_FT08",
+        "Darkisland_FT09",
+        "Darkisland_FT10",
+        "UndergroundCave_Darkisland_1",
+        "UndergroundCave_Darkisland_2",
+        "UndergroundCave_Darkisland_3",
+        "UndergroundCave_Darkisland_4",
+        "UndergroundCave_Darkisland_5",
+        "FixedDungeon_DarkIsland_1",
+        "FixedDungeon_DarkIsland_2",
+        "FixedDungeon_DarkIsland_3",
+        "FixedDungeon_DarkIsland_4"
+      ],
+      "decisionSource": "user_confirmed_2026-07-22"
+    }
+  ]
+}

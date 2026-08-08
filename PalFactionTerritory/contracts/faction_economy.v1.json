@@ -1,0 +1,553 @@
+{
+  "schemaVersion": "1.0.0",
+  "gameBuild": "Steam v1.0.1 / build 24181527",
+  "baselineId": "pwft.faction_economy.v1",
+  "baselineStatus": "user_confirmed_trade_direction_resource_and_recipe_baseline_complete_balance_pending_2026-07-29",
+  "designPolicy": {
+    "merchantOrganisationId": "pwft.commerce.merchant_guild",
+    "merchantOrganisationDisplayNameZhHans": "商人商会",
+    "merchantOrganisationFactionId": null,
+    "factionsAreSuppliersAndCustomers": true,
+    "merchantGuildIsTradeChannel": true,
+    "sellsProcessedGoodsFromLocalResources": true,
+    "procuresGoodsMissingFromLocalSupply": true,
+    "sameProcessedGoodMayAppearForMultipleFactions": true,
+    "greaterLocalSupplyMeansMoreStock": true,
+    "greaterLocalSupplyMeansLowerSellPrice": true,
+    "greaterLocalScarcityMeansStrongerProcurementDemand": true,
+    "existingVanillaMerchantInputsAreExternalSupply": true,
+    "externalMerchantInputsAffectCostButNotRegionalSupplyBand": true,
+    "purchasedFactionGoodsGrantCommerceReputation": true,
+    "sellingRequestedGoodsGrantsCommerceReputation": true,
+    "sellingUnrequestedGoodsGrantsCommerceReputation": false,
+    "commerceReputationCapsOwnedBy": "faction_progression.v1.json",
+    "reputationDecreaseEnabled": false,
+    "storyContentIncluded": false,
+    "dialogueContentIncluded": false
+  },
+  "merchantInputPolicy": {
+    "regionalEndowmentAuditRequired": false,
+    "countsTowardEffectiveSupplyBand": false,
+    "countsTowardProductCostFloor": true,
+    "source": "existing_vanilla_merchants_user_confirmed_2026-07-29",
+    "inputs": [
+      {
+        "itemId": "Pal_crystal_S",
+        "displayNameZhHans": "帕鲁矿碎块",
+        "nativeBasePrice": 70,
+        "role": "fixed_external_input"
+      },
+      {
+        "itemId": "FireOrgan",
+        "displayNameZhHans": "喷火器官",
+        "nativeBasePrice": 300,
+        "role": "fixed_external_input"
+      },
+      {
+        "itemId": "Charcoal",
+        "displayNameZhHans": "木炭",
+        "nativeBasePrice": 30,
+        "role": "fixed_external_input"
+      },
+      {
+        "itemId": "PalOil",
+        "displayNameZhHans": "优质帕鲁油",
+        "nativeBasePrice": 300,
+        "role": "fixed_external_input"
+      },
+      {
+        "itemId": "Polymer",
+        "displayNameZhHans": "聚合物",
+        "nativeBasePrice": 1080,
+        "role": "existing_merchant_intermediate_input"
+      }
+    ]
+  },
+  "separationOfConcerns": {
+    "factionEconomyContractOwns": [
+      "territorial resource endowment",
+      "resource-to-product supply signals",
+      "processed-goods stock signals",
+      "sell-price scarcity signals",
+      "requested-goods procurement signals"
+    ],
+    "factionCommerceContractOwns": [
+      "native transaction settlement adapters",
+      "transaction idempotency",
+      "commerce reputation calculation"
+    ],
+    "factionProgressionContractOwns": [
+      "commerce reputation caps",
+      "hostile relation recovery",
+      "rank progression and ending gates"
+    ]
+  },
+  "resourceEvidence": {
+    "territoryContract": "island_territories.v2.json",
+    "primaryDatasetUrl": "https://www.palworldguide.net/data/map-locations.json",
+    "primaryDatasetVersion": "paldb-map-20260720",
+    "classificationMethod": "project_to_1024_map_and_classify_against_active_whole_island_rgba_masks",
+    "mapRecordCountsAreProductionProxyOnly": true,
+    "ordinaryNodeAndVeinCountsMustRemainSeparate": true,
+    "veinProductionWeight": null,
+    "liveYieldCalibrationStatus": "deferred_until_user_authorises_game_testing",
+    "recipeDataTableAsset": "evidence/faction-economy-assets-20260729/Pal/Content/Pal/DataTable/Item/DT_ItemRecipeDataTable.uasset",
+    "recipeDataTableAssetSha256": "E1D37BCA19EABFCBCAF021D5ECF8DA65C06B5E5D94F39CA9459FB7D180880FBF",
+    "itemDataTableAsset": "evidence/faction-economy-assets-20260729/Pal/Content/Pal/DataTable/Item/DT_ItemDataTable.uasset",
+    "itemDataTableAssetSha256": "5A8042C2DF5130E433E3F69ACFB442313193AD1387C4B1E936994AB0620A536D",
+    "parser": "UAssetGUI v1.1.0 / UAssetAPI 8b8687a / VER_UE5_1 / Palworld_1_0_1.usmap",
+    "recipeRowCount": 1414,
+    "itemRowCount": 2466,
+    "commonAndNonCommonTablesEqual": true
+  },
+  "resources": [
+    {
+      "resourceId": "metal_ore",
+      "nativeItemId": "CopperOre",
+      "displayNameZhHans": "金属矿石",
+      "nativeBasePrice": 100,
+      "processedGoodsDirection": [
+        "金属锭",
+        "需要金属矿石的其他金属制品"
+      ],
+      "recipeAuditStatus": "audited_from_local_1_0_1_data_tables"
+    },
+    {
+      "resourceId": "coal",
+      "nativeItemId": "Coal",
+      "displayNameZhHans": "石炭",
+      "nativeBasePrice": 200,
+      "processedGoodsDirection": [
+        "精炼金属锭",
+        "碳纤维及其他石炭加工品"
+      ],
+      "recipeAuditStatus": "audited_from_local_1_0_1_data_tables"
+    },
+    {
+      "resourceId": "sulfur",
+      "nativeItemId": "Sulfur",
+      "displayNameZhHans": "硫磺",
+      "nativeBasePrice": 300,
+      "processedGoodsDirection": [
+        "火药",
+        "弹药及爆炸物"
+      ],
+      "recipeAuditStatus": "audited_from_local_1_0_1_data_tables"
+    },
+    {
+      "resourceId": "pure_quartz",
+      "nativeItemId": "Quartz",
+      "displayNameZhHans": "纯水晶",
+      "nativeBasePrice": 500,
+      "processedGoodsDirection": [
+        "电路板及电子零件"
+      ],
+      "recipeAuditStatus": "audited_from_local_1_0_1_data_tables"
+    },
+    {
+      "resourceId": "crude_oil",
+      "nativeItemId": "CrudeOil",
+      "displayNameZhHans": "原油",
+      "nativeBasePrice": 800,
+      "processedGoodsDirection": [
+        "原油加工材料",
+        "塑钢及其上游材料"
+      ],
+      "recipeAuditStatus": "audited_from_local_1_0_1_data_tables"
+    },
+    {
+      "resourceId": "chromite",
+      "nativeItemId": "Chromium",
+      "displayNameZhHans": "铬铁矿",
+      "nativeBasePrice": 1500,
+      "processedGoodsDirection": [
+        "六棱晶锭及天坠高阶制品"
+      ],
+      "recipeAuditStatus": "audited_from_local_1_0_1_data_tables"
+    },
+    {
+      "resourceId": "hexolite_quartz",
+      "nativeItemId": "RainbowCrystal",
+      "displayNameZhHans": "六棱晶矿",
+      "nativeBasePrice": 1000,
+      "processedGoodsDirection": [
+        "六棱晶锭及天坠高阶制品"
+      ],
+      "recipeAuditStatus": "audited_from_local_1_0_1_data_tables"
+    },
+    {
+      "resourceId": "ancient_lava",
+      "nativeItemId": "Lava_Ancient",
+      "displayNameZhHans": "古代熔岩块",
+      "nativeBasePrice": 1000,
+      "processedGoodsDirection": [
+        "古代熔岩相关加工品"
+      ],
+      "recipeAuditStatus": "audited_no_bulk_commodity_recipe_four_equipment_recipes_only"
+    }
+  ],
+  "auditedProducts": [
+    {
+      "productItemId": "CopperIngot",
+      "displayNameZhHans": "金属锭",
+      "productCount": 1,
+      "nativeBasePrice": 240,
+      "materials": [
+        { "itemId": "CopperOre", "count": 2 }
+      ],
+      "marketRole": "bulk_processed_commodity"
+    },
+    {
+      "productItemId": "IronIngot",
+      "displayNameZhHans": "精炼金属锭",
+      "productCount": 1,
+      "nativeBasePrice": 720,
+      "materials": [
+        { "itemId": "CopperOre", "count": 2 },
+        { "itemId": "Coal", "count": 2 }
+      ],
+      "marketRole": "bulk_processed_commodity"
+    },
+    {
+      "productItemId": "StealIngot",
+      "displayNameZhHans": "帕鲁金属锭",
+      "productCount": 1,
+      "nativeBasePrice": 1250,
+      "materials": [
+        { "itemId": "CopperOre", "count": 4 },
+        { "itemId": "Quartz", "count": 1 },
+        { "itemId": "Pal_crystal_S", "count": 2 }
+      ],
+      "marketRole": "multi_input_processed_commodity"
+    },
+    {
+      "productItemId": "CarbonFiber",
+      "displayNameZhHans": "碳纤维",
+      "productCount": 1,
+      "nativeBasePrice": 840,
+      "materials": [
+        { "itemId": "Coal", "count": 2 },
+        { "itemId": "FireOrgan", "count": 1 }
+      ],
+      "marketRole": "multi_input_processed_commodity"
+    },
+    {
+      "productItemId": "Gunpowder2",
+      "displayNameZhHans": "火药",
+      "productCount": 1,
+      "nativeBasePrice": 430,
+      "materials": [
+        { "itemId": "Charcoal", "count": 2 },
+        { "itemId": "Sulfur", "count": 1 }
+      ],
+      "marketRole": "multi_input_processed_commodity"
+    },
+    {
+      "productItemId": "Polymer",
+      "displayNameZhHans": "聚合物",
+      "productCount": 1,
+      "nativeBasePrice": 1080,
+      "materials": [
+        { "itemId": "PalOil", "count": 2 },
+        { "itemId": "Sulfur", "count": 1 }
+      ],
+      "marketRole": "multi_input_processed_commodity"
+    },
+    {
+      "productItemId": "MachineParts2",
+      "displayNameZhHans": "电路板",
+      "productCount": 1,
+      "nativeBasePrice": 2500,
+      "materials": [
+        { "itemId": "Quartz", "count": 2 },
+        { "itemId": "Polymer", "count": 1 }
+      ],
+      "marketRole": "multi_input_processed_commodity"
+    },
+    {
+      "productItemId": "Plastic",
+      "displayNameZhHans": "塑钢",
+      "productCount": 1,
+      "nativeBasePrice": 2520,
+      "materials": [
+        { "itemId": "CrudeOil", "count": 2 },
+        { "itemId": "CopperOre", "count": 5 }
+      ],
+      "marketRole": "bulk_processed_commodity"
+    },
+    {
+      "productItemId": "StainlessSteel",
+      "displayNameZhHans": "六棱晶锭",
+      "productCount": 1,
+      "nativeBasePrice": 3000,
+      "materials": [
+        { "itemId": "Chromium", "count": 1 },
+        { "itemId": "RainbowCrystal", "count": 1 }
+      ],
+      "marketRole": "exclusive_high_tier_processed_commodity"
+    }
+  ],
+  "recipeCorrections": [
+    {
+      "invalidAssumption": "ManganeseIngot_is_Hexolite",
+      "confirmedFact": "ManganeseIngot is 珊瑚锭 and uses ManganeseOre x2 plus Coal x5",
+      "requiredAction": "never use ManganeseIngot as the processed output of Chromite or Hexolite Quartz"
+    },
+    {
+      "invalidAssumption": "Chromium_or_RainbowCrystal_produces_ManganeseIngot",
+      "confirmedFact": "StainlessSteel is 六棱晶锭 and uses Chromium x1 plus RainbowCrystal x1",
+      "requiredAction": "use StainlessSteel for the Feybreak Hexolite supply chain"
+    },
+    {
+      "invalidAssumption": "CrudeOil_is_the_input_for_Polymer",
+      "confirmedFact": "Polymer uses PalOil x2 plus Sulfur x1 in the local 1.0.1 recipe table",
+      "requiredAction": "do not derive Polymer supply directly from territorial CrudeOil"
+    },
+    {
+      "invalidAssumption": "AncientLava_has_a_bulk_processed_commodity",
+      "confirmedFact": "Lava_Ancient directly appears only in four equipment recipes in the audited table",
+      "requiredAction": "do not create a bulk Ancient Lava commodity until a later design explicitly adds one"
+    },
+    {
+      "invalidAssumption": "SkyislandIngot_belongs_to_the_current_seven_island_resource_baseline",
+      "confirmedFact": "SkyislandIngot is 烈阳金属锭 and uses SkyIslandOre x2 plus Quartz x2",
+      "requiredAction": "exclude it until the SkyIslandOre territory is added to the active faction map"
+    }
+  ],
+  "supplyBands": {
+    "orderedLowToHigh": [
+      "absent",
+      "scarce",
+      "limited",
+      "established",
+      "strong",
+      "abundant",
+      "dominant",
+      "exclusive"
+    ],
+    "purpose": "qualitative first-pass signals only; exact prices and stocks remain unset",
+    "procurementRule": {
+      "absent": "primary",
+      "scarce": "primary",
+      "limited": "secondary",
+      "established": "none_by_default",
+      "strong": "none_by_default",
+      "abundant": "none_by_default",
+      "dominant": "none_by_default",
+      "exclusive": "none_by_default"
+    },
+    "exportRule": {
+      "absent": "none",
+      "scarce": "none_by_default",
+      "limited": "small_stock_candidate",
+      "established": "standard_stock_candidate",
+      "strong": "large_stock_candidate",
+      "abundant": "large_stock_discount_candidate",
+      "dominant": "speciality_large_stock_discount_candidate",
+      "exclusive": "exclusive_speciality_candidate"
+    }
+  },
+  "marketRules": {
+    "offerPipeline": [
+      "territorial_resource_endowment",
+      "effective_faction_production",
+      "existing_merchant_input_cost_floor",
+      "processed_goods_stock",
+      "merchant_guild_sell_price"
+    ],
+    "procurementPipeline": [
+      "territorial_resource_shortfall",
+      "faction_procurement_demand",
+      "merchant_guild_requested_goods",
+      "confirmed_player_sale",
+      "commerce_reputation"
+    ],
+    "priceRule": "sell_price_must_be_monotonically_non_increasing_as_effective_supply_rises",
+    "merchantInputRule": "existing merchant supplied inputs contribute to product cost but never reduce the faction territorial supply band",
+    "stockRule": "stock_must_be_monotonically_non_decreasing_as_effective_supply_rises",
+    "procurementRule": "requested_quantity_and_purchase_price_may_rise_with_scarcity_but_must_be_bounded_by_refresh_window_quotas",
+    "crossFactionTradeRoutesAreIntentional": true,
+    "antiInfiniteLoopControls": [
+      "finite faction stock per refresh window",
+      "finite faction procurement quota per refresh window",
+      "transaction idempotency",
+      "commerce reputation cap per window"
+    ],
+    "balanceProfile": {
+      "profileId": "pwft.economy.balance.supply_band_v1",
+      "status": "offline_first_pass_complete_user_confirmation_and_live_calibration_pending",
+      "runtimeAuthority": false,
+      "supplyIndexMode": "audited_supply_band_only_no_numeric_vein_weight",
+      "refreshWindowIdProvider": "external-world-day-adapter",
+      "refreshDurationMinutes": null,
+      "priceRoundingStep": 10,
+      "merchantInputCostFloorMultiplier": 1.2,
+      "minimumUnitsPerActiveLine": 1,
+      "maximumUnitsPerActiveLine": 99,
+      "stockCountFormula": "clamp(floor(stockValueBudget / sellPrice), minimumUnitsPerActiveLine, maximumUnitsPerActiveLine)",
+      "procurementQuotaFormula": "clamp(floor(procurementValueBudget / procurementPrice), minimumUnitsPerActiveLine, maximumUnitsPerActiveLine)",
+      "bands": {
+        "absent": {
+          "direction": "procure",
+          "procurementPriceMultiplier": 1.4,
+          "procurementValueBudget": 30000
+        },
+        "scarce": {
+          "direction": "procure",
+          "procurementPriceMultiplier": 1.2,
+          "procurementValueBudget": 18000
+        },
+        "limited": {
+          "direction": "sell",
+          "sellPriceMultiplier": 1.15,
+          "stockValueBudget": 8000
+        },
+        "established": {
+          "direction": "sell",
+          "sellPriceMultiplier": 1.0,
+          "stockValueBudget": 16000
+        },
+        "strong": {
+          "direction": "sell",
+          "sellPriceMultiplier": 0.9,
+          "stockValueBudget": 28000
+        },
+        "abundant": {
+          "direction": "sell",
+          "sellPriceMultiplier": 0.82,
+          "stockValueBudget": 40000
+        },
+        "dominant": {
+          "direction": "sell",
+          "sellPriceMultiplier": 0.75,
+          "stockValueBudget": 60000
+        },
+        "exclusive": {
+          "direction": "sell",
+          "sellPriceMultiplier": 0.7,
+          "stockValueBudget": 80000
+        }
+      }
+    },
+    "exactSellPriceMultipliers": "marketRules.balanceProfile.bands[*].sellPriceMultiplier",
+    "exactStockCounts": "derived_by_stockCountFormula",
+    "exactProcurementPrices": "nativeBasePrice_x_band_procurementPriceMultiplier",
+    "exactProcurementQuotas": "derived_by_procurementQuotaFormula",
+    "nativeBasePriceAuditStatus": "complete_for_nine_initial_processed_commodity_candidates",
+    "balanceStatus": "offline_first_pass_complete_user_confirmation_and_live_calibration_pending"
+  },
+  "factions": [
+    {
+      "factionId": "pwft.faction.rayne_syndicate",
+      "territoryId": "pwft.island.central_southeast_archipelago",
+      "territoryDisplayNameZhHans": "东南群岛",
+      "resourceBaseline": {
+        "metal_ore": { "ordinaryNodes": 171, "veins": 4, "supplyBand": "established" },
+        "coal": { "ordinaryNodes": 5, "veins": 1, "supplyBand": "scarce" },
+        "sulfur": { "ordinaryNodes": 7, "veins": 0, "supplyBand": "scarce" },
+        "pure_quartz": { "ordinaryNodes": 7, "veins": 0, "supplyBand": "scarce" },
+        "crude_oil": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "chromite": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "hexolite_quartz": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "ancient_lava": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" }
+      }
+    },
+    {
+      "factionId": "pwft.faction.free_pal_alliance",
+      "territoryId": "pwft.island.central_forest_archipelago",
+      "territoryDisplayNameZhHans": "中央森林群岛",
+      "resourceBaseline": {
+        "metal_ore": { "ordinaryNodes": 169, "veins": 6, "supplyBand": "established" },
+        "coal": { "ordinaryNodes": 52, "veins": 3, "supplyBand": "established" },
+        "sulfur": { "ordinaryNodes": 19, "veins": 0, "supplyBand": "limited" },
+        "pure_quartz": { "ordinaryNodes": 10, "veins": 2, "supplyBand": "limited" },
+        "crude_oil": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "chromite": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "hexolite_quartz": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "ancient_lava": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" }
+      }
+    },
+    {
+      "factionId": "pwft.faction.pidf",
+      "territoryId": "pwft.island.desert",
+      "territoryDisplayNameZhHans": "沙漠岛",
+      "resourceBaseline": {
+        "metal_ore": { "ordinaryNodes": 244, "veins": 0, "supplyBand": "strong" },
+        "coal": { "ordinaryNodes": 279, "veins": 10, "supplyBand": "dominant" },
+        "sulfur": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "pure_quartz": { "ordinaryNodes": 7, "veins": 0, "supplyBand": "scarce" },
+        "crude_oil": { "ordinaryNodes": 45, "veins": 0, "supplyBand": "strong" },
+        "chromite": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "hexolite_quartz": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "ancient_lava": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" }
+      }
+    },
+    {
+      "factionId": "pwft.faction.pal_genetic_research_unit",
+      "territoryId": "pwft.island.snow",
+      "territoryDisplayNameZhHans": "雪山岛",
+      "resourceBaseline": {
+        "metal_ore": { "ordinaryNodes": 256, "veins": 1, "supplyBand": "strong" },
+        "coal": { "ordinaryNodes": 2, "veins": 0, "supplyBand": "scarce" },
+        "sulfur": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "pure_quartz": { "ordinaryNodes": 475, "veins": 5, "supplyBand": "dominant" },
+        "crude_oil": { "ordinaryNodes": 13, "veins": 0, "supplyBand": "limited" },
+        "chromite": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "hexolite_quartz": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "ancient_lava": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" }
+      }
+    },
+    {
+      "factionId": "pwft.faction.moonflower",
+      "territoryId": "pwft.island.sakurajima",
+      "territoryDisplayNameZhHans": "樱岛",
+      "resourceBaseline": {
+        "metal_ore": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "coal": { "ordinaryNodes": 20, "veins": 0, "supplyBand": "limited" },
+        "sulfur": { "ordinaryNodes": 19, "veins": 0, "supplyBand": "limited" },
+        "pure_quartz": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "crude_oil": { "ordinaryNodes": 22, "veins": 0, "supplyBand": "limited" },
+        "chromite": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "hexolite_quartz": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "ancient_lava": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" }
+      }
+    },
+    {
+      "factionId": "pwft.faction.eternal_pyre",
+      "territoryId": "pwft.island.volcano",
+      "territoryDisplayNameZhHans": "火山岛",
+      "resourceBaseline": {
+        "metal_ore": { "ordinaryNodes": 170, "veins": 6, "supplyBand": "established" },
+        "coal": { "ordinaryNodes": 50, "veins": 7, "supplyBand": "established" },
+        "sulfur": { "ordinaryNodes": 161, "veins": 4, "supplyBand": "dominant" },
+        "pure_quartz": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "crude_oil": { "ordinaryNodes": 34, "veins": 0, "supplyBand": "strong" },
+        "chromite": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "hexolite_quartz": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "ancient_lava": { "ordinaryNodes": 10, "veins": 0, "supplyBand": "exclusive" }
+      }
+    },
+    {
+      "factionId": "pwft.faction.feybreak_army",
+      "territoryId": "pwft.island.feybreak",
+      "territoryDisplayNameZhHans": "天坠之地",
+      "resourceBaseline": {
+        "metal_ore": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "coal": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "sulfur": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "pure_quartz": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" },
+        "crude_oil": { "ordinaryNodes": 59, "veins": 0, "supplyBand": "abundant" },
+        "chromite": { "ordinaryNodes": 257, "veins": 0, "supplyBand": "exclusive" },
+        "hexolite_quartz": { "ordinaryNodes": 349, "veins": 0, "supplyBand": "exclusive" },
+        "ancient_lava": { "ordinaryNodes": 0, "veins": 0, "supplyBand": "absent" }
+      }
+    }
+  ],
+  "runtimeActivation": {
+    "nativeMerchantSpawnEnabled": false,
+    "customProductRowsEnabled": false,
+    "dynamicPriceRuntimeEnabled": false,
+    "requestedSaleReputationSettlementEnabled": false,
+    "reason": "balance_confirmation_custom_shop_rows_and_live_sale_replication_acceptance_pending"
+  }
+}

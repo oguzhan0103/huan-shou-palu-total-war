@@ -1,0 +1,18 @@
+[
+  {
+    "factionId": "pwft.faction.rayne_syndicate",
+    "state": "Hostile",
+    "revision": 1
+  },
+  {
+    "factionId": "pwft.faction.free_pal_alliance",
+    "state": "Friendly",
+    "revision": 1
+  },
+  {
+    "factionId": "pwft.faction.pidf",
+    "state": "Neutral",
+    "revision": 1
+  }
+]
+

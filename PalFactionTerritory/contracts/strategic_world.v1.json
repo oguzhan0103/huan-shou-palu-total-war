@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "1.0.0",
+  "apiVersion": "1.0.0",
+  "contentPackSchema": "pwft.strategic-world.pack.v1",
+  "contentStatus": "mechanics_only_player_content_required",
+  "storyContentIncluded": false,
+  "statePolicy": {
+    "storage": "mod-owned-progression-sidecar",
+    "palworldSaveMutationAllowed": false,
+    "idempotentOperationIdsRequired": true,
+    "singleOwnerPerUniquePal": true,
+    "optimisticOwnerTransferRequired": true
+  },
+  "uniquePalPolicy": {
+    "definitionsOwnedByContentPacks": true,
+    "allowedOwnerKinds": [
+      "unclaimed",
+      "wild",
+      "player",
+      "faction"
+    ],
+    "transferRoutesProvidedByGameplay": [
+      "diplomacy",
+      "task",
+      "war"
+    ]
+  },
+  "cityPolicy": {
+    "definitionsAndMappingsOwnedByContentPacks": true,
+    "states": [
+      "active",
+      "occupied",
+      "destroyed"
+    ],
+    "requiredUniquePalControlsPermanentDestruction": true,
+    "bossHealthWithoutPermission": 1,
+    "destroyedStatePersists": true,
+    "restorationMustBeExplicitlyAllowedByContent": true
+  },
+  "ultimatumPolicy": {
+    "states": [
+      "pending",
+      "accepted",
+      "rejected"
+    ],
+    "supportedDemandKinds": [
+      "tribute",
+      "submission",
+      "resource",
+      "ceasefire",
+      "custom"
+    ],
+    "demandTextOwnedByContentPacks": true
+  },
+  "nativeActivation": {
+    "bossDamageAdapter": "public-api-ready-native-binding-pending-live-acceptance",
+    "citySpawnAdapter": "event-api-ready-native-binding-pending",
+    "npcFactionThreatAdapter": "state-machine-ready-native-presenter-pending"
+  }
+}

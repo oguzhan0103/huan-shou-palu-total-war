@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "1.0.0",
+  "bundleSchema": "pwft.content-bundle.v1",
+  "apiVersion": "1.0.0",
+  "purpose": "combine a player-authored key with the deterministic mechanism foundation",
+  "storyContentIncludedInFoundation": false,
+  "fields": [
+    "schemaVersion",
+    "manifest",
+    "questTemplates",
+    "strategicWorld",
+    "endingRoutes"
+  ],
+  "registrationPolicy": {
+    "crossDomainValidationBeforeCommit": true,
+    "manifestMustBeDataOnly": true,
+    "localizationKeysOnly": true,
+    "allDomainPackIdsMustMatchManifest": true,
+    "dependenciesAndConflictsResolvedBeforeCommit": true,
+    "deterministicCommitAfterSuccessfulStaging": true
+  },
+  "authorityPolicy": {
+    "contentAuthorsDeclareRulesAndTextKeys": true,
+    "coreOwnsStateTransitions": true,
+    "languageModelMayRegisterContent": false,
+    "languageModelMayMutateState": false
+  }
+}

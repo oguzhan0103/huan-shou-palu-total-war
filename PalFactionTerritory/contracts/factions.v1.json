@@ -1,0 +1,102 @@
+{
+  "schemaVersion": "1.0.0",
+  "gameBuild": "Steam v1.0.1 / build 24181527",
+  "factions": [
+    {
+      "id": "pwft.faction.rayne_syndicate",
+      "displayNameZhHans": "雷恩盗猎团",
+      "displayNameEn": "Rayne Syndicate",
+      "sourceTextKey": "DUNGEON_GRASSHARD_TextData",
+      "nativeOrganizationType": null,
+      "bindingStatus": "game_text_confirmed_runtime_group_pending"
+    },
+    {
+      "id": "pwft.faction.free_pal_alliance",
+      "displayNameZhHans": "帕鲁保护团体",
+      "displayNameEn": "Free Pal Alliance",
+      "sourceTextKey": "BUILDOBJECT_DESC_Believer_Banner_TextData",
+      "nativeOrganizationType": null,
+      "bindingStatus": "game_text_confirmed_runtime_group_pending"
+    },
+    {
+      "id": "pwft.faction.eternal_pyre",
+      "displayNameZhHans": "永炎同心会",
+      "displayNameEn": "Brothers of the Eternal Pyre",
+      "sourceTextKey": "BUILDOBJECT_DESC_FireCult_Banner_TextData",
+      "nativeOrganizationType": null,
+      "bindingStatus": "game_text_confirmed_runtime_group_pending"
+    },
+    {
+      "id": "pwft.faction.pidf",
+      "displayNameZhHans": "帕洛斯群岛自卫队",
+      "displayNameEn": "Palpagos Islands Defense Force (PIDF)",
+      "sourceTextKey": "Help_29_TextData",
+      "nativeOrganizationType": "EPalOrganizationType::Police",
+      "bindingStatus": "native_enum_confirmed_semantic_mapping_confirmed"
+    },
+    {
+      "id": "pwft.faction.desert_pal_tribe",
+      "displayNameZhHans": "沙漠帕鲁部落",
+      "displayNameEn": "Desert Pal Tribe",
+      "sourceTextKey": "PWFT_FACTION_DESERT_PAL_TRIBE_TextData",
+      "nativeOrganizationType": null,
+      "bindingStatus": "user_defined_no_native_binding"
+    },
+    {
+      "id": "pwft.faction.snow_pal_tribe",
+      "displayNameZhHans": "雪地帕鲁部落",
+      "displayNameEn": "Snow Pal Tribe",
+      "sourceTextKey": "PWFT_FACTION_SNOW_PAL_TRIBE_TextData",
+      "nativeOrganizationType": null,
+      "bindingStatus": "user_defined_no_native_binding"
+    },
+    {
+      "id": "pwft.faction.fire_pal_tribe",
+      "displayNameZhHans": "火焰属性帕鲁部落",
+      "displayNameEn": "Fire Pal Tribe",
+      "sourceTextKey": "PWFT_FACTION_FIRE_PAL_TRIBE_TextData",
+      "nativeOrganizationType": null,
+      "bindingStatus": "user_defined_no_native_binding"
+    },
+    {
+      "id": "pwft.faction.feybreak_composite_pal_tribe",
+      "displayNameZhHans": "天坠之地综合帕鲁部落",
+      "displayNameEn": "Feybreak United Pal Tribe",
+      "sourceTextKey": "PWFT_FACTION_FEYBREAK_COMPOSITE_PAL_TRIBE_TextData",
+      "nativeOrganizationType": null,
+      "bindingStatus": "user_defined_no_native_binding"
+    },
+    {
+      "id": "pwft.faction.dark_nocturnal_pal_tribe",
+      "displayNameZhHans": "暗属性帕鲁部落",
+      "displayNameEn": "Nocturnal Dark Pal Tribe",
+      "sourceTextKey": "PWFT_FACTION_DARK_NOCTURNAL_PAL_TRIBE_TextData",
+      "nativeOrganizationType": null,
+      "bindingStatus": "user_defined_no_native_binding"
+    },
+    {
+      "id": "pwft.faction.pal_genetic_research_unit",
+      "displayNameZhHans": "基因研究部队",
+      "displayNameEn": "PAL Genetic Research Unit",
+      "sourceTextKey": "BUILDOBJECT_DESC_Scientist_Banner_TextData",
+      "nativeOrganizationType": null,
+      "bindingStatus": "game_text_confirmed_runtime_group_pending"
+    },
+    {
+      "id": "pwft.faction.moonflower",
+      "displayNameZhHans": "月花众",
+      "displayNameEn": "Moonflower",
+      "sourceTextKey": "BUILDOBJECT_DESC_Ninja_Banner_TextData",
+      "nativeOrganizationType": null,
+      "bindingStatus": "game_text_confirmed_runtime_group_pending"
+    },
+    {
+      "id": "pwft.faction.feybreak_army",
+      "displayNameZhHans": "天坠军",
+      "displayNameEn": "Feybreak Army",
+      "sourceTextKey": "Yamishima_guide5_2_TextData",
+      "nativeOrganizationType": null,
+      "bindingStatus": "game_text_confirmed_runtime_group_pending"
+    }
+  ]
+}

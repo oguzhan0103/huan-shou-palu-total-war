@@ -1,0 +1,217 @@
+{
+  "schemaVersion": "1.0.0",
+  "gameBuild": "Steam v1.0.1 / build 24181527",
+  "baselineStatus": "user_confirmed_mechanics_baseline_2026-07-28",
+  "balanceStatus": "provisional_until_live_balance_review",
+  "designPolicy": {
+    "multipleHumanMembershipsAllowed": true,
+    "reputationDecreaseEnabled": false,
+    "storyContentIncluded": false,
+    "taskContentIncluded": false,
+    "modOwnedPersistenceRequired": true,
+    "palworldSaveMutationAllowed": false
+  },
+  "humanFactionIds": [
+    "pwft.faction.rayne_syndicate",
+    "pwft.faction.free_pal_alliance",
+    "pwft.faction.eternal_pyre",
+    "pwft.faction.pidf",
+    "pwft.faction.pal_genetic_research_unit",
+    "pwft.faction.moonflower",
+    "pwft.faction.feybreak_army"
+  ],
+  "palFactionIds": [
+    "pwft.faction.desert_pal_tribe",
+    "pwft.faction.snow_pal_tribe",
+    "pwft.faction.fire_pal_tribe",
+    "pwft.faction.feybreak_composite_pal_tribe",
+    "pwft.faction.dark_nocturnal_pal_tribe"
+  ],
+  "initialState": {
+    "humanReputation": 0,
+    "humanRelation": "Friendly",
+    "humanJoined": false,
+    "palReputation": -100,
+    "palRelation": "Hostile",
+    "palJoined": false
+  },
+  "relationPolicy": {
+    "hostileBelowReputation": 0,
+    "nonMemberNonHostileRelation": "Friendly",
+    "joinedHumanRelation": "Player",
+    "palNonHostileRelation": "Friendly",
+    "palMaximumRelation": "Friendly"
+  },
+  "membershipPolicy": {
+    "joinMinimumReputation": 0,
+    "humanOnly": true,
+    "joinOperationProvidedByContent": true,
+    "joinDiplomacyEffectsStatus": "runtime_overlay_and_content_adapter_ready_native_presenter_pending",
+    "joinDiplomacyEffects": {
+      "schemaVersion": "1.0.0",
+      "sourceThreadId": "019f7d91-89f6-7c33-809c-2bb61aedc2a6",
+      "sourceDocument": "1.0文本资料库/文档/幻兽帕鲁1.0_势力关系图与日记证据.docx",
+      "defaultUnspecifiedRelation": "Neutral",
+      "joinedFactionRelation": "Player",
+      "reputationMutationOnJoin": false,
+      "mapDisplayRelation": {
+        "Hostile": "Hostile",
+        "Friendly": "Friendly",
+        "Neutral": "Friendly",
+        "Player": "Player"
+      },
+      "pairs": [
+        {
+          "factionA": "pwft.faction.rayne_syndicate",
+          "factionB": "pwft.faction.free_pal_alliance",
+          "relation": "Hostile",
+          "displayLabelZhHans": "敌对",
+          "judgmentId": "PW10-RELJ-001",
+          "confidence": "high",
+          "basis": "原文明确双方对立且经常战斗"
+        },
+        {
+          "factionA": "pwft.faction.rayne_syndicate",
+          "factionB": "pwft.faction.pal_genetic_research_unit",
+          "relation": "Friendly",
+          "displayLabelZhHans": "友善/合作",
+          "judgmentId": "PW10-RELJ-002",
+          "confidence": "user-confirmed-inference",
+          "basis": "雷恩负责出售帕鲁，雪山研究部队采购冰帕鲁；用户裁定可直接推断双方存在供货合作"
+        },
+        {
+          "factionA": "pwft.faction.rayne_syndicate",
+          "factionB": "pwft.faction.feybreak_army",
+          "relation": "Friendly",
+          "displayLabelZhHans": "友善",
+          "judgmentId": "PW10-RELJ-003",
+          "confidence": "user-confirmed",
+          "basis": "比约恩与佐伊父亲存在亦师亦友和前后辈式历史联系；不等同于正式联盟"
+        },
+        {
+          "factionA": "pwft.faction.eternal_pyre",
+          "factionB": "pwft.faction.pal_genetic_research_unit",
+          "relation": "Hostile",
+          "displayLabelZhHans": "敌对",
+          "judgmentId": "PW10-RELJ-004",
+          "confidence": "high-with-faction-mapping",
+          "basis": "原文记载火山一众与雪山势力日以继夜进行血腥搏杀"
+        },
+        {
+          "factionA": "pwft.faction.pal_genetic_research_unit",
+          "factionB": "pwft.faction.moonflower",
+          "relation": "Neutral",
+          "displayLabelZhHans": "中立/低好感",
+          "judgmentId": "PW10-RELJ-005",
+          "confidence": "user-confirmed",
+          "basis": "纱夜明确厌恶雪山研究者，但用户裁定未达到默认红名的持续敌对关系"
+        }
+      ],
+      "conditionalRules": [
+        {
+          "factionId": "pwft.faction.pidf",
+          "condition": "player_crime_or_rule_violation",
+          "relation": "Hostile",
+          "scope": "incident_or_wanted_state",
+          "basis": "自卫队制度性中立；犯罪、越界或违法时按条件敌对"
+        }
+      ]
+    },
+    "joinInteraction": {
+      "enabled": true,
+      "apiVersion": "1.0.0",
+      "humanFactionsOnly": true,
+      "multipleMembershipsAllowed": true,
+      "requiresRegisteredSource": true,
+      "requiresExplicitConfirmation": true,
+      "previewDiplomacyChanges": true,
+      "dialogueContentIncluded": false,
+      "pendingOfferPersistence": "transient",
+      "playerIdentitySource": "content_supplied_until_native_profile_adapter",
+      "nativePresenterStatus": "public_adapter_ready_native_presenter_pending"
+    }
+  },
+  "rankPolicy": {
+    "automaticPromotion": true,
+    "ranks": [
+      {
+        "id": "Member",
+        "displayNameZhHans": "成员",
+        "minimumReputation": 0,
+        "guardAccess": false
+      },
+      {
+        "id": "CoreMember",
+        "displayNameZhHans": "核心成员",
+        "minimumReputation": 300,
+        "guardAccess": false
+      },
+      {
+        "id": "Leader",
+        "displayNameZhHans": "领队",
+        "minimumReputation": 700,
+        "guardAccess": true
+      },
+      {
+        "id": "Lord",
+        "displayNameZhHans": "领主",
+        "minimumReputation": 1200,
+        "guardAccess": true
+      }
+    ]
+  },
+  "reputationSources": {
+    "task": {
+      "enabled": true,
+      "primarySource": true,
+      "maximumAwardPerEvent": 300
+    },
+    "defense": {
+      "enabled": true,
+      "primarySource": true,
+      "maximumAwardPerEvent": 300,
+      "hostileParticipantRecoveryAllowed": true,
+      "temporaryTruceRequired": true
+    },
+    "commerce": {
+      "enabled": true,
+      "primarySource": false,
+      "windowPolicy": "external_window_id",
+      "negativeRecoveryCapPerWindow": 80,
+      "nonNegativeCapPerWindow": 20,
+      "canRestoreToNonHostile": true,
+      "canReachLordAlone": false,
+      "diplomacyRecovery": {
+        "enabled": true,
+        "automaticClear": true,
+        "requiresNonNegativeReputation": true,
+        "pointsSource": "applied_non_negative_commerce_reputation",
+        "requiredPointsPerHostilitySource": 60,
+        "capPerWindow": 20,
+        "sourceOrder": "sorted_faction_id",
+        "carryRemainderAcrossSources": false,
+        "fixedMarketCommercialTruceRequired": true,
+        "visitingCaravansWhileHostileAllowed": false,
+        "balanceStatus": "provisional_offline_baseline_2026-07-29"
+      }
+    },
+    "pal_reconciliation": {
+      "enabled": true,
+      "requiresAllHumanLords": true,
+      "targetReputation": 0,
+      "contentMechanismStatus": "finite_token_discourse_contract_ready_content_binding_pending_2026-08-05",
+      "directReconcileApiEnabled": false,
+      "awardAuthority": "pal-discourse-service-v1",
+      "positivePartialAwardsAllowed": true
+    }
+  },
+  "unlockPolicy": {
+    "palReconciliation": {
+      "allHumanFactionsMustReachRank": "Lord"
+    },
+    "ending3": {
+      "allHumanFactionsMustReachRank": "Lord",
+      "allPalFactionsMustReachRelation": "Friendly"
+    }
+  }
+}
