@@ -1,32 +1,52 @@
-# Palworld Total War Foundation / 幻兽帕鲁：全面战争机制基座
+# 幻兽帕鲁全面战争
 
-这是一个面向《幻兽帕鲁》通关后玩法的非商业、社区驱动开源项目。
+《幻兽帕鲁全面战争》是一个非商业、社区驱动的 Mod 项目。当前公开版本是 **v1.0.1 开源机制基座**：它把玩法规则、运行时代码、内容包接口和测试交给社区，但不把剧情文本或详细世界设定写死在 Core 中。
 
-项目采用“基座 + 密钥”的结构：
+> 这不是“一键安装的完整剧情 Mod”。公开 Release 是 source-only 源码包，不含 Pocketpair 游戏资产、Cooked PAK、存档或模型。玩家可直接体验的独立 UE4SS 扩展与开发者基座在同一仓库中分别标注，离线通过不会冒充实机通过。
 
-- **Core Foundation** 提供势力关系、任务、商业、保卫战、护卫、帕鲁和解、唯一帕鲁、城邦状态、结局、持久化和公共 API。
-- **Content Key** 由社区作者填写剧情、任务文本、本地化、代表、信物、唯一帕鲁清单、城邦映射和结局条件。
-- **Official Add-ons** 提供已经完成并通过对应 Steam Build 验证的可玩示例。
-- **AI Dialogue Experimental** 提供本地 Ollama / OpenAI-compatible 的 NPC 对话实验，但模型无权直接修改任务、好感度、物品或世界状态。
+## 当前状态
 
-商人商会基座已把七名普通 `ItemShop` 商会员工、七套 `PFT_Economy_*` 商品行、资源短缺采购清单和限额商业好感度结算接到同一条源码链；所有原生生成、商品绑定和出售结算开关仍默认关闭，等待统一实机验收。
+| 内容 | 状态 | 已验证范围 |
+| --- | --- | --- |
+| 小型聚落帕鲁攻城 | Build `24467282` 实机通过 | 两轮均原生生成 4/4、居民优先战斗、4/4 回收 |
+| 商人商会七柜台 | Build `24467282` 实机通过 | 7 个实体、7 个势力、7 个商品行；原生 ItemShop 可连续打开；7/7 回收 |
+| 势力进度、商业规则、任务、护卫、结局和内容包 SDK | 离线验证通过 | 规则、API、幂等与回归测试完成；部分原生入口默认关闭 |
+| 帕鲁信物与有限论道 | 离线验证通过 | 信物、任务门闩、有限次数、技术故障返还、红转蓝结算完成 |
+| NPC / 帕鲁聊天 | 仅底座完成 | 离线对话树和外部 AI 运行时已完成；游戏内代表交互、对话 UI 尚未接通 |
+| `PalMultiOtomo0` 多帕鲁 | 独立扩展源码已公开 | F6 最多增加 4 只辅助帕鲁、F7 回收；当前 Build 仍应重新实机确认 |
 
-Core 不包含正式剧情正文。内容包必须先通过命名空间、版本、依赖、冲突、本地化键和跨领域原子验证，才能接入确定性运行时。
+完整、逐项且不夸大的状态说明见 [已完成内容](./幻兽帕鲁全面战争_已完成内容.md)。攻城与商会的实机记录见 [最终实机验收](./PalFactionTerritory/docs/40_帕鲁攻城与商人商会最终实机验收_2026-08-08.md)。
 
 ## 仓库组成
 
-- `PalFactionTerritory/`：机制基座、内容包 SDK、全面战争官方配置和测试。
-- `PalMultiOtomo/`：多帕鲁协同作战官方扩展。
-- `PalAgentDialogue/`：大模型 NPC 对话实验组件。
+- `PalFactionTerritory/`：势力、商业、攻城、帕鲁和解、内容包 SDK、作者示例和测试。
+- `PalMultiOtomo/`：独立的多帕鲁 UE4SS 扩展。
+- `PalAgentDialogue/`：本地 Ollama / OpenAI-compatible NPC 对话实验运行时与 UE4SS 文件桥。
 
-玄绒龙已从活动 Mod 与 v1.0 发布范围撤出；其工程、美术资源和任何从游戏提取的资产均不进入公共源码仓库或 Release 附件。
+项目采用“基座 + 密钥”结构：
 
-## 安全原则
+- **基座**负责确定性机制、状态、接口和安全边界。
+- **密钥**由内容作者提供剧情、任务文本、本地化、代表、信物名称、城邦映射和结局条件。
+- 大模型只能生成对话和白名单建议，不能直接修改任务、好感度、物品、经济或世界状态。
 
-- 不替换或修改原始 PAK。
-- 不直接编辑 Palworld 存档。
-- 持久化只写 Mod 自有侧车文件，并按世界与玩家身份隔离。
-- 安装、卸载和实机测试均先建立可恢复快照。
-- 离线通过、成功打包、已部署和实机通过分别记录，不互相冒充。
+## 获取与验证
 
-本项目与 Pocketpair 无隶属、授权或官方关系。《幻兽帕鲁》名称、角色及游戏资产归其权利人所有。
+请从 [GitHub Releases](https://github.com/oguzhan0103/huan-shou-palu-total-war/releases) 下载 v1.0.1 的分包源码和 `SHA256SUMS.txt`。开发者也可以克隆仓库后运行：
+
+```powershell
+npm ci
+npm test
+
+Set-Location .\PalAgentDialogue
+cargo test --all-targets
+```
+
+`PalMultiOtomo0` 的手动安装目录位于 `PalMultiOtomo/mod0/ue4ss/PalMultiOtomo0/`。`PalFactionTerritory0` 公开包不包含地图、UMG 和商店 DataTable 的 Cooked PAK，因此应视为开发者基座，而不是完整玩家安装包。
+
+## 参与开发
+
+内容作者从 `PalFactionTerritory/examples/minimal-content-pack/` 开始。贡献代码或内容前请阅读 [贡献指南](./CONTRIBUTING.md)、[安全策略](./SECURITY.md) 和 [第三方资产说明](./THIRD_PARTY_NOTICES.md)。
+
+玄绒龙已从活动 Mod 和公开发布范围撤出。本仓库不包含其模型、纹理、FBX、Cook 资源或 PAK。
+
+本项目采用 [MIT License](./LICENSE)，与 Pocketpair 无隶属、授权或官方关系。《幻兽帕鲁》名称、角色和游戏资产归其权利人所有。

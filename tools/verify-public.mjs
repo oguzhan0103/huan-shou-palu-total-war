@@ -101,4 +101,38 @@ for (const file of trackedCandidates) {
   }
 }
 
-console.log(`PASS public source verification: ${luaFiles.length} Lua files, ${testCount} Lua tests`);
+const tracked = spawnSync("git", ["ls-files", "-z"], {
+  cwd: root,
+  encoding: "utf8",
+});
+if (tracked.error) throw tracked.error;
+if (tracked.status !== 0) {
+  throw new Error(`git ls-files failed: ${tracked.stderr ?? "unknown error"}`);
+}
+
+const forbiddenTrackedText = [
+  { label: "Steam account ID", pattern: /\b7656119\d{10}\b/ },
+  { label: "local Windows user profile path", pattern: /[A-Za-z]:\\Users\\[^<\\\r\n]+\\/i },
+  { label: "GitHub access token", pattern: /\bgh[pousr]_[A-Za-z0-9_]{20,}\b/ },
+  { label: "OpenAI-style secret key", pattern: /\bsk-[A-Za-z0-9_-]{20,}\b/ },
+  { label: "private key", pattern: /-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----/ },
+];
+
+let safetyFileCount = 0;
+for (const relative of tracked.stdout.split("\0").filter(Boolean)) {
+  const file = path.join(root, relative);
+  if (!fs.existsSync(file) || !fs.statSync(file).isFile()) continue;
+  const payload = fs.readFileSync(file);
+  if (payload.includes(0)) continue;
+  const text = payload.toString("utf8");
+  for (const rule of forbiddenTrackedText) {
+    if (rule.pattern.test(text)) {
+      throw new Error(`Tracked public source contains ${rule.label}: ${relative}`);
+    }
+  }
+  safetyFileCount += 1;
+}
+
+console.log(
+  `PASS public source verification: ${luaFiles.length} Lua files, ${testCount} Lua tests, ${safetyFileCount} tracked text files scanned`,
+);

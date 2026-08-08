@@ -36,9 +36,7 @@
 
 ## 日志
 
-日志位于：
-
-`E:\SteamLibrary\steamapps\common\Palworld\Pal\Binaries\Win64\ue4ss\UE4SS.log`
+日志位于 `<Palworld>\Pal\Binaries\Win64\ue4ss\UE4SS.log`。
 
 筛选关键字：
 

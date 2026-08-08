@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$GameRoot = "E:\SteamLibrary\steamapps\common\Palworld",
-    [string]$SaveRoot = "C:\Users\asus\AppData\Local\Pal\Saved\SaveGames\76561198452346716"
+    [Parameter(Mandatory = $true)][string]$SaveRoot,
+    [Parameter(Mandatory = $true)][string]$WorldName
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,7 +11,8 @@ $ExpectedExeSha256 = "8b5286b96550e83fb79a2ec7ede7bf881ec86f52f017e8276ceb1dc1b3
 $ExpectedMainPakSha256 = "a82fee669e60558db5adc409c8607bb6c06b8a4d4c984317f9a37415461e7119"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $WorkspaceRoot = Split-Path -Parent $ProjectRoot
-$AppManifest = "E:\SteamLibrary\steamapps\appmanifest_1623730.acf"
+$SteamAppsRoot = Split-Path -Parent (Split-Path -Parent $GameRoot)
+$AppManifest = Join-Path $SteamAppsRoot "appmanifest_1623730.acf"
 $Win64Root = Join-Path $GameRoot "Pal\Binaries\Win64"
 $ShippingExe = Join-Path $Win64Root "Palworld-Win64-Shipping.exe"
 $ProxyDll = Join-Path $Win64Root "dwmapi.dll"
@@ -71,7 +73,7 @@ if ($MainPakSha256 -ne $ExpectedMainPakSha256) {
     throw "Build $ExpectedBuildId original Pal-Windows.pak hash drifted: $MainPakSha256"
 }
 
-$OguzhanWorld = $null
+$DesignatedWorld = $null
 foreach ($WorldDirectory in Get-ChildItem -LiteralPath $SaveRoot -Directory) {
     $LevelMeta = Join-Path $WorldDirectory.FullName "LevelMeta.sav"
     if (-not (Test-Path -LiteralPath $LevelMeta -PathType Leaf)) {
@@ -82,17 +84,17 @@ foreach ($WorldDirectory in Get-ChildItem -LiteralPath $SaveRoot -Directory) {
     )
     if ([regex]::IsMatch(
         $RawText,
-        "WorldName.{0,64}StrProperty.{0,32}oguzhan.{0,32}HostPlayerName",
+        "WorldName.{0,64}StrProperty.{0,32}$([regex]::Escape($WorldName)).{0,32}HostPlayerName",
         [System.Text.RegularExpressions.RegexOptions]::Singleline
     )) {
-        if ($null -ne $OguzhanWorld) {
-            throw "More than one top-level oguzhan world was found; snapshot refused"
+        if ($null -ne $DesignatedWorld) {
+            throw "More than one top-level world named '$WorldName' was found; snapshot refused"
         }
-        $OguzhanWorld = $WorldDirectory.FullName
+        $DesignatedWorld = $WorldDirectory.FullName
     }
 }
-if ($null -eq $OguzhanWorld) {
-    throw "The designated top-level oguzhan save was not found; snapshot refused"
+if ($null -eq $DesignatedWorld) {
+    throw "The designated top-level world '$WorldName' was not found; snapshot refused"
 }
 
 function Get-FileManifest {
@@ -199,19 +201,19 @@ foreach ($Pair in @(
 }
 
 $ResolvedSaveRoot = (Resolve-Path -LiteralPath $SaveRoot).Path.TrimEnd('\')
-$ResolvedOguzhanWorld = (Resolve-Path -LiteralPath $OguzhanWorld).Path
-if (-not $ResolvedOguzhanWorld.StartsWith(
+$ResolvedDesignatedWorld = (Resolve-Path -LiteralPath $DesignatedWorld).Path
+if (-not $ResolvedDesignatedWorld.StartsWith(
     $ResolvedSaveRoot + '\',
     [System.StringComparison]::OrdinalIgnoreCase
 )) {
-    throw "Resolved oguzhan world is outside the configured save root"
+    throw "Resolved designated world is outside the configured save root"
 }
-$OguzhanRelativePath = $ResolvedOguzhanWorld.Substring($ResolvedSaveRoot.Length).TrimStart('\')
+$DesignatedRelativePath = $ResolvedDesignatedWorld.Substring($ResolvedSaveRoot.Length).TrimStart('\')
 $CriticalHashes = [ordered]@{}
 foreach ($RelativePath in @("Level.sav", "LevelMeta.sav")) {
-    $CriticalPath = Join-Path $OguzhanWorld $RelativePath
+    $CriticalPath = Join-Path $DesignatedWorld $RelativePath
     if (-not (Test-Path -LiteralPath $CriticalPath -PathType Leaf)) {
-        throw "Designated oguzhan save is missing $RelativePath"
+        throw "Designated world '$WorldName' is missing $RelativePath"
     }
     $CriticalHashes[$RelativePath] =
         (Get-FileHash -LiteralPath $CriticalPath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -228,8 +230,8 @@ foreach ($RelativePath in @("Level.sav", "LevelMeta.sav")) {
     liveTestPerformed = $false
     installationMutated = $false
     designatedSave = [ordered]@{
-        name = "oguzhan"
-        relativeWorldPath = $OguzhanRelativePath
+        name = $WorldName
+        relativeWorldPath = $DesignatedRelativePath
         sourceRoot = $SaveRoot
         criticalHashes = $CriticalHashes
         completeSaveSnapshot = $SaveSnapshot
@@ -261,7 +263,7 @@ foreach ($RelativePath in @("Level.sav", "LevelMeta.sav")) {
 } | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $EvidencePath -Encoding utf8
 
 Write-Host "PASS full recoverable live-test snapshot for Steam Build $ExpectedBuildId"
-Write-Host "oguzhan save snapshot: $($SaveSnapshot.snapshot)"
+Write-Host "Designated world '$WorldName' save snapshot: $($SaveSnapshot.snapshot)"
 Write-Host "UE4SS and Mod PAK snapshot: $SnapshotRoot"
 Write-Host "Evidence: $EvidencePath"
 Write-Host "No game was started and no installed file or save was changed."
