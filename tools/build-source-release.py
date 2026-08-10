@@ -21,7 +21,7 @@ from pathlib import Path, PurePosixPath
 from typing import Iterable
 
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 TARGET_STEAM_BUILD_ID = "24467282"
 FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
 ROOT = Path(__file__).resolve().parent.parent
@@ -93,7 +93,7 @@ CORE_CONTRACTS = (
 )
 
 
-CORE_README = """# 幻兽帕鲁全面战争 Core Foundation v1.0.1
+CORE_README = """# 幻兽帕鲁全面战争 Core Foundation v1.0.2
 
 这是《幻兽帕鲁全面战争》的 source-only 机制底座，目标 Steam Build 为 24467282。
 
@@ -102,14 +102,15 @@ CORE_README = """# 幻兽帕鲁全面战争 Core Foundation v1.0.1
 存档、日志、安装产物或玄绒龙美术资源。
 
 状态：小型聚落攻城与商人商会七柜台已在 Build 24467282 实机通过；其他规则层
-通过离线回归。NPC/帕鲁原生聊天 UI、真实交易好感度闭环和最终场景落位未完成。
+通过离线回归。NPC/帕鲁的 Core 对话控制器、通用呈现路由和代表距离门闩已经
+离线完成；原生聊天 Widget/Delegate、真实交易好感度闭环和最终场景落位未完成。
 
 本包不含地图、UMG 或商店 DataTable 的 Cooked PAK，因此是开发者基座，不是
 一键安装的完整玩家版。UE4SS 源码位于
 `PalFactionTerritory/mod0/ue4ss/PalFactionTerritory0/`。
 """
 
-ADDONS_README = """# 幻兽帕鲁全面战争 Official Add-ons v1.0.1
+ADDONS_README = """# 幻兽帕鲁全面战争 Official Add-ons v1.0.2
 
 本 source-only 包包含官方多帕鲁协同作战扩展 PalMultiOtomo0。
 目标 Steam Build 为 24467282；不包含游戏资产、存档、日志或已部署文件。
@@ -118,15 +119,16 @@ ADDONS_README = """# 幻兽帕鲁全面战争 Official Add-ons v1.0.1
 将 `PalMultiOtomo0` 目录复制到 UE4SS 的 `Mods` 目录后，从 Steam 启动游戏验证。
 """
 
-AI_README = """# 幻兽帕鲁全面战争 AI Dialogue Experimental v1.0.1
+AI_README = """# 幻兽帕鲁全面战争 AI Dialogue Experimental v1.0.2
 
 这是独立的 Rust 源码实验包，支持本地 Ollama 和 OpenAI-compatible 接口。
 模型只能提出对白、白名单选择和白名单标签；任务、好感、物品和世界状态仍由
 确定性的 Core 裁决。
 
-状态：Rust 外部运行时和 UE4SS 文件桥源码均已包含并通过离线测试。Core 尚未
-调用该桥并在游戏内展示返回文本，玩家可见 UI 与 Build 24467282 实机验收未完成，
-因此本包明确标记为 Experimental。
+状态：Rust 外部运行时和 UE4SS 文件桥源码均已包含并通过离线测试。Mod Core
+已经具备提交、轮询、再次校验、离线回退和玩家确认控制器，以及后端无关的呈现
+与代表距离门闩。原生 NPC Delegate、玩家可见 Widget 与 Build 24467282 实机验收
+仍未完成，因此本包明确标记为 Experimental。
 """
 
 

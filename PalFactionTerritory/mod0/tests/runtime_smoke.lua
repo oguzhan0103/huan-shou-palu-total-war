@@ -71,6 +71,9 @@ assert(state.factionProgression ~= nil)
 assert(state.palReconciliation ~= nil)
 assert(state.palRaidResultAdapter ~= nil)
 assert(state.palDiscourseRuntime ~= nil)
+assert(state.palDialogueController ~= nil)
+assert(state.palDialoguePresenter ~= nil)
+assert(state.palRepresentativeInteraction ~= nil)
 assert(state.factionApi ~= nil)
 assert(state.factionCommerce ~= nil)
 assert(state.factionEconomy ~= nil)
@@ -163,6 +166,47 @@ assert(
 assert(
     state.palDiscourseRuntime:status()
         .nativeDialoguePresenterEnabled == false
+)
+assert(
+    _G.PWFT_PAL_DIALOGUE_CONTROLLER_V1
+        == state.palDialogueController
+)
+assert(
+    _G.PWFT_PAL_DIALOGUE_PRESENTER_V1
+        == state.palDialoguePresenter
+)
+assert(
+    _G.PWFT_PAL_REPRESENTATIVE_INTERACTION_V1
+        == state.palRepresentativeInteraction
+)
+assert(state.palDialogueController:status().enabled == true)
+assert(
+    state.palDialogueController:status()
+        .directAgentStateMutation == false
+)
+assert(
+    state.palDialogueController:status()
+        .offlineTreeFallback == true
+)
+assert(state.palDialoguePresenter:status().enabled == true)
+assert(
+    state.palDialoguePresenter:status()
+        .nativePresenterEnabled == false
+)
+assert(
+    state.palDialoguePresenter:status()
+        .deterministicRuleEngineOwnsOutcome == true
+)
+assert(
+    state.palRepresentativeInteraction:status().enabled == true
+)
+assert(
+    state.palRepresentativeInteraction:status()
+        .proximityGate == true
+)
+assert(
+    state.palRepresentativeInteraction:status()
+        .nativeDelegateBinding == false
 )
 assert(state.factionEconomy:status().closedLoopProductCount == 4)
 assert(

@@ -172,6 +172,11 @@ trip, including rejection of authority fields and unauthorized proposals.
 ## Integration status
 
 The external runtime, file protocol, and minimal UE4SS adapter are implemented
-and testable with a mock provider. The deterministic Palworld Mod Core must still
-call the adapter and present the returned text in its own UI, then be verified in
-game. Offline tests do not claim live UI or game integration acceptance.
+and testable with a mock provider. `PalFactionTerritory0` now contains a Core
+controller that submits and polls this adapter, independently revalidates the
+response, falls back to the authored offline tree, and requires player
+confirmation before a proposed choice reaches deterministic state. It also
+contains a backend-neutral presentation and representative-proximity router.
+The cooked/native dialogue Widget and NPC interaction delegate are still not
+connected or accepted in game. Offline tests do not claim live UI or game
+integration acceptance.

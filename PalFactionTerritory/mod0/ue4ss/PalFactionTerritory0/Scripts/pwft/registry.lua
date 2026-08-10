@@ -10,7 +10,7 @@ return {
         ["faction_commerce.v1.json"] = "d6f5e3e92e9851779c827f220159c66ec9d0ee3873ec4488c57388f3fe255179",
         ["faction_economy.v1.json"] = "8ac4b1c2c8e3ba2c7e08365cd8223b340aed6c3f8e4cae23e6bed500f7457fe5",
         ["faction_economy_shops.v1.json"] = "bc051914c66eaae7c2e4e45686eb6d8895e1c3afa55a843f18f584007e984086",
-        ["pal_reconciliation.v1.json"] = "85849c1b73aaff07d87ac5d029d32bb08112a31a431e04ce58c9cba19d7e8cf3",
+        ["pal_reconciliation.v1.json"] = "84469dc58ae6d3f57a9d8ba282e85694dc7486f95d931e298cce4831f1ceb639",
         ["faction_progression.v1.json"] = "a790d8d4274c2e946e6fff9341975c250aaf919477b209913a9404613414fbd0",
         ["territory_assignments.v1.json"] = "0b4542014338178ab311f73a876dea640a1d393e9cd68801b3c852e2849e0f7b",
         ["fast_travel_territories.v1.json"] = "a2945338ca661ef001b1603a077209f06efae5fad2b25a43d432acde9419dbf4",
@@ -1585,8 +1585,11 @@ return {
         ["runtimeActivation"] = {
             ["coreEnabled"] = true,
             ["nativeRaidResultBindingEnabled"] = false,
+            ["dialoguePresenterRouterEnabled"] = true,
+            ["representativeInteractionRouterEnabled"] = true,
+            ["representativeInteractionDistance"] = 500,
             ["nativeDialoguePresenterEnabled"] = false,
-            ["agentAdapterEnabled"] = false,
+            ["agentAdapterEnabled"] = true,
             ["persistenceFollowsFactionProgressionSidecar"] = true
         }
     },

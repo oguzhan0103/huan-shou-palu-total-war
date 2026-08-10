@@ -293,4 +293,124 @@ assert(settled_outcome.ok)
 assert(settled_outcome.requestedAward == 2)
 assert(#awards == 3)
 
+-- A temporary sidecar/progression rejection after authoritative inventory
+-- replication must not lose the sale. The same confirmation and commerce
+-- window are retried, so the eventual success is awarded exactly once.
+local retry_attempts = 0
+local retry_confirmations = {}
+local retry_windows = {}
+local retry_commerce = {
+    registeredShops = {},
+}
+function retry_commerce:merchant_status()
+    return { factionId = "pwft.faction.rayne_syndicate" }
+end
+function retry_commerce:register_shop(shop_id, faction_id, metadata)
+    self.registeredShops[shop_id] = {
+        factionId = faction_id,
+        metadata = metadata,
+    }
+    return { ok = true, reason = "registered" }
+end
+function retry_commerce:confirm_requested_sale(
+    shop_id,
+    confirmation_id,
+    items,
+    commerce_window_id
+)
+    retry_attempts = retry_attempts + 1
+    retry_confirmations[retry_attempts] = confirmation_id
+    retry_windows[retry_attempts] = commerce_window_id
+    if retry_attempts == 1 then
+        return {
+            ok = false,
+            reason = "temporary-progression-sidecar-unavailable",
+            applied = 0,
+        }
+    end
+    return {
+        ok = true,
+        reason = "commerce-reputation-awarded-after-retry",
+        applied = 1,
+        requestedAward = 1,
+        shopId = shop_id,
+        requestedItemCount = items[1].count,
+    }
+end
+local retry_bridge = CommerceBridge.create(retry_commerce, {
+    windowIdProvider = function()
+        return "world-day-retry-22"
+    end,
+    nativeSaleReplicationProbeEnabled = true,
+    nativeSaleReputationSettlementEnabled = true,
+})
+local retry_actor = {
+    GetFullName = function()
+        return "BP_NPC_Trader_C /Game/Test/RetryVendor"
+    end,
+}
+local retry_component = {
+    GetFullName = function()
+        return "PalNetworkShopComponent /Game/Test/RetryPlayer"
+    end,
+}
+local retry_slot = {
+    ItemId = { StaticId = pal_oil_name },
+    StackCount = 20,
+    GetFullName = function()
+        return "PalItemSlot /Game/Test/RetrySale"
+    end,
+}
+assert(retry_bridge:register_vendor_actor(
+    "pwft.faction.rayne_syndicate",
+    retry_actor,
+    { mode = "fixed-market", commercialTruce = true }
+))
+assert(retry_bridge:on_shop_setup(retry_component, retry_actor))
+assert(retry_bridge:on_item_sell_ui_request(
+    item_shop_ui,
+    { retry_slot }
+))
+assert(retry_bridge:on_sell_request(
+    retry_component,
+    { A = 13, B = 14, C = 15, D = 16 },
+    {}
+))
+assert(retry_bridge:on_item_sell_ui_result(item_shop_ui, true))
+retry_slot.StackCount = 0
+local retry_failed, retry_failure =
+    retry_bridge:on_item_slot_replicated(
+        retry_slot,
+        "test-authoritative-replication-first"
+    )
+assert(not retry_failed)
+assert(retry_failure.reason
+    == "temporary-progression-sidecar-unavailable")
+assert(retry_bridge:status().confirmedSellCount == 0)
+local retry_succeeded, retry_outcome =
+    retry_bridge:on_item_slot_replicated(
+        retry_slot,
+        "test-authoritative-replication-retry"
+    )
+assert(retry_succeeded)
+assert(retry_outcome.reason
+    == "commerce-reputation-awarded-after-retry")
+assert(retry_outcome.applied == 1)
+assert(retry_attempts == 2)
+assert(retry_confirmations[1] == retry_confirmations[2])
+assert(retry_windows[1] == retry_windows[2])
+assert(retry_windows[1] == "world-day-retry-22")
+assert(retry_bridge:status().confirmedSellCount == 1)
+assert(retry_bridge:status().nativeSellSettlementAttemptCount == 2)
+assert(retry_bridge:status().nativeSellSettlementRetryCount == 1)
+assert(retry_bridge:status().nativeSellSettlementFailureCount == 1)
+local no_duplicate, no_duplicate_reason =
+    retry_bridge:on_item_slot_replicated(
+        retry_slot,
+        "test-authoritative-replication-after-success"
+    )
+assert(not no_duplicate)
+assert(no_duplicate_reason == "replicated-slot-not-pending-sale")
+assert(retry_attempts == 2)
+
 print("PASS native commerce buy bridge and confirmed-sale adapter")

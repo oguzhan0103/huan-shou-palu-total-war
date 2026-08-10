@@ -106,6 +106,30 @@ try {
         throw "Lua offline Pal discourse-tree runtime test failed"
     }
 
+    $PalDialogueControllerOutput = & npx.cmd --offline --yes --package=fengari-node-cli@0.1.0 fengari "mod0/tests/pal_dialogue_controller_spec.lua" 2>&1
+    $PalDialogueControllerExitCode = $LASTEXITCODE
+    $PalDialogueControllerOutput | Write-Output
+    $PalDialogueControllerText = $PalDialogueControllerOutput -join "`n"
+    if ($PalDialogueControllerExitCode -ne 0 -or $PalDialogueControllerText -match "(?im)assertion failed|stack traceback:") {
+        throw "Lua optional Agent Pal dialogue controller test failed"
+    }
+
+    $PalDialoguePresenterOutput = & npx.cmd --offline --yes --package=fengari-node-cli@0.1.0 fengari "mod0/tests/pal_dialogue_presenter_spec.lua" 2>&1
+    $PalDialoguePresenterExitCode = $LASTEXITCODE
+    $PalDialoguePresenterOutput | Write-Output
+    $PalDialoguePresenterText = $PalDialoguePresenterOutput -join "`n"
+    if ($PalDialoguePresenterExitCode -ne 0 -or $PalDialoguePresenterText -match "(?im)assertion failed|stack traceback:") {
+        throw "Lua Pal dialogue presentation router test failed"
+    }
+
+    $PalRepresentativeInteractionOutput = & npx.cmd --offline --yes --package=fengari-node-cli@0.1.0 fengari "mod0/tests/pal_representative_interaction_spec.lua" 2>&1
+    $PalRepresentativeInteractionExitCode = $LASTEXITCODE
+    $PalRepresentativeInteractionOutput | Write-Output
+    $PalRepresentativeInteractionText = $PalRepresentativeInteractionOutput -join "`n"
+    if ($PalRepresentativeInteractionExitCode -ne 0 -or $PalRepresentativeInteractionText -match "(?im)assertion failed|stack traceback:") {
+        throw "Lua Pal representative proximity and interaction router test failed"
+    }
+
     $ContentPackOutput = & npx.cmd --offline --yes --package=fengari-node-cli@0.1.0 fengari "mod0/tests/content_pack_registry_spec.lua" 2>&1
     $ContentPackExitCode = $LASTEXITCODE
     $ContentPackOutput | Write-Output

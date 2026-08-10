@@ -94,6 +94,9 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "pal_reconciliation.lua",
         SCRIPTS_ROOT / "pwft" / "pal_raid_result_adapter.lua",
         SCRIPTS_ROOT / "pwft" / "pal_discourse_runtime.lua",
+        SCRIPTS_ROOT / "pwft" / "pal_dialogue_controller.lua",
+        SCRIPTS_ROOT / "pwft" / "pal_dialogue_presenter.lua",
+        SCRIPTS_ROOT / "pwft" / "pal_representative_interaction.lua",
         SCRIPTS_ROOT / "pwft" / "registry.lua",
         SCRIPTS_ROOT / "pwft" / "policy.lua",
         SCRIPTS_ROOT / "pwft" / "progression_identity.lua",
@@ -119,6 +122,9 @@ def main() -> int:
         PROJECT_ROOT / "mod0" / "tests" / "pal_reconciliation_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "pal_raid_result_adapter_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "pal_discourse_runtime_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "pal_dialogue_controller_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "pal_dialogue_presenter_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "pal_representative_interaction_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "content_pack_registry_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "content_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "quest_runtime_spec.lua",
@@ -569,6 +575,15 @@ def main() -> int:
     pal_discourse_runtime_text = (
         SCRIPTS_ROOT / "pwft" / "pal_discourse_runtime.lua"
     ).read_text(encoding="utf-8")
+    pal_dialogue_controller_text = (
+        SCRIPTS_ROOT / "pwft" / "pal_dialogue_controller.lua"
+    ).read_text(encoding="utf-8")
+    pal_dialogue_presenter_text = (
+        SCRIPTS_ROOT / "pwft" / "pal_dialogue_presenter.lua"
+    ).read_text(encoding="utf-8")
+    pal_representative_interaction_text = (
+        SCRIPTS_ROOT / "pwft" / "pal_representative_interaction.lua"
+    ).read_text(encoding="utf-8")
     progression_identity_text = (
         SCRIPTS_ROOT / "pwft" / "progression_identity.lua"
     ).read_text(encoding="utf-8")
@@ -673,10 +688,16 @@ def main() -> int:
     require("PalReconciliation.create(" in runtime_text, "finite Pal reconciliation runtime is not started")
     require("PalRaidResultAdapter.create(" in runtime_text, "Pal raid-result adapter runtime is not started")
     require("PalDiscourseRuntime.create(" in runtime_text, "offline Pal discourse runtime is not started")
+    require("PalDialogueController.create(" in runtime_text, "Pal Agent dialogue controller is not started")
+    require("PalDialoguePresenter.create(" in runtime_text, "Pal dialogue presenter router is not started")
+    require("PalRepresentativeInteraction.create(" in runtime_text, "Pal representative interaction router is not started")
     require("_G.PWFT_FACTION_API_V1" in runtime_text, "versioned public faction API is not exported")
     require("_G.PWFT_PAL_RECONCILIATION_API_V1" in runtime_text, "versioned public Pal reconciliation API is not exported")
     require("_G.PWFT_PAL_RAID_RESULT_ADAPTER_V1" in runtime_text, "versioned Pal raid-result adapter is not exported")
     require("_G.PWFT_PAL_DISCOURSE_API_V1" in runtime_text, "versioned Pal discourse API is not exported")
+    require("_G.PWFT_PAL_DIALOGUE_CONTROLLER_V1" in runtime_text, "versioned Pal dialogue controller is not exported")
+    require("_G.PWFT_PAL_DIALOGUE_PRESENTER_V1" in runtime_text, "versioned Pal dialogue presenter is not exported")
+    require("_G.PWFT_PAL_REPRESENTATIVE_INTERACTION_V1" in runtime_text, "versioned Pal representative interaction API is not exported")
     require("_G.PWFT_COMMERCE_API_V1" in runtime_text, "versioned public commerce API is not exported")
     require("_G.PWFT_ECONOMY_SHOP_API_V1" in runtime_text, "versioned economy shop API is not exported")
     require("_G.PWFT_COMMERCE_BRIDGE_V1" in runtime_text, "versioned commerce bridge is not exported")
@@ -839,9 +860,12 @@ def main() -> int:
     )
     require(
         pal_reconciliation["runtimeActivation"]["nativeRaidResultBindingEnabled"] is False
+        and pal_reconciliation["runtimeActivation"]["dialoguePresenterRouterEnabled"] is True
+        and pal_reconciliation["runtimeActivation"]["representativeInteractionRouterEnabled"] is True
+        and pal_reconciliation["runtimeActivation"]["representativeInteractionDistance"] == 500
         and pal_reconciliation["runtimeActivation"]["nativeDialoguePresenterEnabled"] is False
-        and pal_reconciliation["runtimeActivation"]["agentAdapterEnabled"] is False,
-        "unaccepted Pal reconciliation native features must remain disabled",
+        and pal_reconciliation["runtimeActivation"]["agentAdapterEnabled"] is True,
+        "dialogue routing and Agent adapter must stay active while the native Pal presenter remains disabled",
     )
     require("record_raid_result" in pal_reconciliation_text, "Pal raid-result adapter is missing")
     require("first-spawn-of-final-wave" in pal_raid_result_adapter_text, "deterministic Pal raid leader rule is missing")
@@ -855,6 +879,18 @@ def main() -> int:
     require("pal-discourse-technical-failure-refunded" in pal_discourse_runtime_text, "technical failure refund is missing")
     require("localizationKeysOnly = true" in pal_discourse_runtime_text, "localization-key-only dialogue boundary is missing")
     require("io." not in pal_discourse_runtime_text, "Pal discourse runtime cannot write files directly")
+    require("response-fields-not-allowed" in pal_dialogue_controller_text, "Pal Agent response authority-field rejection is missing")
+    require("agent-proposal-committed-by-player" in pal_dialogue_controller_text, "Pal Agent player-confirmation route is missing")
+    require("technical_failure" in pal_dialogue_controller_text, "Pal Agent presentation technical-refund route is missing")
+    require("io." not in pal_dialogue_controller_text, "Pal dialogue controller cannot write files directly")
+    require("explicit-player-abort-required-active-token-would-be-consumed" in pal_dialogue_presenter_text, "Pal dialogue UI explicit-abort guard is missing")
+    require("deterministicRuleEngineOwnsOutcome = true" in pal_dialogue_presenter_text, "Pal dialogue presenter authority boundary is missing")
+    require("io." not in pal_dialogue_presenter_text, "Pal dialogue presenter cannot write files directly")
+    require("player-not-near-pal-representative" in pal_representative_interaction_text, "Pal representative proximity gate is missing")
+    require("dialogue-presenter-backend-unavailable-token-preserved" in pal_representative_interaction_text, "Pal representative pre-confirmation presenter gate is missing")
+    require("pal-representative-presentation-failed" in pal_representative_interaction_text, "Pal representative presentation refund route is missing")
+    require("nativeDelegateBinding = false" in pal_representative_interaction_text, "Pal representative native-delegate boundary is missing")
+    require("io." not in pal_representative_interaction_text, "Pal representative interaction router cannot write files directly")
     require("complete_token_quest" in pal_reconciliation_text, "Pal token quest adapter is missing")
     require("preview_discourse" in pal_reconciliation_text, "irreversible discourse preview is missing")
     require("begin_discourse" in pal_reconciliation_text, "Pal discourse reservation route is missing")
