@@ -23,6 +23,12 @@ local NativeCharacterAdapter =
 local PalReconciliation = require("pwft.pal_reconciliation")
 local PalDiscourseRuntime =
     require("pwft.pal_discourse_runtime")
+local PalDialogueController =
+    require("pwft.pal_dialogue_controller")
+local PalDialoguePresenter =
+    require("pwft.pal_dialogue_presenter")
+local PalRepresentativeInteraction =
+    require("pwft.pal_representative_interaction")
 local PalRaidResultAdapter =
     require("pwft.pal_raid_result_adapter")
 local ProgressionIdentity = require("pwft.progression_identity")
@@ -3544,8 +3550,11 @@ function Runtime.start(config, registry, policy)
     assert(config.palReconciliation.nativeRaidResultBindingEnabled == false, "Pal raid-result binding requires separate live acceptance")
     assert(config.palReconciliation.leaderDesignation == "first-spawn-of-final-wave", "unsupported Pal raid leader designation")
     assert(config.palReconciliation.offlineDialogueTreeEnabled == true, "offline Pal dialogue-tree runtime must be enabled")
+    assert(config.palReconciliation.dialoguePresenterRouterEnabled == true, "Pal dialogue presenter router must be enabled")
+    assert(config.palReconciliation.representativeInteractionRouterEnabled == true, "Pal representative interaction router must be enabled")
+    assert(type(config.palReconciliation.representativeInteractionDistance) == "number", "Pal representative interaction distance is required")
     assert(config.palReconciliation.nativeDialoguePresenterEnabled == false, "Pal dialogue presenter requires authored content and live acceptance")
-    assert(config.palReconciliation.agentAdapterEnabled == false, "Pal Agent adapter is outside the active baseline")
+    assert(config.palReconciliation.agentAdapterEnabled == true, "presentation-only Pal Agent adapter must be enabled")
     assert(config.palReconciliation.storyContentIncluded == false, "base Mod cannot include authored Pal reconciliation stories")
     assert(type(config.factionUi) == "table", "faction UI must be explicitly configured")
     assert(type(config.factionUi.enabled) == "boolean", "faction UI enabled flag is required")
@@ -3697,6 +3706,28 @@ function Runtime.start(config, registry, policy)
         )
     _G.PWFT_PAL_DISCOURSE_API_V1 =
         state.palDiscourseRuntime
+    state.palDialogueController =
+        PalDialogueController.create(
+            state.palDiscourseRuntime,
+            config.palReconciliation
+        )
+    _G.PWFT_PAL_DIALOGUE_CONTROLLER_V1 =
+        state.palDialogueController
+    state.palDialoguePresenter =
+        PalDialoguePresenter.create(
+            state.palDialogueController,
+            config.palReconciliation
+        )
+    _G.PWFT_PAL_DIALOGUE_PRESENTER_V1 =
+        state.palDialoguePresenter
+    state.palRepresentativeInteraction =
+        PalRepresentativeInteraction.create(
+            state.palDiscourseRuntime,
+            state.palDialoguePresenter,
+            config.palReconciliation
+        )
+    _G.PWFT_PAL_REPRESENTATIVE_INTERACTION_V1 =
+        state.palRepresentativeInteraction
     state.contentPackRegistry = ContentPackRegistry.create({
         coreVersion = config.schemaVersion,
     })
@@ -4029,6 +4060,45 @@ function Runtime.start(config, registry, policy)
         tostring(pal_discourse_status.nativeDialoguePresenterEnabled),
         tostring(pal_discourse_status.baseStoryContentIncluded),
         tostring(pal_discourse_status.localizationKeysOnly)
+    ))
+    local pal_dialogue_status =
+        state.palDialogueController:status()
+    log(string.format(
+        "PAL_DIALOGUE_CONTROLLER_READY api=%s agent=%s bridge=%s offlineFallback=%s playerConfirmation=%s directAgentMutation=%s nativePresenter=%s",
+        pal_dialogue_status.apiVersion,
+        tostring(pal_dialogue_status.enabled),
+        tostring(pal_dialogue_status.bridgeAvailable),
+        tostring(pal_dialogue_status.offlineTreeFallback),
+        tostring(pal_dialogue_status.proposalRequiresPlayerConfirmation),
+        tostring(pal_dialogue_status.directAgentStateMutation),
+        tostring(pal_dialogue_status.nativePresenterEnabled)
+    ))
+    local pal_dialogue_presenter_status =
+        state.palDialoguePresenter:status()
+    log(string.format(
+        "PAL_DIALOGUE_PRESENTER_READY api=%s router=%s backend=%s native=%s localizationKeys=%s generatedDialogue=%s explicitAbort=%s directMutation=%s",
+        pal_dialogue_presenter_status.apiVersion,
+        tostring(pal_dialogue_presenter_status.enabled),
+        tostring(pal_dialogue_presenter_status.backendAvailable),
+        tostring(pal_dialogue_presenter_status.nativePresenterEnabled),
+        tostring(pal_dialogue_presenter_status.localizationKeyPresentation),
+        tostring(pal_dialogue_presenter_status.generatedDialoguePresentation),
+        tostring(pal_dialogue_presenter_status.explicitAbortRequired),
+        tostring(pal_dialogue_presenter_status.directPresenterStateMutation)
+    ))
+    local representative_interaction_status =
+        state.palRepresentativeInteraction:status()
+    log(string.format(
+        "PAL_REPRESENTATIVE_INTERACTION_READY api=%s router=%s bindings=%d proximity=%s distance=%.0f confirmation=%s presenterGate=%s nativeDelegate=%s directMutation=%s",
+        representative_interaction_status.apiVersion,
+        tostring(representative_interaction_status.enabled),
+        representative_interaction_status.registeredBindingCount,
+        tostring(representative_interaction_status.proximityGate),
+        representative_interaction_status.defaultMaximumDistance,
+        tostring(representative_interaction_status.explicitIrreversibleConfirmation),
+        tostring(representative_interaction_status.presenterReadinessBeforeTokenConsume),
+        tostring(representative_interaction_status.nativeDelegateBinding),
+        tostring(representative_interaction_status.directInteractionStateMutation)
     ))
     local strategic_world_status = state.strategicWorld:status()
     local content_pack_status = state.contentPackRegistry:status()

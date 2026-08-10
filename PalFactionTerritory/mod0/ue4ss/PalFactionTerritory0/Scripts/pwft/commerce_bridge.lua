@@ -288,6 +288,9 @@ function CommerceBridge.create(commerce, options)
         nativeSellReplicationEventCount = 0,
         nativeSellReplicationConfirmedCount = 0,
         nativeSellReplicationProbeOnlyCount = 0,
+        nativeSellSettlementAttemptCount = 0,
+        nativeSellSettlementRetryCount = 0,
+        nativeSellSettlementFailureCount = 0,
     }, { __index = CommerceBridge })
 end
 
@@ -491,6 +494,9 @@ function CommerceBridge:on_sell_request(component, shop_guid, raw_items)
             or nil,
         uiAttempt = self.activeUiSaleAttempt,
         replicationConfirmed = false,
+        confirmationId = nil,
+        commerceWindowId = nil,
+        settlementAttemptCount = 0,
     }
     if self.activeUiSaleAttempt ~= nil then
         self.activeUiSaleAttempt.pendingComponentKey =
@@ -629,6 +635,14 @@ function CommerceBridge:evaluate_native_sale_replication(
         return false, "no-pending-sale"
     end
     if pending.replicationConfirmed then
+        if self.nativeSaleReputationSettlementEnabled then
+            return self:settle_replicated_sale(
+                component_key,
+                pending,
+                pending.extractedItems,
+                trigger or "replication-retry"
+            )
+        end
         return false, "sale-already-replication-confirmed"
     end
     if pending.uiAttempt == nil
@@ -648,27 +662,21 @@ function CommerceBridge:evaluate_native_sale_replication(
     pending.replicationConfirmed = true
     self.nativeSellReplicationConfirmedCount =
         self.nativeSellReplicationConfirmedCount + 1
+    if self.nativeSaleReputationSettlementEnabled then
+        return self:settle_replicated_sale(
+            component_key,
+            pending,
+            items,
+            trigger or "slot-replication"
+        )
+    end
+
     local confirmation_id = default_transaction_id(
         self,
         "sell-replication",
         pending.shopId,
         tostring(trigger or "slot-replication")
     )
-    if self.nativeSaleReputationSettlementEnabled then
-        local confirmed, outcome = self:confirm_item_sale(
-            component_key,
-            items,
-            confirmation_id,
-            tostring(self.windowIdProvider())
-        )
-        log(self, string.format(
-            "NATIVE_SELL_REPLICATION_CONFIRMED trigger=%s items=%d settlement=true confirmed=%s",
-            tostring(trigger),
-            #items,
-            tostring(confirmed)
-        ))
-        return confirmed, outcome
-    end
 
     self.pendingSales[component_key] = nil
     self.nativeSellReplicationProbeOnlyCount =
@@ -694,6 +702,63 @@ function CommerceBridge:evaluate_native_sale_replication(
         confirmationId = confirmation_id,
         itemCount = #items,
     }
+end
+
+function CommerceBridge:settle_replicated_sale(
+    component_key,
+    pending,
+    items,
+    trigger
+)
+    if pending.confirmationId == nil then
+        pending.confirmationId = default_transaction_id(
+            self,
+            "sell-replication",
+            pending.shopId,
+            tostring(trigger or "slot-replication")
+        )
+    end
+    if pending.commerceWindowId == nil then
+        pending.commerceWindowId =
+            tostring(self.windowIdProvider())
+    end
+    pending.settlementAttemptCount =
+        (pending.settlementAttemptCount or 0) + 1
+    self.nativeSellSettlementAttemptCount =
+        self.nativeSellSettlementAttemptCount + 1
+    if pending.settlementAttemptCount > 1 then
+        self.nativeSellSettlementRetryCount =
+            self.nativeSellSettlementRetryCount + 1
+    end
+    local confirmed, outcome = self:confirm_item_sale(
+        component_key,
+        items,
+        pending.confirmationId,
+        pending.commerceWindowId
+    )
+    if not confirmed then
+        self.nativeSellSettlementFailureCount =
+            self.nativeSellSettlementFailureCount + 1
+        log(self, string.format(
+            "NATIVE_SELL_SETTLEMENT_RETRYABLE trigger=%s items=%d attempt=%d confirmation=%s reason=%s",
+            tostring(trigger),
+            #items,
+            pending.settlementAttemptCount,
+            tostring(pending.confirmationId),
+            tostring(type(outcome) == "table" and outcome.reason or outcome)
+        ))
+        return false, outcome
+    end
+    log(self, string.format(
+        "NATIVE_SELL_REPLICATION_CONFIRMED trigger=%s items=%d settlement=true confirmed=true attempt=%d confirmation=%s applied=%s reason=%s",
+        tostring(trigger),
+        #items,
+        pending.settlementAttemptCount,
+        tostring(pending.confirmationId),
+        tostring(type(outcome) == "table" and outcome.applied or 0),
+        tostring(type(outcome) == "table" and outcome.reason or "unknown")
+    ))
+    return true, outcome
 end
 
 function CommerceBridge:on_item_slot_replicated(slot, trigger)
@@ -741,21 +806,23 @@ function CommerceBridge:confirm_item_sale(
             and native_confirmation_id ~= "",
         "native sale confirmation ID is required"
     )
-    self.pendingSales[component_key] = nil
     local outcome = self.commerce:confirm_requested_sale(
         pending.shopId,
         native_confirmation_id,
         items,
         commerce_window_id or tostring(self.windowIdProvider())
     )
-    self.confirmedSellCount = self.confirmedSellCount + 1
+    if outcome.ok then
+        self.pendingSales[component_key] = nil
+        self.confirmedSellCount = self.confirmedSellCount + 1
+    end
     local event = copy(outcome)
     event.type = "commerce-sale-confirmed"
     event.ok = outcome.ok == true
     event.settlementEnabled = true
     event.items = public_sale_items(items)
     emit_event(self, event)
-    return true, outcome
+    return outcome.ok == true, outcome
 end
 
 function CommerceBridge:start()
@@ -887,6 +954,12 @@ function CommerceBridge:status()
             self.nativeSellReplicationConfirmedCount,
         nativeSellReplicationProbeOnlyCount =
             self.nativeSellReplicationProbeOnlyCount,
+        nativeSellSettlementAttemptCount =
+            self.nativeSellSettlementAttemptCount,
+        nativeSellSettlementRetryCount =
+            self.nativeSellSettlementRetryCount,
+        nativeSellSettlementFailureCount =
+            self.nativeSellSettlementFailureCount,
         sellNativeSuccessSignal =
             self.nativeSaleReplicationProbeEnabled
                 and (

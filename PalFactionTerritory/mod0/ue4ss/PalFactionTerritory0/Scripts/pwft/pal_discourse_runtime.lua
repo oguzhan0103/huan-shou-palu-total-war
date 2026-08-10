@@ -452,6 +452,8 @@ function PalDiscourseRuntime:confirm(offer_id, confirmation_id, accepted)
     local session = {
         sessionId = session_id,
         offerId = offer_id,
+        representativeId = offer.representativeId,
+        representativeNameKey = offer.representativeNameKey,
         factionId = offer.factionId,
         tokenInstanceId = offer.tokenInstanceId,
         treeId = tree.treeId,
@@ -614,6 +616,20 @@ function PalDiscourseRuntime:session_status(session_id)
         if tree ~= nil then
             value.node = public_node(tree.nodes[session.currentNodeId])
         end
+    end
+    return value
+end
+
+function PalDiscourseRuntime:representative_status(representative_id)
+    local representative = self.representatives[representative_id]
+    if representative == nil then
+        return nil
+    end
+    local value = copy(representative)
+    local faction = self.factions[representative.factionId]
+    if faction ~= nil then
+        value.contentPackId = faction.contentPackId
+        value.contentVersion = faction.contentVersion
     end
     return value
 end

@@ -35,16 +35,26 @@ return {
     -- Finite Pal reconciliation is implemented as a Mod-owned service inside
     -- the progression snapshot. Fan content packs register each tribe's
     -- token quota, quests, and discourse content through its public API.
-    -- Native raid-result and dialogue bindings stay disabled until their
-    -- authoritative callbacks have been captured and accepted in-game.
+    -- Native raid-result and dialogue presentation stay disabled until their
+    -- authoritative callbacks have been accepted in-game. The optional Agent
+    -- adapter is active as a presentation-only bridge: unavailable or invalid
+    -- responses fall back to the deterministic offline tree, and a model can
+    -- never directly mutate affinity, quests, inventory, saves, or world state.
     palReconciliation = {
         enabled = true,
         normalizedRaidAdapterEnabled = true,
         nativeRaidResultBindingEnabled = false,
         leaderDesignation = "first-spawn-of-final-wave",
         offlineDialogueTreeEnabled = true,
+        -- The router is data/UI-backend agnostic and may run before a cooked
+        -- native presenter exists. It returns localization-key-only views and
+        -- routes every choice back through the deterministic discourse Core.
+        dialoguePresenterRouterEnabled = true,
+        representativeInteractionRouterEnabled = true,
+        representativeInteractionDistance = 500,
         nativeDialoguePresenterEnabled = false,
-        agentAdapterEnabled = false,
+        agentAdapterEnabled = true,
+        agentDefaultLocale = "zh-CN",
         storyContentIncluded = false,
     },
 
