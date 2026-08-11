@@ -44,7 +44,7 @@ local function validate_policy(contract, config)
     local policy = contract.offlineDialogueTreePolicy
     assert(type(policy) == "table", "offline Pal dialogue-tree policy is required")
     assert(policy.runtimeEnabled == true, "offline Pal dialogue-tree runtime must be enabled")
-    assert(policy.nativePresenterEnabled == false, "native Pal dialogue presenter requires live acceptance")
+    assert(policy.nativePresenterEnabled == true, "native Pal dialogue presenter must be enabled")
     assert(policy.representativeRegistrationRequired == true, "Pal representative registration must be required")
     assert(policy.explicitIrreversibleConfirmationRequired == true, "irreversible confirmation must be required")
     assert(policy.baseStoryContentIncluded == false, "base Mod cannot include authored Pal story content")
@@ -56,7 +56,7 @@ local function validate_policy(contract, config)
     assert(policy.allPathsMustReachTerminal == true, "every Pal dialogue path must terminate")
     assert(type(config) == "table", "Pal discourse runtime configuration is required")
     assert(config.offlineDialogueTreeEnabled == true, "offline Pal dialogue-tree runtime is disabled")
-    assert(config.nativeDialoguePresenterEnabled == false, "native Pal dialogue presenter requires live acceptance")
+    assert(config.nativeDialoguePresenterEnabled == true, "native Pal dialogue presenter is disabled")
     return policy
 end
 
@@ -193,9 +193,12 @@ function PalDiscourseRuntime.create(reconciliation, config)
     return setmetatable({
         version = API_VERSION,
         reconciliation = reconciliation,
+        config = copy(config),
         policy = policy,
         factions = {},
         representatives = {},
+        nativeRaidGroups = {},
+        registeredPacks = {},
         offers = {},
         requestIds = {},
         confirmationIds = {},
@@ -208,7 +211,7 @@ function PalDiscourseRuntime.create(reconciliation, config)
             explicitIrreversibleConfirmation = true,
             technicalFailureRefund = true,
             authoredStoryContent = false,
-            nativePresenter = false,
+            nativePresenter = true,
             agentStateMutation = false,
             PalworldSaveMutation = false,
         },
@@ -230,6 +233,7 @@ function PalDiscourseRuntime:register_pack(pack)
         }
         local pack_factions = {}
         local pack_representatives = {}
+        local pack_native_raid_groups = {}
         for _, item in ipairs(pack.factions) do
             assert(type(item) == "table", "Pal discourse faction entry is required")
             local faction_id = require_non_empty_string(item.factionId, "Pal discourse faction ID")
@@ -238,6 +242,23 @@ function PalDiscourseRuntime:register_pack(pack)
             local quota = require_positive_integer(item.tokenQuota, "Pal discourse token quota")
             local maximum = item.maximumAffinityPerDiscourse
             assert(type(maximum) == "number" and maximum > 0 and maximum <= 100, "invalid Pal discourse maximum affinity")
+            assert(type(item.nativeRaidGroupNames or {}) == "table",
+                "Pal discourse native raid groups must be an array")
+            local native_raid_group_names = {}
+            for _, group_name in ipairs(item.nativeRaidGroupNames or {}) do
+                group_name = require_non_empty_string(
+                    group_name,
+                    "Pal native raid group name"
+                )
+                assert(self.nativeRaidGroups[group_name] == nil,
+                    "Pal native raid group is already owned by another content pack: "
+                        .. group_name)
+                assert(pack_native_raid_groups[group_name] == nil,
+                    "duplicate Pal native raid group: " .. group_name)
+                pack_native_raid_groups[group_name] = faction_id
+                native_raid_group_names[#native_raid_group_names + 1] =
+                    group_name
+            end
             assert(type(item.representative) == "table", "Pal discourse representative is required")
             reject_inline_text(item.representative, "Pal discourse representative")
             local representative_id = require_non_empty_string(item.representative.representativeId, "Pal representative ID")
@@ -270,6 +291,7 @@ function PalDiscourseRuntime:register_pack(pack)
                 contentVersion = version,
                 tokenQuota = quota,
                 maximumAffinityPerDiscourse = maximum,
+                nativeRaidGroupNames = native_raid_group_names,
                 representative = representative,
                 trees = trees,
                 treeByCityState = tree_by_city,
@@ -324,7 +346,16 @@ function PalDiscourseRuntime:register_pack(pack)
         end
         self.factions[faction.factionId] = faction
         self.representatives[faction.representative.representativeId] = faction.representative
+        for _, group_name in ipairs(faction.nativeRaidGroupNames) do
+            self.nativeRaidGroups[group_name] = {
+                groupName = group_name,
+                factionId = faction.factionId,
+                contentPackId = faction.contentPackId,
+                contentVersion = faction.contentVersion,
+            }
+        end
     end
+    self.registeredPacks[normalized.contentPackId] = copy(pack)
     return result(true, "pal-discourse-content-pack-registered", {
         contentPackId = normalized.contentPackId,
         contentVersion = normalized.contentVersion,
@@ -634,13 +665,59 @@ function PalDiscourseRuntime:representative_status(representative_id)
     return value
 end
 
+function PalDiscourseRuntime:export_registered_packs()
+    return copy(self.registeredPacks)
+end
+
+function PalDiscourseRuntime:export_native_raid_sources()
+    local names = {}
+    for group_name in pairs(self.nativeRaidGroups) do
+        names[#names + 1] = group_name
+    end
+    table.sort(names)
+    local sources = {}
+    for _, group_name in ipairs(names) do
+        sources[#sources + 1] = copy(
+            self.nativeRaidGroups[group_name]
+        )
+    end
+    return sources
+end
+
+function PalDiscourseRuntime:ready_tokens_for_representative(
+    representative_id
+)
+    require_non_empty_string(
+        representative_id,
+        "Pal representative ID"
+    )
+    local representative = self.representatives[representative_id]
+    if representative == nil then
+        return result(false, "unknown-pal-representative", {
+            tokens = {},
+        })
+    end
+    local tokens = self.reconciliation:discourse_ready_tokens(
+        representative.factionId
+    )
+    return result(true, "pal-discourse-ready-tokens-listed", {
+        representativeId = representative_id,
+        factionId = representative.factionId,
+        tokens = copy(tokens),
+    })
+end
+
 function PalDiscourseRuntime:status()
     local faction_count = 0
     local representative_count = 0
     local active_sessions = 0
     local resolved_sessions = 0
+    local native_raid_group_count = 0
     for _, _ in pairs(self.factions) do faction_count = faction_count + 1 end
     for _, _ in pairs(self.representatives) do representative_count = representative_count + 1 end
+    for _ in pairs(self.nativeRaidGroups) do
+        native_raid_group_count = native_raid_group_count + 1
+    end
     for _, session in pairs(self.sessions) do
         if session.state == "active" then active_sessions = active_sessions + 1 else resolved_sessions = resolved_sessions + 1 end
     end
@@ -648,10 +725,11 @@ function PalDiscourseRuntime:status()
         apiVersion = self.version,
         registeredFactionCount = faction_count,
         registeredRepresentativeCount = representative_count,
+        nativeRaidGroupCount = native_raid_group_count,
         activeSessionCount = active_sessions,
         resolvedSessionCount = resolved_sessions,
         offlineDialogueTreeEnabled = true,
-        nativeDialoguePresenterEnabled = false,
+        nativeDialoguePresenterEnabled = true,
         baseStoryContentIncluded = false,
         localizationKeysOnly = true,
     }

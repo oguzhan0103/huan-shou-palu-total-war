@@ -51,6 +51,37 @@ local function safe_property(object, name)
     return ok and value or nil
 end
 
+local function safe_actor_location(actor)
+    if not is_valid_object(actor) then
+        return nil
+    end
+    local ok, value = pcall(function()
+        return actor:K2_GetActorLocation()
+    end)
+    if not ok or value == nil then
+        return nil
+    end
+    local x = safe_property(value, "X")
+    local y = safe_property(value, "Y")
+    local z = safe_property(value, "Z")
+    if type(x) ~= "number"
+        or type(y) ~= "number"
+        or type(z) ~= "number" then
+        return nil
+    end
+    return { X = x, Y = y, Z = z }
+end
+
+local function vector_distance(left, right)
+    if type(left) ~= "table" or type(right) ~= "table" then
+        return nil
+    end
+    local dx = left.X - right.X
+    local dy = left.Y - right.Y
+    local dz = left.Z - right.Z
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
+end
+
 local function safe_unwrap(value)
     if value == nil then
         return nil
@@ -117,6 +148,14 @@ function NativeCharacterAdapter.create(options)
         refreshVendorOnSpawn =
             options.refreshVendorOnSpawn ~= false,
         controllerClassPath = options.controllerClassPath,
+        guardControllerClassPath =
+            options.guardControllerClassPath,
+        guardFollowIntervalMs =
+            options.guardFollowIntervalMs or 1000,
+        guardAcceptanceRadius =
+            options.guardAcceptanceRadius or 350,
+        guardFollowMaxFailures =
+            options.guardFollowMaxFailures or 8,
         merchantSpawnerClassPath =
             options.merchantSpawnerClassPath,
         merchantDefaultActionClassPath =
@@ -158,7 +197,11 @@ function NativeCharacterAdapter.create(options)
             palShopBinding = true,
             guardBlueprintSpawn = true,
             guardProviderFactory = true,
-            noPermanentLoop = true,
+            guardVisitorLeaderBinding = true,
+            guardScopedFollowPulse = true,
+            guardCombatPreservation = true,
+            guardDeathStop = true,
+            noGlobalPermanentLoop = true,
             PalworldSaveMutation = false,
         },
     }
@@ -180,6 +223,21 @@ function NativeCharacterAdapter.create(options)
         type(instance.nativeSetupMaxAttempts) == "number"
             and instance.nativeSetupMaxAttempts > 0,
         "native setup attempt count must be positive"
+    )
+    assert(
+        type(instance.guardFollowIntervalMs) == "number"
+            and instance.guardFollowIntervalMs > 0,
+        "guard follow interval must be positive"
+    )
+    assert(
+        type(instance.guardAcceptanceRadius) == "number"
+            and instance.guardAcceptanceRadius > 0,
+        "guard acceptance radius must be positive"
+    )
+    assert(
+        type(instance.guardFollowMaxFailures) == "number"
+            and instance.guardFollowMaxFailures > 0,
+        "guard follow failure limit must be positive"
     )
     -- UE4SS can report an inherited Lua method as unavailable when queried
     -- through type(instance.method).  Publish the post-registration refresh
@@ -428,9 +486,30 @@ function NativeCharacterAdapter:_configure_vendor(actor, plan)
         return false, "vendor-configuration-failed:"
             .. tostring(configure_error)
     end
-    if self.refreshVendorOnSpawn
-        and type(vendor.SetupShopData) == "function" then
+    if self.refreshVendorOnSpawn then
+        if plan.salesChannel == "ItemShop" then
+            local previous_shop = safe_property(
+                vendor,
+                "MyItemShop"
+            )
+            local cleared, clear_error = pcall(function()
+                vendor.MyItemShop = nil
+            end)
+            if not cleared then
+                return false, "item-shop-reset-failed:"
+                    .. tostring(clear_error)
+            end
+            self:_log(string.format(
+                "MERCHANT_ITEM_SHOP_RESET actor=%s previous=%s row=%s",
+                safe_full_name(actor),
+                safe_full_name(previous_shop),
+                tostring(plan.shopRowName)
+            ))
+        end
         local refreshed, refresh_error = pcall(function()
+            -- Reflected Blueprint/native functions are callable through
+            -- UE4SS __namecall even when reading the member does not yield a
+            -- Lua value whose type is "function".
             vendor:SetupShopData()
         end)
         if not refreshed then
@@ -1450,6 +1529,12 @@ function NativeCharacterAdapter:_spawn(plan, merchant)
                 .. tostring(deferred_or_error)
         )
     end
+    if merchant then
+        require_non_empty_string(
+            plan.shopRowName,
+            "native shop row name"
+        )
+    end
     local finish_ok, actor_or_error = pcall(function()
         -- Ordinary merchants are normally born through a Pal NPC spawner,
         -- which supplies their controller.  A deferred direct spawn needs the
@@ -1580,6 +1665,285 @@ function NativeCharacterAdapter:spawn_guard(plan)
     return self:_spawn(plan, false)
 end
 
+function NativeCharacterAdapter:_guard_is_dead(actor)
+    if not is_valid_object(actor) then
+        return true, "guard-actor-unavailable"
+    end
+    local component_ok, component = pcall(function()
+        return actor:GetCharacterParameterComponent()
+    end)
+    if not component_ok or not is_valid_object(component) then
+        return false, "death-probe-unavailable"
+    end
+    local dead_ok, dead = pcall(function()
+        return component:IsDead()
+    end)
+    if not dead_ok then
+        return false, "death-probe-failed:"
+            .. tostring(dead)
+    end
+    return dead == true, dead == true
+            and "guard-dead"
+        or "guard-alive"
+end
+
+function NativeCharacterAdapter:_guard_combat_target(controller)
+    if not is_valid_object(controller) then
+        return nil
+    end
+    local hate_ok, hate_system = pcall(function()
+        return controller:GetHateSystem()
+    end)
+    if not hate_ok or not is_valid_object(hate_system) then
+        return nil
+    end
+    local target_ok, target = pcall(function()
+        return hate_system:FindMostHateTarget()
+    end)
+    if target_ok and is_valid_object(target) then
+        return target
+    end
+    return nil
+end
+
+function NativeCharacterAdapter:_guard_follow_once(record)
+    if type(record) ~= "table"
+        or record.cancelled == true
+        or self.records[record.runtimeId] ~= record then
+        return false, "guard-follow-cancelled"
+    end
+    if not is_valid_object(record.followTarget) then
+        return false, "guard-follow-target-unavailable"
+    end
+    local dead, death_reason = self:_guard_is_dead(record.actor)
+    if dead then
+        record.downed = true
+        record.following = false
+        if not record.downedLogged then
+            record.downedLogged = true
+            self:_log(string.format(
+                "PLAYER_GUARD_DOWNED runtime=%s actor=%s reason=%s",
+                record.runtimeId,
+                safe_full_name(record.actor),
+                tostring(death_reason)
+            ))
+        end
+        return false, "guard-downed"
+    end
+
+    local controller = record.controller
+    if not is_valid_object(controller) then
+        controller = self:_ensure_default_controller(record.actor)
+        record.controller = controller
+    end
+    if not is_valid_object(controller) then
+        return false, "guard-controller-unavailable"
+    end
+
+    if not record.guardAIInitialized then
+        local leader_ok, leader_error = pcall(function()
+            controller.VisitorLeader = record.followTarget
+        end)
+        local initial_ok, initial_error = pcall(function()
+            controller:SetInitialValue(false, true)
+        end)
+        local active_ok, active_error = pcall(function()
+            controller:SetActiveAI(true)
+        end)
+        if not leader_ok or not initial_ok or not active_ok then
+            return false,
+                "guard-ai-initialize-failed:leader="
+                    .. tostring(leader_error)
+                    .. ";initial=" .. tostring(initial_error)
+                    .. ";active=" .. tostring(active_error)
+        end
+        record.guardAIInitialized = true
+    end
+
+    local combat_target = self:_guard_combat_target(controller)
+    if combat_target ~= nil then
+        if record.inCombat ~= true then
+            self:_log(string.format(
+                "PLAYER_GUARD_COMBAT_PRESERVED runtime=%s actor=%s target=%s",
+                record.runtimeId,
+                safe_full_name(record.actor),
+                safe_full_name(combat_target)
+            ))
+        end
+        record.inCombat = true
+        record.following = false
+        return true, "guard-combat-preserved"
+    end
+
+    local resumed = record.inCombat == true
+    record.inCombat = false
+    local move_ok, move_result = pcall(function()
+        return controller:MoveToActor(
+            record.followTarget,
+            self.guardAcceptanceRadius,
+            true,
+            true,
+            true,
+            nil,
+            true
+        )
+    end)
+    if not move_ok then
+        record.following = false
+        return false, "guard-move-to-player-failed:"
+            .. tostring(move_result)
+    end
+    record.following = true
+    record.followPulseCount =
+        (record.followPulseCount or 0) + 1
+    local actor_location = safe_actor_location(record.actor)
+    local target_location = safe_actor_location(record.followTarget)
+    local remaining_distance = vector_distance(
+        actor_location,
+        target_location
+    )
+    if actor_location ~= nil
+        and target_location ~= nil
+        and (record.followPulseCount == 1
+            or record.followPulseCount % 5 == 0
+            or resumed) then
+        self:_log(string.format(
+            "PLAYER_GUARD_FOLLOW_PULSE runtime=%s pulse=%d actor=(%.2f,%.2f,%.2f) target=(%.2f,%.2f,%.2f) distance=%.2f moveResult=%s",
+            record.runtimeId,
+            record.followPulseCount,
+            actor_location.X,
+            actor_location.Y,
+            actor_location.Z,
+            target_location.X,
+            target_location.Y,
+            target_location.Z,
+            remaining_distance,
+            tostring(move_result)
+        ))
+    end
+    local actor_delta = vector_distance(
+        actor_location,
+        record.followInitialActorLocation
+    )
+    local target_delta = vector_distance(
+        target_location,
+        record.followInitialTargetLocation
+    )
+    if record.followMovementLogged ~= true
+        and actor_delta ~= nil
+        and actor_delta >= 100 then
+        record.followMovementLogged = true
+        self:_log(string.format(
+            "PLAYER_GUARD_FOLLOW_MOVEMENT_CONFIRMED runtime=%s pulse=%d actorDelta=%.2f targetDelta=%.2f remainingDistance=%.2f",
+            record.runtimeId,
+            record.followPulseCount,
+            actor_delta,
+            target_delta or 0,
+            remaining_distance or -1
+        ))
+    end
+    if not record.followReadyLogged or resumed then
+        self:_log(string.format(
+            "PLAYER_GUARD_FOLLOW_READY runtime=%s actor=%s controller=%s visitorLeader=true activeAI=true move=true acceptanceRadius=%s pulse=%d resumedAfterCombat=%s",
+            record.runtimeId,
+            safe_full_name(record.actor),
+            safe_full_name(controller),
+            tostring(self.guardAcceptanceRadius),
+            record.followPulseCount,
+            tostring(resumed)
+        ))
+        record.followReadyLogged = true
+    end
+    return true, "guard-follow-command-issued"
+end
+
+function NativeCharacterAdapter:_schedule_guard_follow(record)
+    if type(self.executeWithDelay) ~= "function" then
+        return false, "ExecuteWithDelay-unavailable"
+    end
+    if record.cancelled == true
+        or self.records[record.runtimeId] ~= record
+        or record.followScheduled == true then
+        return false, "guard-follow-not-scheduled"
+    end
+    record.followScheduled = true
+    local callback = function()
+        local execute = function()
+            record.followScheduled = false
+            if record.cancelled == true
+                or self.records[record.runtimeId] ~= record then
+                return
+            end
+            local ok, reason = self:_guard_follow_once(record)
+            if reason == "guard-downed" then
+                return
+            end
+            if ok then
+                record.followFailureCount = 0
+            else
+                record.followFailureCount =
+                    (record.followFailureCount or 0) + 1
+                self:_log(string.format(
+                    "PLAYER_GUARD_FOLLOW_RETRY runtime=%s failure=%d limit=%d reason=%s",
+                    record.runtimeId,
+                    record.followFailureCount,
+                    self.guardFollowMaxFailures,
+                    tostring(reason)
+                ))
+                if record.followFailureCount
+                    >= self.guardFollowMaxFailures then
+                    record.following = false
+                    record.followStopped = true
+                    self:_log(string.format(
+                        "PLAYER_GUARD_FOLLOW_STOPPED runtime=%s reason=%s",
+                        record.runtimeId,
+                        tostring(reason)
+                    ))
+                    return
+                end
+            end
+            self:_schedule_guard_follow(record)
+        end
+        if type(self.executeInGameThread) == "function" then
+            self.executeInGameThread(execute)
+        else
+            execute()
+        end
+    end
+    self.executeWithDelay(self.guardFollowIntervalMs, callback)
+    return true, "guard-follow-scheduled"
+end
+
+function NativeCharacterAdapter:_activate_guard_follow(
+    runtime_id,
+    follow_target
+)
+    local record = self.records[runtime_id]
+    if type(record) ~= "table" then
+        return false, "guard-record-unavailable"
+    end
+    if not is_valid_object(follow_target) then
+        return false, "guard-follow-target-unavailable"
+    end
+    record.followTarget = follow_target
+    record.followFailureCount = 0
+    record.cancelled = false
+    record.followInitialActorLocation = safe_actor_location(record.actor)
+    record.followInitialTargetLocation = safe_actor_location(follow_target)
+    record.followMovementLogged = false
+    local followed, follow_reason =
+        self:_guard_follow_once(record)
+    if not followed then
+        return false, follow_reason
+    end
+    local scheduled, schedule_reason =
+        self:_schedule_guard_follow(record)
+    if not scheduled then
+        return false, schedule_reason
+    end
+    return true, "native-guard-follow-active"
+end
+
 function NativeCharacterAdapter:create_guard_provider(
     character_id,
     character_class_path
@@ -1616,24 +1980,47 @@ function NativeCharacterAdapter:create_guard_provider(
                 factionId = faction_id,
                 characterId = character_id,
                 characterClassPath = character_class_path,
+                controllerClassPath =
+                    context.controllerClassPath
+                        or adapter.guardControllerClassPath,
                 location = context.location,
                 rotation = context.rotation
                     or { Pitch = 0, Yaw = 0, Roll = 0 },
             })
+            local follow_ready, follow_error =
+                adapter:_activate_guard_follow(
+                    runtime_id,
+                    context.followTarget
+                )
+            if not follow_ready then
+                adapter:despawn(
+                    actor,
+                    "guard-follow-activation-failed"
+                )
+                error(follow_error)
+            end
             return {
                 runtimeId = runtime_id,
                 actor = actor,
                 followTarget = context.followTarget,
                 followBehaviourStatus =
-                    "native-follow-controller-pending-live-validation",
+                    "native-visitor-leader-follow-active-live-combat-validation-pending",
             }
         end,
         recall = function(handle, reason)
             if type(handle) ~= "table" then
                 return false
             end
+            -- UE4SS may hand Lua a different wrapper for the same native
+            -- actor between deploy and recall.  Resolve the authoritative
+            -- lifecycle record by runtime ID so cancellation never depends
+            -- on wrapper identity.
+            local record = adapter.records[handle.runtimeId]
+            local actor = type(record) == "table"
+                    and record.actor
+                or handle.actor
             local outcome = adapter:despawn(
-                handle.actor,
+                actor,
                 reason or "guard-recall"
             )
             return outcome.ok
@@ -1699,14 +2086,45 @@ function NativeCharacterAdapter:despawn(actor, reason)
         })
     end
     if not is_valid_object(actor) then
-        return make_result(true, "already-despawned")
+        local stale_runtime_id = nil
+        for runtime_id, record in pairs(self.records) do
+            if record.actor == actor then
+                stale_runtime_id = runtime_id
+                record.cancelled = true
+                record.followScheduled = false
+                record.following = false
+                break
+            end
+        end
+        if stale_runtime_id ~= nil then
+            self.records[stale_runtime_id] = nil
+            self.despawnCount = self.despawnCount + 1
+            self:_log(string.format(
+                "DESPAWNED runtime=%s reason=%s lifecycle=already-invalid-record-cleanup",
+                stale_runtime_id,
+                tostring(reason or "unspecified")
+            ))
+        end
+        return make_result(true, "already-despawned", {
+            runtimeId = stale_runtime_id,
+        })
     end
     local removed_runtime_id = nil
+    local removed_record = nil
     for runtime_id, record in pairs(self.records) do
         if record.actor == actor then
             removed_runtime_id = runtime_id
+            removed_record = record
             break
         end
+    end
+    if removed_record ~= nil then
+        -- ExecuteWithDelay callbacks cannot be unscheduled through UE4SS.
+        -- Invalidating this lifecycle-scoped record makes every already queued
+        -- follow pulse inert before the actor is destroyed.
+        removed_record.cancelled = true
+        removed_record.followScheduled = false
+        removed_record.following = false
     end
     local ok, destroy_error = pcall(function()
         actor:K2_DestroyActor()

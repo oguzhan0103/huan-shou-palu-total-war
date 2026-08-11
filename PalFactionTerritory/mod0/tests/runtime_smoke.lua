@@ -82,6 +82,8 @@ assert(state.commerceBridge ~= nil)
 assert(state.factionDefense ~= nil)
 assert(state.factionGuard ~= nil)
 assert(state.factionJoin ~= nil)
+assert(state.factionJoinNativePresenter ~= nil)
+assert(state.factionJoinNativeRouter ~= nil)
 assert(state.factionMerchantRuntime ~= nil)
 assert(state.nativeCharacterAdapter ~= nil)
 assert(state.factionUiModel ~= nil)
@@ -131,6 +133,10 @@ assert(state.contentPackRegistry:status().registeredPackCount == 0)
 assert(state.contentRuntime:status().registeredBundleCount == 0)
 assert(state.questRuntime:status().templateCount == 0)
 assert(_G.PWFT_JOIN_API_V1 == state.factionJoin)
+assert(
+    _G.PWFT_FACTION_JOIN_NATIVE_ROUTER_V1
+        == state.factionJoinNativeRouter
+)
 assert(_G.PWFT_COMMERCE_API_V1 == state.factionCommerce)
 assert(_G.PWFT_ECONOMY_API_V1 == state.factionEconomy)
 assert(
@@ -157,7 +163,7 @@ assert(
 )
 assert(
     state.palRaidResultAdapter:status()
-        .nativeRaidResultBindingEnabled == false
+        .nativeRaidResultBindingEnabled == true
 )
 assert(
     state.palDiscourseRuntime:status()
@@ -165,7 +171,7 @@ assert(
 )
 assert(
     state.palDiscourseRuntime:status()
-        .nativeDialoguePresenterEnabled == false
+        .nativeDialoguePresenterEnabled == true
 )
 assert(
     _G.PWFT_PAL_DIALOGUE_CONTROLLER_V1
@@ -191,7 +197,7 @@ assert(
 assert(state.palDialoguePresenter:status().enabled == true)
 assert(
     state.palDialoguePresenter:status()
-        .nativePresenterEnabled == false
+        .nativePresenterEnabled == true
 )
 assert(
     state.palDialoguePresenter:status()
@@ -245,7 +251,19 @@ assert(
         == false
 )
 assert(state.factionJoin:status().sourceCount == 7)
-assert(state.factionJoin:status().presenterReady == false)
+assert(state.factionJoin:status().presenterReady == true)
+assert(state.factionJoin:status().nativePresenter == true)
+assert(
+    state.factionJoinNativePresenter:status().native == true
+)
+assert(
+    state.factionJoinNativeRouter:status().nativeHookReady == false
+)
+assert(state.factionJoinNativeRouter:status().bindingCount == 0)
+assert(
+    state.factionJoinNativeStartError
+        == "RegisterKeyBind-unavailable"
+)
 assert(
     state.factionJoin:status(
         "pwft.join.source.rayne_syndicate"
@@ -257,7 +275,7 @@ assert(hooks["/Script/Pal.PalNetworkShopComponent:RequestBuyProduct_ToServer"] ~
 assert(hooks["/Script/Pal.PalNetworkShopComponent:RecieveBuyResult_ToClient"] ~= nil)
 assert(hooks["/Script/Pal.PalNetworkShopComponent:RequestSellItems_ToServer"] ~= nil)
 assert(hooks["/Script/Pal.PalUIItemShopBase:TrySell"] ~= nil)
-assert(hooks["/Script/Pal.PalUIItemShopBase:TrySell"].postCallback ~= nil)
+assert(hooks["/Script/Pal.PalUIItemShopBase:TrySell"].postCallback == nil)
 assert(state.factionProgression:status("pwft.faction.rayne_syndicate").relation == "Friendly")
 assert(state.factionProgression:status("pwft.faction.dark_nocturnal_pal_tribe").relation == "Hostile")
 assert(hooks["/Script/Pal.PalUIWorldMap:CreateWorldMapData"].callback == state.hooks["/Script/Pal.PalUIWorldMap:CreateWorldMapData"].callback)

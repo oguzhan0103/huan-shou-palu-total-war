@@ -31,7 +31,7 @@ local adapter = PalRaidResultAdapter.create(
     reconciliation,
     {
         normalizedRaidAdapterEnabled = true,
-        nativeRaidResultBindingEnabled = false,
+        nativeRaidResultBindingEnabled = true,
         leaderDesignation = "first-spawn-of-final-wave",
     }
 )
@@ -78,7 +78,7 @@ assert(adapter.version == "1.0.0")
 assert(adapter.capabilities.normalizedEventAggregation)
 assert(adapter.capabilities.deterministicFinalWaveLeader)
 assert(adapter.capabilities.timerSettlement == false)
-assert(adapter:status().nativeRaidResultBindingEnabled == false)
+assert(adapter:status().nativeRaidResultBindingEnabled == true)
 
 assert(adapter:begin_event({
     raidEventId = "unauthorized",

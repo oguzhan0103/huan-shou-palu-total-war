@@ -7,11 +7,13 @@ package.path = table.concat({
 local Registry = require("pwft.registry")
 local Progression = require("pwft.faction_progression")
 local ContentPackRegistry = require("pwft.content_pack_registry")
+local ContentRuntime = require("pwft.content_runtime")
 local QuestRuntime = require("pwft.quest_runtime")
 local StrategicWorld = require("pwft.strategic_world")
 local EndingRuntime = require("pwft.ending_runtime")
 local PalReconciliation = require("pwft.pal_reconciliation")
 local PalDiscourseRuntime = require("pwft.pal_discourse_runtime")
+local LocalizationRuntime = require("pwft.localization_runtime")
 local Example = require("minimal-content-pack.pack")
 
 local function copy(value)
@@ -91,11 +93,58 @@ local reconciliation = PalReconciliation.create(
 )
 local discourse = PalDiscourseRuntime.create(reconciliation, {
     offlineDialogueTreeEnabled = true,
-    nativeDialoguePresenterEnabled = false,
+    nativeDialoguePresenterEnabled = true,
 })
 local discourse_result = discourse:register_pack(Example.palDiscourse)
 assert(discourse_result.ok and discourse_result.reason == "pal-discourse-content-pack-registered")
 assert(discourse_result.factionCount == 1)
+
+-- The public author entrypoint must also validate as one atomic bundle. This
+-- mirrors the in-game internal module loader rather than the legacy sequence
+-- of separate cross-Mod global registrations.
+local bundle_progression = Progression.create(Registry.progression)
+local bundle_registry = ContentPackRegistry.create({ coreVersion = "1.0.0" })
+local bundle_quests = QuestRuntime.create(bundle_progression, bundle_registry)
+local bundle_world = StrategicWorld.create(bundle_progression, {
+    contentPackRegistry = bundle_registry,
+})
+local bundle_endings = EndingRuntime.create(
+    bundle_progression,
+    bundle_world,
+    { contentPackRegistry = bundle_registry }
+)
+local bundle_reconciliation = PalReconciliation.create(
+    Registry.palReconciliation,
+    bundle_progression
+)
+local bundle_discourse = PalDiscourseRuntime.create(
+    bundle_reconciliation,
+    { offlineDialogueTreeEnabled = true, nativeDialoguePresenterEnabled = true }
+)
+local bundle_localization = LocalizationRuntime.create(bundle_registry, {
+    fallbackLocale = "zh-CN",
+})
+local bundle_runtime = ContentRuntime.create(
+    bundle_progression,
+    bundle_registry,
+    bundle_quests,
+    bundle_world,
+    bundle_endings,
+    {
+        palDiscourseRuntime = bundle_discourse,
+        localizationRuntime = bundle_localization,
+    }
+)
+local atomic_bundle = bundle_runtime:register(Example.bundle)
+assert(atomic_bundle.ok and atomic_bundle.reason == "content-bundle-registered")
+assert(atomic_bundle.questTemplateCount == 1)
+assert(atomic_bundle.palDiscourseRegistered)
+assert(atomic_bundle.localizationRegistered)
+assert(atomic_bundle.localizedMessageCount > 0)
+assert(bundle_localization:resolve(
+    "zh-CN",
+    Example.localization.byName.palRepresentativePrompt
+) == "与代表论道")
 
 -- Minimal loop: content registration -> quest choice -> structured result ->
 -- trusted Core operations -> deterministic ending evaluation and commit.

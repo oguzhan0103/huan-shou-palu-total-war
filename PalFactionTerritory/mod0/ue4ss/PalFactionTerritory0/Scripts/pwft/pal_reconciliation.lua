@@ -913,6 +913,37 @@ function PalReconciliation:token_status(faction_id, token_instance_id)
     return copy(record.tokens[token_instance_id])
 end
 
+-- Return only tokens that can start a discourse session right now.  The
+-- virtual ledger remains authoritative; callers cannot mutate the copied
+-- entries, and the normal preview gate (all Human Lords, no active session,
+-- quest complete, faction not reconciled/locked) is applied to every token.
+function PalReconciliation:discourse_ready_tokens(faction_id)
+    local record = self.state.factions[faction_id]
+    if record == nil then
+        return {}
+    end
+    local token_ids = {}
+    for token_instance_id, token in pairs(record.tokens) do
+        if token.state == "quest-complete" then
+            token_ids[#token_ids + 1] = token_instance_id
+        end
+    end
+    table.sort(token_ids)
+    local ready = {}
+    for _, token_instance_id in ipairs(token_ids) do
+        local preview = self:preview_discourse(
+            faction_id,
+            token_instance_id
+        )
+        if preview.ok then
+            local token = copy(record.tokens[token_instance_id])
+            token.preview = copy(preview)
+            ready[#ready + 1] = token
+        end
+    end
+    return ready
+end
+
 function PalReconciliation:export_snapshot()
     return copy(self.state)
 end

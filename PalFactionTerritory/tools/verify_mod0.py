@@ -75,6 +75,8 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "config.lua",
         SCRIPTS_ROOT / "pwft" / "content_pack_registry.lua",
         SCRIPTS_ROOT / "pwft" / "content_runtime.lua",
+        SCRIPTS_ROOT / "pwft" / "content_module_loader.lua",
+        SCRIPTS_ROOT / "pwft" / "localization_runtime.lua",
         SCRIPTS_ROOT / "pwft" / "ending_runtime.lua",
         SCRIPTS_ROOT / "pwft" / "commerce_bridge.lua",
         SCRIPTS_ROOT / "pwft" / "faction_api.lua",
@@ -93,6 +95,7 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "native_character_adapter.lua",
         SCRIPTS_ROOT / "pwft" / "pal_reconciliation.lua",
         SCRIPTS_ROOT / "pwft" / "pal_raid_result_adapter.lua",
+        SCRIPTS_ROOT / "pwft" / "pal_raid_native_binding.lua",
         SCRIPTS_ROOT / "pwft" / "pal_discourse_runtime.lua",
         SCRIPTS_ROOT / "pwft" / "pal_dialogue_controller.lua",
         SCRIPTS_ROOT / "pwft" / "pal_dialogue_presenter.lua",
@@ -121,12 +124,15 @@ def main() -> int:
         PROJECT_ROOT / "mod0" / "tests" / "faction_progression_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "pal_reconciliation_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "pal_raid_result_adapter_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "pal_raid_native_binding_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "pal_discourse_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "pal_dialogue_controller_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "pal_dialogue_presenter_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "pal_representative_interaction_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "content_pack_registry_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "content_runtime_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "content_module_loader_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "localization_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "quest_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "strategic_world_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "ending_runtime_spec.lua",
@@ -139,6 +145,11 @@ def main() -> int:
         PROJECT_ROOT / "examples" / "minimal-content-pack" / "strategic_world.lua",
         PROJECT_ROOT / "examples" / "minimal-content-pack" / "ending_routes.lua",
         PROJECT_ROOT / "examples" / "minimal-content-pack" / "pal_discourse.lua",
+        PROJECT_ROOT / "examples" / "minimal-content-pack" / "localization_catalogs.lua",
+        PROJECT_ROOT / "examples" / "minimal-content-pack" / "bundle.lua",
+        PROJECT_ROOT / "examples" / "minimal-content-pack" / "content_module.lua",
+        PROJECT_ROOT / "scripts" / "validate-content-pack.ps1",
+        PROJECT_ROOT / "tools" / "validate_content_pack.lua",
         PROJECT_ROOT / "mod0" / "tests" / "json_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "native_character_adapter_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "progression_identity_spec.lua",
@@ -305,8 +316,18 @@ def main() -> int:
     merchant_island = commerce["merchantIsland"]
     require(
         merchant_island["placementStatus"]
-        == "user_selected_ftpoint90_island_live_ground_validation_pending",
-        "merchant-island selection status is not locked",
+        == "ftpoint90_live_ground_accepted_2026_08_11",
+        "merchant-island live placement status is not locked",
+    )
+    require(
+        merchant_island["rootLocation"]
+        == {"X": -492507.908, "Y": -42766.375, "Z": -1992.57},
+        "merchant-island accepted root location drifted",
+    )
+    require(
+        merchant_island["rootRotation"]
+        == {"Pitch": 0, "Yaw": 235.46, "Roll": 0},
+        "merchant-island accepted root rotation drifted",
     )
     merchant_island_selection = merchant_island["selectionDecision"]
     require(
@@ -558,6 +579,12 @@ def main() -> int:
     faction_defense_text = (SCRIPTS_ROOT / "pwft" / "faction_defense.lua").read_text(encoding="utf-8")
     faction_guard_text = (SCRIPTS_ROOT / "pwft" / "faction_guard.lua").read_text(encoding="utf-8")
     faction_join_text = (SCRIPTS_ROOT / "pwft" / "faction_join.lua").read_text(encoding="utf-8")
+    faction_join_native_presenter_text = (
+        SCRIPTS_ROOT / "pwft" / "faction_join_native_presenter.lua"
+    ).read_text(encoding="utf-8")
+    faction_join_native_router_text = (
+        SCRIPTS_ROOT / "pwft" / "faction_join_native_router.lua"
+    ).read_text(encoding="utf-8")
     faction_merchant_runtime_text = (SCRIPTS_ROOT / "pwft" / "faction_merchant_runtime.lua").read_text(encoding="utf-8")
     faction_ui_text = (SCRIPTS_ROOT / "pwft" / "faction_ui_model.lua").read_text(encoding="utf-8")
     faction_ui_presenter_text = (
@@ -571,6 +598,9 @@ def main() -> int:
     ).read_text(encoding="utf-8")
     pal_raid_result_adapter_text = (
         SCRIPTS_ROOT / "pwft" / "pal_raid_result_adapter.lua"
+    ).read_text(encoding="utf-8")
+    pal_raid_native_binding_text = (
+        SCRIPTS_ROOT / "pwft" / "pal_raid_native_binding.lua"
     ).read_text(encoding="utf-8")
     pal_discourse_runtime_text = (
         SCRIPTS_ROOT / "pwft" / "pal_discourse_runtime.lua"
@@ -687,6 +717,7 @@ def main() -> int:
     require("FactionProgression.create(" in runtime_text, "progression runtime is not started")
     require("PalReconciliation.create(" in runtime_text, "finite Pal reconciliation runtime is not started")
     require("PalRaidResultAdapter.create(" in runtime_text, "Pal raid-result adapter runtime is not started")
+    require("PalRaidNativeBinding.create(" in runtime_text, "native Pal raid binding runtime is not started")
     require("PalDiscourseRuntime.create(" in runtime_text, "offline Pal discourse runtime is not started")
     require("PalDialogueController.create(" in runtime_text, "Pal Agent dialogue controller is not started")
     require("PalDialoguePresenter.create(" in runtime_text, "Pal dialogue presenter router is not started")
@@ -694,6 +725,7 @@ def main() -> int:
     require("_G.PWFT_FACTION_API_V1" in runtime_text, "versioned public faction API is not exported")
     require("_G.PWFT_PAL_RECONCILIATION_API_V1" in runtime_text, "versioned public Pal reconciliation API is not exported")
     require("_G.PWFT_PAL_RAID_RESULT_ADAPTER_V1" in runtime_text, "versioned Pal raid-result adapter is not exported")
+    require("_G.PWFT_PAL_RAID_NATIVE_BINDING_V1" in runtime_text, "versioned native Pal raid binding is not exported")
     require("_G.PWFT_PAL_DISCOURSE_API_V1" in runtime_text, "versioned Pal discourse API is not exported")
     require("_G.PWFT_PAL_DIALOGUE_CONTROLLER_V1" in runtime_text, "versioned Pal dialogue controller is not exported")
     require("_G.PWFT_PAL_DIALOGUE_PRESENTER_V1" in runtime_text, "versioned Pal dialogue presenter is not exported")
@@ -713,6 +745,34 @@ def main() -> int:
     require("explicitConfirmation" in faction_join_text, "explicit join confirmation capability missing")
     require("join-offer-stale" in faction_join_text, "stale join offer guard missing")
     require("dialogueContentIncluded = false" in faction_join_text, "join adapter must remain dialogue-free")
+    require(
+        "FactionJoinNativePresenter.create(" in runtime_text,
+        "native human join presenter is not started",
+    )
+    require(
+        "FactionJoinNativeRouter.create(" in runtime_text,
+        "native human join router is not started",
+    )
+    require(
+        "_G.PWFT_FACTION_JOIN_NATIVE_ROUTER_V1" in runtime_text,
+        "versioned native human join router is not exported",
+    )
+    require(
+        "deterministicRuleEngineOwnsOutcome = true"
+        in faction_join_native_presenter_text,
+        "native human join presenter must leave outcomes to the deterministic core",
+    )
+    require(
+        "exactRegisteredActorOnly = true" in faction_join_native_router_text
+        and "proximityGate = true" in faction_join_native_router_text
+        and "explicitConfirmation = true" in faction_join_native_router_text,
+        "native human join router safety gates are incomplete",
+    )
+    require(
+        "directStateMutation = false" in faction_join_native_router_text
+        and "storyContentIncluded = false" in faction_join_native_router_text,
+        "native human join router crossed the Core/content boundary",
+    )
     require("FACTION_JOIN_READY" in runtime_text, "join interaction readiness log missing")
     require("FactionEconomyShopCatalog.create(" in runtime_text, "economy shop catalog is not started")
     require("FACTION_ECONOMY_SHOPS_READY" in runtime_text, "economy shop readiness log missing")
@@ -768,7 +828,17 @@ def main() -> int:
     require("palShopSimpleLotteryTableName" in native_character_adapter_text, "native Pal-shop binding missing")
     require("K2_DestroyActor" in native_character_adapter_text, "native character cleanup route missing")
     require("create_guard_provider" in native_character_adapter_text, "native guard provider factory missing")
-    require("native-follow-controller-pending-live-validation" in native_character_adapter_text, "guard follow-validation boundary missing")
+    require("native-visitor-leader-follow-active-live-combat-validation-pending" in native_character_adapter_text, "native guard follow status missing")
+    require("BP_NPCAIController_Visitor_Guardman" in config_text, "native visitor guard controller missing")
+    require("controller.VisitorLeader = record.followTarget" in native_character_adapter_text, "native guard leader binding missing")
+    require("controller:MoveToActor(" in native_character_adapter_text, "native guard follow command missing")
+    require("FindMostHateTarget" in native_character_adapter_text, "native guard combat-preservation probe missing")
+    require("PLAYER_GUARD_DOWNED" in native_character_adapter_text, "native guard death-stop route missing")
+    require("pwft.guard" in runtime_text, "player guard deploy/recall command missing")
+    require(
+        "guardLiveTestProvider:recall" not in runtime_text,
+        "guard live-test recall must not inject provider self into the handle slot",
+    )
     require("RegisterLoop" not in native_character_adapter_text, "native character adapter cannot use a permanent loop")
     require("io." not in native_character_adapter_text, "native character adapter cannot write files")
     require("negativeRecoveryRemaining" in faction_ui_text, "UI commerce-cap model missing")
@@ -828,7 +898,7 @@ def main() -> int:
     raid_adapter_policy = pal_reconciliation["raidResultAdapterPolicy"]
     require(
         raid_adapter_policy["normalizedAdapterEnabled"] is True
-        and raid_adapter_policy["nativeBindingEnabled"] is False
+        and raid_adapter_policy["nativeBindingEnabled"] is True
         and raid_adapter_policy["leaderDesignation"]
         == "first-spawn-of-final-wave"
         and raid_adapter_policy["timerCleanupMaySettleRaid"] is False
@@ -851,7 +921,7 @@ def main() -> int:
     dialogue_policy = pal_reconciliation["offlineDialogueTreePolicy"]
     require(
         dialogue_policy["runtimeEnabled"] is True
-        and dialogue_policy["nativePresenterEnabled"] is False
+        and dialogue_policy["nativePresenterEnabled"] is True
         and dialogue_policy["baseStoryContentIncluded"] is False
         and dialogue_policy["inlineTextAllowed"] is False
         and dialogue_policy["deterministicRuleEngineOwnsOutcome"] is True
@@ -859,13 +929,13 @@ def main() -> int:
         "offline Pal dialogue-tree content or authority policy drifted",
     )
     require(
-        pal_reconciliation["runtimeActivation"]["nativeRaidResultBindingEnabled"] is False
+        pal_reconciliation["runtimeActivation"]["nativeRaidResultBindingEnabled"] is True
         and pal_reconciliation["runtimeActivation"]["dialoguePresenterRouterEnabled"] is True
         and pal_reconciliation["runtimeActivation"]["representativeInteractionRouterEnabled"] is True
         and pal_reconciliation["runtimeActivation"]["representativeInteractionDistance"] == 500
-        and pal_reconciliation["runtimeActivation"]["nativeDialoguePresenterEnabled"] is False
+        and pal_reconciliation["runtimeActivation"]["nativeDialoguePresenterEnabled"] is True
         and pal_reconciliation["runtimeActivation"]["agentAdapterEnabled"] is True,
-        "dialogue routing and Agent adapter must stay active while the native Pal presenter remains disabled",
+        "dialogue routing, native presenter, and Agent adapter activation drifted",
     )
     require("record_raid_result" in pal_reconciliation_text, "Pal raid-result adapter is missing")
     require("first-spawn-of-final-wave" in pal_raid_result_adapter_text, "deterministic Pal raid leader rule is missing")
@@ -873,6 +943,17 @@ def main() -> int:
     require("local-player-owned-pal" in pal_raid_result_adapter_text, "owned-Pal kill attribution is missing")
     require("raid-member-observation-conflict" in pal_raid_result_adapter_text, "conflicting raid evidence fail-closed route is missing")
     require("io." not in pal_raid_result_adapter_text, "Pal raid-result adapter cannot write files directly")
+    require("BroadcastInvaderStart" in pal_raid_native_binding_text, "native Pal raid start broadcast hook is missing")
+    require("BroadcastInvaderEnd" in pal_raid_native_binding_text, "native Pal raid end broadcast hook is missing")
+    require("OnCharacterSpawned" in pal_raid_native_binding_text, "native Pal raid member hook is missing")
+    require("OnDeadEnemy" in pal_raid_native_binding_text, "native Pal raid death hook is missing")
+    require("bCompleteAllWave" in pal_raid_native_binding_text, "native Pal raid authoritative wave completion gate is missing")
+    require("GetPlayerUId" in pal_raid_native_binding_text, "native Pal raid local-player UID attribution is missing")
+    require("GetTrainerPlayerController_ForServer" in pal_raid_native_binding_text, "native Pal raid owned-Pal trainer attribution is missing")
+    require("native-raid-group-unbound" in pal_raid_native_binding_text, "unmapped native Pal raid groups must fail closed")
+    require("PalworldSaveMutation = false" in pal_raid_native_binding_text, "native Pal raid binding must not mutate Palworld saves")
+    require("io." not in pal_raid_native_binding_text, "native Pal raid binding cannot write files directly")
+    require("export_native_raid_sources" in pal_discourse_runtime_text, "content-pack native Pal raid source mapping is missing")
     require("invalid-pal-discourse-content-pack" in pal_discourse_runtime_text, "Pal dialogue content validation is missing")
     require("pal-discourse-declined-token-preserved" in pal_discourse_runtime_text, "pre-confirmation token preservation is missing")
     require("pal-discourse-player-abort-consumed" in pal_discourse_runtime_text, "confirmed player-abort consumption is missing")

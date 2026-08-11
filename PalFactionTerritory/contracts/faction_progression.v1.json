@@ -46,7 +46,7 @@
     "joinMinimumReputation": 0,
     "humanOnly": true,
     "joinOperationProvidedByContent": true,
-    "joinDiplomacyEffectsStatus": "runtime_overlay_and_content_adapter_ready_native_presenter_pending",
+    "joinDiplomacyEffectsStatus": "runtime_overlay_content_adapter_and_native_presenter_ready",
     "joinDiplomacyEffects": {
       "schemaVersion": "1.0.0",
       "sourceThreadId": "019f7d91-89f6-7c33-809c-2bb61aedc2a6",
@@ -128,7 +128,7 @@
       "dialogueContentIncluded": false,
       "pendingOfferPersistence": "transient",
       "playerIdentitySource": "content_supplied_until_native_profile_adapter",
-      "nativePresenterStatus": "public_adapter_ready_native_presenter_pending"
+      "nativePresenterStatus": "native_presenter_and_exact_actor_router_ready_content_actor_binding_required"
     }
   },
   "rankPolicy": {
@@ -159,6 +159,26 @@
         "guardAccess": true
       }
     ]
+  },
+  "guardPolicy": {
+    "enabled": true,
+    "humanOnly": true,
+    "unlockRanks": [
+      "Leader",
+      "Lord"
+    ],
+    "maximumActivePerFaction": 1,
+    "providerStatus": "native_blueprint_provider_and_player_entry_ready",
+    "controllerClassPath": "/Game/Pal/Blueprint/Controller/NPC/BP_NPCAIController_Visitor_Guardman.BP_NPCAIController_Visitor_Guardman_C",
+    "leaderBinding": "VisitorLeader=local-player",
+    "followRoute": "AIController.MoveToActor lifecycle-scoped pulse",
+    "combatPolicy": "preserve-native-hate-target-before-follow-resume",
+    "deathPolicy": "stop-follow-and-await-recall-or-native-body-cleanup",
+    "cleanupPolicy": "cancel-pulse-and-K2_DestroyActor-or-stale-record-cleanup",
+    "playerEntry": "pwft.guard status|deploy|recall",
+    "storyContentIncluded": false,
+    "offlineStatus": "complete",
+    "liveStatus": "follow-combat-down-and-cleanup-validation-pending"
   },
   "reputationSources": {
     "task": {

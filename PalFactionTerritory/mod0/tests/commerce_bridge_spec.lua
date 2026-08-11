@@ -124,6 +124,26 @@ local coal_name = {
         return "Coal"
     end,
 }
+local wrapped_slot_array = {
+    get = function()
+        error("TArray.get requires an index")
+    end,
+    ForEach = function(_, callback)
+        callback(0, {
+            ItemId = { StaticId = pal_oil_name },
+            StackCount = 40,
+        })
+    end,
+}
+local wrapped_started, wrapped_attempt =
+    bridge:on_item_sell_ui_request(
+        item_shop_ui,
+        wrapped_slot_array
+    )
+assert(wrapped_started)
+assert(#wrapped_attempt.items == 1)
+assert(wrapped_attempt.items[1].itemId == "PalOil")
+assert(wrapped_attempt.items[1].count == 40)
 local ui_started, ui_attempt =
     bridge:on_item_sell_ui_request(
         item_shop_ui,
@@ -141,10 +161,6 @@ local ui_started, ui_attempt =
 assert(ui_started)
 assert(#ui_attempt.items == 2)
 assert(bridge:on_sell_request(component, shop_guid, {}))
-assert(bridge:on_item_sell_ui_result(
-    item_shop_ui,
-    true
-))
 assert(#awards == 1)
 local sale_confirmed, sale_outcome = bridge:confirm_item_sale(
     component,
@@ -158,9 +174,9 @@ assert(#awards == 2)
 assert(awards[2].diplomacyRecoveryEligible == true)
 assert(awards[2].venueMode == "fixed-market")
 assert(bridge:status().sellRequestCount == 1)
-assert(bridge:status().itemSellUiRequestCount == 1)
+assert(bridge:status().itemSellUiRequestCount == 2)
 assert(bridge:status().itemSellUiAcceptedCount == 1)
-assert(bridge:status().extractedSaleItemCount == 2)
+assert(bridge:status().extractedSaleItemCount == 3)
 assert(bridge:status().confirmedSellCount == 1)
 
 assert(bridge:on_item_sell_ui_request(
@@ -172,7 +188,6 @@ assert(bridge:on_item_sell_ui_request(
         },
     }
 ))
-assert(bridge:on_sell_request(component, shop_guid, {}))
 assert(bridge:on_item_sell_ui_result(
     item_shop_ui,
     false
@@ -200,10 +215,6 @@ assert(bridge:on_item_sell_ui_request(
     { replicated_slot }
 ))
 assert(bridge:on_sell_request(component, shop_guid, {}))
-assert(bridge:on_item_sell_ui_result(
-    item_shop_ui,
-    true
-))
 assert(#awards == 2)
 replicated_slot.StackCount = 0
 local replication_confirmed, replication_outcome =
@@ -277,10 +288,6 @@ assert(settling_bridge:on_sell_request(
     settling_component,
     { A = 9, B = 10, C = 11, D = 12 },
     {}
-))
-assert(settling_bridge:on_item_sell_ui_result(
-    item_shop_ui,
-    true
 ))
 settling_slot.StackCount = 0
 local settled, settled_outcome =
@@ -376,7 +383,6 @@ assert(retry_bridge:on_sell_request(
     { A = 13, B = 14, C = 15, D = 16 },
     {}
 ))
-assert(retry_bridge:on_item_sell_ui_result(item_shop_ui, true))
 retry_slot.StackCount = 0
 local retry_failed, retry_failure =
     retry_bridge:on_item_slot_replicated(
@@ -412,5 +418,119 @@ local no_duplicate, no_duplicate_reason =
 assert(not no_duplicate)
 assert(no_duplicate_reason == "replicated-slot-not-pending-sale")
 assert(retry_attempts == 2)
+
+local context_bridge = CommerceBridge.create(commerce, {
+    nativeSaleReplicationProbeEnabled = true,
+    nativeSaleReputationSettlementEnabled = true,
+})
+local context_rayne_actor = {
+    GetFullName = function()
+        return "BP_NPC_Trader_C /Game/Test/ContextRayne"
+    end,
+}
+local context_genetics_actor = {
+    GetFullName = function()
+        return "BP_NPC_Trader_C /Game/Test/ContextGenetics"
+    end,
+}
+local shared_component = {
+    GetFullName = function()
+        return "PalNetworkShopComponent /Game/Test/SharedPlayer"
+    end,
+}
+assert(context_bridge:register_vendor_actor(
+    "pwft.faction.rayne_syndicate",
+    context_rayne_actor,
+    { mode = "fixed-market", representedFactionId = "rayne" }
+))
+assert(context_bridge:on_shop_setup(
+    shared_component,
+    context_rayne_actor
+))
+assert(context_bridge:register_vendor_actor(
+    "pwft.faction.pal_genetic_research_unit",
+    context_genetics_actor,
+    { mode = "fixed-market", representedFactionId = "genetics" }
+))
+assert(context_bridge:on_shop_setup(
+    shared_component,
+    context_genetics_actor
+))
+assert(context_bridge:begin_vendor_interaction(
+    "pwft.faction.rayne_syndicate",
+    context_rayne_actor
+))
+assert(context_bridge:on_item_sell_ui_request(
+    item_shop_ui,
+    {
+        {
+            ItemId = { StaticId = pal_oil_name },
+            StackCount = 40,
+        },
+    }
+))
+local context_requested, context_pending =
+    context_bridge:on_sell_request(
+        shared_component,
+        { A = 21, B = 22, C = 23, D = 24 },
+        {}
+    )
+assert(context_requested)
+assert(context_pending.factionId
+    == "pwft.faction.rayne_syndicate")
+
+local delayed_callbacks = {}
+local previous_execute_with_delay = ExecuteWithDelay
+local previous_execute_in_game_thread = ExecuteInGameThread
+ExecuteWithDelay = function(_, callback)
+    table.insert(delayed_callbacks, callback)
+end
+ExecuteInGameThread = function(callback)
+    callback()
+end
+local polled_bridge = CommerceBridge.create(commerce, {
+    nativeSaleReplicationProbeEnabled = true,
+    nativeSaleReputationSettlementEnabled = false,
+})
+local polled_actor = {
+    GetFullName = function()
+        return "BP_NPC_Trader_C /Game/Test/PolledVendor"
+    end,
+}
+local polled_component = {
+    GetFullName = function()
+        return "PalNetworkShopComponent /Game/Test/PolledPlayer"
+    end,
+}
+local polled_slot = {
+    ItemId = { StaticId = pal_oil_name },
+    StackCount = 10,
+    GetFullName = function()
+        return "PalItemSlot /Game/Test/PolledSale"
+    end,
+}
+assert(polled_bridge:register_vendor_actor(
+    "pwft.faction.rayne_syndicate",
+    polled_actor,
+    { mode = "fixed-market", commercialTruce = true }
+))
+assert(polled_bridge:on_shop_setup(polled_component, polled_actor))
+assert(polled_bridge:on_item_sell_ui_request(
+    item_shop_ui,
+    { polled_slot }
+))
+assert(polled_bridge:on_sell_request(
+    polled_component,
+    { A = 17, B = 18, C = 19, D = 20 },
+    {}
+))
+assert(#delayed_callbacks == 1)
+polled_slot.StackCount = 0
+delayed_callbacks[1]()
+assert(polled_bridge:status().nativeSellReplicationConfirmedCount == 1)
+assert(polled_bridge:status().nativeSellReplicationProbeOnlyCount == 1)
+assert(polled_bridge:status().confirmedSellCount == 0)
+ExecuteWithDelay = previous_execute_with_delay
+ExecuteInGameThread = previous_execute_in_game_thread
 
 print("PASS native commerce buy bridge and confirmed-sale adapter")

@@ -27,21 +27,21 @@ assert(status.nativeMerchantSpawnEnabled == true)
 assert(status.nativeShopBindingEnabled == true)
 assert(status.dynamicRestockEnabled == false)
 assert(status.procurementMoneyBonusEnabled == false)
-assert(status.procurementCommerceReputationEnabled == false)
+assert(status.procurementCommerceReputationEnabled == true)
 assert(
     status.merchantIslandPlacementStatus
-        == "pending-live-ground-validation"
+        == "ready"
 )
 assert(
     status.serverSuccessSignalStatus
-        == "replication_probe_ready_settlement_disabled_live_acceptance_pending"
+        == "native_server_request_plus_inventory_replication_confirmation_enabled"
 )
 assert(shops.capabilities.readOnlyCatalog == true)
 assert(shops.capabilities.nativeItemShopProductRows == true)
 assert(shops.capabilities.nativeItemShopLotteryRows == true)
 assert(shops.capabilities.runtimeMerchantSpawn == true)
 assert(shops.capabilities.runtimeMoneyMutation == false)
-assert(shops.capabilities.runtimeReputationMutation == false)
+assert(shops.capabilities.runtimeReputationMutation == true)
 
 local rayne = "pwft.faction.rayne_syndicate"
 local fpa = "pwft.faction.free_pal_alliance"
@@ -99,7 +99,7 @@ assert(
 )
 assert(rayne_procurement.nativePriceOverrideAvailable == false)
 assert(rayne_procurement.moneyBonusEnabled == false)
-assert(rayne_procurement.commerceReputationEnabled == false)
+assert(rayne_procurement.commerceReputationEnabled == true)
 
 local iron_requested, iron_direction =
     shops:is_requested_item(rayne, "IronIngot")
@@ -124,10 +124,10 @@ assert(quote.nativeGross == 7200)
 assert(quote.maximumMoneyBonus == 1400)
 assert(quote.settlementReady == false)
 assert(quote.moneyMutationEnabled == false)
-assert(quote.commerceReputationMutationEnabled == false)
+assert(quote.commerceReputationMutationEnabled == true)
 assert(
     quote.serverSuccessSignalStatus
-        == "replication_probe_ready_settlement_disabled_live_acceptance_pending"
+        == "native_server_request_plus_inventory_replication_confirmation_enabled"
 )
 
 local capped = assert(

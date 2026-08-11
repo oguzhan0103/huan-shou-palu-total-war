@@ -67,8 +67,8 @@ local function validate_contract(contract, economy)
     )
     assert(
         contract.procurementAdapter.serverSuccessSignalStatus
-            == "replication_probe_ready_settlement_disabled_live_acceptance_pending",
-        "server sale replication must remain settlement-disabled pending live acceptance"
+            == "native_server_request_plus_inventory_replication_confirmation_enabled",
+        "server sale settlement must require native request plus inventory replication"
     )
     assert(
         contract.procurementAdapter.moneyBonusMutationEnabled == false,
@@ -77,8 +77,8 @@ local function validate_contract(contract, economy)
     assert(
         contract.procurementAdapter
             .commerceReputationSettlementEnabled
-            == false,
-        "procurement reputation mutation must remain disabled"
+            == true,
+        "procurement reputation mutation must use the confirmed native-sale gate"
     )
 
     local activation = contract.runtimeActivation

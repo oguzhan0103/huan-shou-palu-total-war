@@ -1,0 +1,48 @@
+local Keys = require("minimal-content-pack.localization_keys").byName
+
+-- These are author-owned demonstration strings, not Total War canon. Replace
+-- every value when turning this SDK fixture into a real fan content pack.
+return {
+    ["zh-CN"] = {
+        [Keys.questTitle] = "示例任务标题",
+        [Keys.questSummary] = "示例任务摘要",
+        [Keys.questBeginObjective] = "到达作者指定的起点。",
+        [Keys.questChooseObjective] = "选择一个由作者定义的处理方式。",
+        [Keys.questResolveObjective] = "完成作者定义的收尾条件。",
+        [Keys.questPreserveChoice] = "保留现状",
+        [Keys.questTransferChoice] = "移交控制",
+        [Keys.uniquePalName] = "示例唯一帕鲁",
+        [Keys.cityName] = "示例城邦",
+        [Keys.preserveRouteName] = "示例路线：保留",
+        [Keys.transferRouteName] = "示例路线：移交",
+        [Keys.removeRouteName] = "示例路线：移除",
+        [Keys.preserveTitle] = "示例结局称号：守成者",
+        [Keys.transferTitle] = "示例结局称号：交接者",
+        [Keys.removeTitle] = "示例结局称号：破局者",
+        [Keys.palRepresentativeName] = "示例帕鲁代表",
+        [Keys.palRepresentativePrompt] = "与代表论道",
+        [Keys.palOpening] = "这是由内容作者替换的示例开场文本。",
+        [Keys.palCompleteChoice] = "接受示例共识",
+        [Keys.palAbortChoice] = "结束本次论道",
+        [Keys.palComplete] = "示例论道完成。",
+        [Keys.palAbort] = "示例论道已由玩家主动结束。",
+    },
+    ["en-US"] = {
+        [Keys.questTitle] = "Example quest title",
+        [Keys.questSummary] = "Example quest summary",
+        [Keys.questBeginObjective] = "Reach the author-defined starting point.",
+        [Keys.questChooseObjective] = "Choose an author-defined resolution.",
+        [Keys.questResolveObjective] = "Complete the author-defined final condition.",
+        [Keys.questPreserveChoice] = "Preserve",
+        [Keys.questTransferChoice] = "Transfer",
+        [Keys.uniquePalName] = "Example unique Pal",
+        [Keys.cityName] = "Example city-state",
+        [Keys.palRepresentativeName] = "Example Pal representative",
+        [Keys.palRepresentativePrompt] = "Begin discourse",
+        [Keys.palOpening] = "Replace this example opening with authored text.",
+        [Keys.palCompleteChoice] = "Accept the example accord",
+        [Keys.palAbortChoice] = "End this discourse",
+        [Keys.palComplete] = "Example discourse completed.",
+        [Keys.palAbort] = "The player ended the example discourse.",
+    },
+}

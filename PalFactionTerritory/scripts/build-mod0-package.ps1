@@ -13,7 +13,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "Mod 0 verification failed; package was not created."
 }
 
-$ReleaseName = "PalFactionTerritory0-v1.0.0-build24467282"
+$ReleaseName = "PalFactionTerritory0-v1.0.2-build24467282"
 $StageRoot = Join-Path $OutputRoot "$ReleaseName-staging"
 $ZipPath = Join-Path $OutputRoot "$ReleaseName.zip"
 $HashPath = "$ZipPath.sha256.json"
@@ -32,9 +32,20 @@ Copy-Item -LiteralPath $SourceMod -Destination $StagedMod -Recurse
 $StagedAuthorSdk = Join-Path $StageRoot "AuthorSDK\minimal-content-pack"
 New-Item -ItemType Directory -Path (Split-Path -Parent $StagedAuthorSdk) -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $ProjectRoot "examples\minimal-content-pack") -Destination $StagedAuthorSdk -Recurse
+$StagedAuthorSdkRoot = Split-Path -Parent $StagedAuthorSdk
+Copy-Item -LiteralPath (Join-Path $ProjectRoot "scripts\validate-content-pack.ps1") `
+    -Destination (Join-Path $StagedAuthorSdkRoot "validate-content-pack.ps1")
+Copy-Item -LiteralPath (Join-Path $ProjectRoot "tools\validate_content_pack.lua") `
+    -Destination (Join-Path $StagedAuthorSdkRoot "validate_content_pack.lua")
 $StagedContracts = Join-Path $StageRoot "AuthorSDK\contracts"
 New-Item -ItemType Directory -Path $StagedContracts -Force | Out-Null
-foreach ($ContractName in @("content_pack.v1.json", "strategic_world.v1.json", "ending_routes.v1.json")) {
+foreach ($ContractName in @(
+    "content_pack.v1.json",
+    "content_bundle.v1.json",
+    "pal_reconciliation.v1.json",
+    "strategic_world.v1.json",
+    "ending_routes.v1.json"
+)) {
     Copy-Item -LiteralPath (Join-Path $ProjectRoot "contracts\$ContractName") -Destination $StagedContracts
 }
 
@@ -52,11 +63,11 @@ $ManifestFiles = @(
 
 $Manifest = [ordered]@{
     schemaVersion = "1.0.0"
-    releaseId = "PalFactionTerritory0-v1.0.0"
-    releaseVersion = "1.0.0"
+    releaseId = "PalFactionTerritory0-v1.0.2"
+    releaseVersion = "1.0.2"
     expectedSteamBuildId = "24467282"
     installRelativeRoot = "Pal/Binaries/Win64/ue4ss"
-    safetyMode = "read-only"
+    safetyMode = "mod-owned-state-no-palworld-save-write"
     files = $ManifestFiles
 }
 $Manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $StageRoot "package-manifest.json") -Encoding UTF8
@@ -74,6 +85,8 @@ try {
         "Mods/PalFactionTerritory0/Scripts/pwft/config.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/content_pack_registry.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/content_runtime.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/content_module_loader.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/localization_runtime.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/ending_runtime.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/content_pack_registry.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/content_runtime.lua",
@@ -94,6 +107,7 @@ try {
         "Mods/PalFactionTerritory0/Scripts/pwft/native_character_adapter.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/pal_discourse_runtime.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/pal_raid_result_adapter.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/pal_raid_native_binding.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/pal_reconciliation.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/policy.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/progression_store.lua",
@@ -103,8 +117,12 @@ try {
         "Mods/PalFactionTerritory0/Scripts/pwft/runtime.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/strategic_world.lua",
         "AuthorSDK/contracts/content_pack.v1.json",
+        "AuthorSDK/contracts/content_bundle.v1.json",
+        "AuthorSDK/contracts/pal_reconciliation.v1.json",
         "AuthorSDK/contracts/strategic_world.v1.json",
         "AuthorSDK/contracts/ending_routes.v1.json",
+        "AuthorSDK/validate-content-pack.ps1",
+        "AuthorSDK/validate_content_pack.lua",
         "AuthorSDK/minimal-content-pack/README.md",
         "AuthorSDK/minimal-content-pack/pack.lua",
         "AuthorSDK/minimal-content-pack/manifest.lua",
@@ -113,6 +131,9 @@ try {
         "AuthorSDK/minimal-content-pack/strategic_world.lua",
         "AuthorSDK/minimal-content-pack/ending_routes.lua",
         "AuthorSDK/minimal-content-pack/pal_discourse.lua",
+        "AuthorSDK/minimal-content-pack/localization_catalogs.lua",
+        "AuthorSDK/minimal-content-pack/bundle.lua",
+        "AuthorSDK/minimal-content-pack/content_module.lua",
         "package-manifest.json"
     )
     foreach ($RequiredEntry in $RequiredEntries) {

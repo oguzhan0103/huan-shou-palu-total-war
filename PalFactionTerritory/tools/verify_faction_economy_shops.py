@@ -253,13 +253,13 @@ def verify_contract(
     )
     require(
         procurement["serverSuccessSignalStatus"]
-        == "replication_probe_ready_settlement_disabled_live_acceptance_pending",
-        "server sale replication probe must remain settlement-disabled pending live acceptance",
+        == "native_server_request_plus_inventory_replication_confirmation_enabled",
+        "server sale settlement must require native request plus inventory replication",
     )
     require(
         procurement["moneyBonusMutationEnabled"] is False
-        and procurement["commerceReputationSettlementEnabled"] is False,
-        "procurement mutations must remain disabled",
+        and procurement["commerceReputationSettlementEnabled"] is True,
+        "procurement reputation must use the confirmed native-sale gate without money mutation",
     )
 
     activation = contract["runtimeActivation"]
@@ -276,9 +276,12 @@ def verify_contract(
     for key in (
         "dynamicRestockEnabled",
         "procurementMoneyBonusEnabled",
-        "procurementCommerceReputationEnabled",
     ):
         require(activation[key] is False, f"{key} must remain disabled")
+    require(
+        activation["procurementCommerceReputationEnabled"] is True,
+        "confirmed requested-sale reputation settlement must be enabled",
+    )
 
 
 def verify_sources(contract: dict[str, Any]) -> None:
@@ -386,8 +389,8 @@ def verify_catalog_and_json(
         and catalog["procurementSettlement"][
             "commerceReputationSettlementEnabled"
         ]
-        is False,
-        "catalog procurement mutation must remain disabled",
+        is True,
+        "catalog requested-sale reputation settlement must be enabled without money mutation",
     )
 
     catalog_representatives = {
@@ -547,7 +550,8 @@ def main() -> int:
     print(
         "PASS faction economy shops "
         "(7 representatives, 26 products, 37 requested items, "
-        "63 signals, 4 roundtrips, 8 PAK entries, runtime disabled)"
+        "63 signals, 4 roundtrips, 8 PAK entries, "
+        "confirmed-sale reputation enabled)"
     )
     return 0
 

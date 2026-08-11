@@ -193,7 +193,7 @@ end
 local function config()
     return {
         dialoguePresenterRouterEnabled = true,
-        nativeDialoguePresenterEnabled = false,
+        nativeDialoguePresenterEnabled = true,
     }
 end
 
@@ -387,7 +387,7 @@ assert(
 local status = presenter:status()
 assert(status.enabled == true)
 assert(status.backendAvailable == true)
-assert(status.nativePresenterEnabled == false)
+assert(status.nativePresenterEnabled == true)
 assert(status.presentationCount == 1)
 assert(status.activePresentationCount == 0)
 assert(status.openCount == 1)

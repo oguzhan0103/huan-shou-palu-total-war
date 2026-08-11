@@ -49,7 +49,7 @@ local runtime = PalDiscourseRuntime.create(
     reconciliation,
     {
         offlineDialogueTreeEnabled = true,
-        nativeDialoguePresenterEnabled = false,
+        nativeDialoguePresenterEnabled = true,
     }
 )
 local faction_id = "pwft.faction.desert_pal_tribe"
@@ -160,7 +160,7 @@ assert(registered.ok and registered.reason == "pal-discourse-content-pack-regist
 assert(registered.factionCount == 1)
 assert(runtime:status().registeredRepresentativeCount == 1)
 assert(runtime.capabilities.authoredStoryContent == false)
-assert(runtime.capabilities.nativePresenter == false)
+assert(runtime.capabilities.nativePresenter == true)
 
 local tokens = {}
 for index = 1, 3 do
@@ -191,7 +191,19 @@ local locked_offer = runtime:offer(
 )
 assert(not locked_offer.ok)
 assert(locked_offer.eligibilityReason == "all-human-lords-required")
+local locked_ready = runtime:ready_tokens_for_representative(
+    representative_id
+)
+assert(locked_ready.ok and #locked_ready.tokens == 0)
 unlock_all_human_lords(progression)
+local ready = runtime:ready_tokens_for_representative(
+    representative_id
+)
+assert(ready.ok and ready.reason == "pal-discourse-ready-tokens-listed")
+assert(#ready.tokens == 3)
+assert(ready.tokens[1].tokenInstanceId == tokens[1])
+assert(ready.tokens[1].state == "quest-complete")
+assert(ready.tokens[1].preview.ok == true)
 
 -- Declining before the irreversible confirmation preserves the token.
 local declined_offer = runtime:offer(

@@ -40,7 +40,7 @@
   },
   "raidResultAdapterPolicy": {
     "normalizedAdapterEnabled": true,
-    "nativeBindingEnabled": false,
+    "nativeBindingEnabled": true,
     "leaderDesignation": "first-spawn-of-final-wave",
     "eventAuthority": "pal-invader-incident-group-guid-v1",
     "spawnAuthority": "pal-invader-on-character-spawned-v1",
@@ -86,7 +86,7 @@
   },
   "offlineDialogueTreePolicy": {
     "runtimeEnabled": true,
-    "nativePresenterEnabled": false,
+    "nativePresenterEnabled": true,
     "representativeRegistrationRequired": true,
     "explicitIrreversibleConfirmationRequired": true,
     "baseStoryContentIncluded": false,
@@ -119,11 +119,11 @@
   },
   "runtimeActivation": {
     "coreEnabled": true,
-    "nativeRaidResultBindingEnabled": false,
+    "nativeRaidResultBindingEnabled": true,
     "dialoguePresenterRouterEnabled": true,
     "representativeInteractionRouterEnabled": true,
     "representativeInteractionDistance": 500,
-    "nativeDialoguePresenterEnabled": false,
+    "nativeDialoguePresenterEnabled": true,
     "agentAdapterEnabled": true,
     "persistenceFollowsFactionProgressionSidecar": true
   }

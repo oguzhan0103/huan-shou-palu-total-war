@@ -95,6 +95,7 @@ end
 local function controller_config(enabled)
     return {
         offlineDialogueTreeEnabled = true,
+        nativeDialoguePresenterEnabled = true,
         agentAdapterEnabled = enabled,
         agentDefaultLocale = "zh-CN",
     }
@@ -323,7 +324,7 @@ assert(status.committedCount == 1)
 assert(status.directAgentStateMutation == false)
 assert(status.proposalRequiresPlayerConfirmation == true)
 assert(status.offlineTreeFallback == true)
-assert(status.nativePresenterEnabled == false)
+assert(status.nativePresenterEnabled == true)
 assert(status.storyContentIncluded == false)
 
 local failed_discourse = make_discourse()

@@ -2,18 +2,20 @@ local FactionEconomyMerchantRuntime = {}
 
 local API_VERSION = "1.0.0"
 
--- Build 24467282 live evidence proves this authored merchant spawner creates
--- a real individual handle, actor, controller, and interaction lifecycle.
--- The generic BP_MonoNPCSpawner and PalNPCManager ordinary-Trader routes do
--- not create a usable actor when instantiated by the runtime.
-local PROVEN_MERCHANT_CHARACTER_ID = "NPC_Male_DarkTrader"
+-- Use the game's ordinary item merchant rather than the Dark Trader.  The
+-- Dark Trader can be spawned reliably, but its authored vendor component owns
+-- only a PalCharacterShop; assigning an ItemShop row does not turn that shop
+-- object into an item shop.  The ordinary Trader v04 class carries the native
+-- ItemShop vendor lifecycle that the seven faction catalog rows require.
+local PROVEN_MERCHANT_CHARACTER_ID = "NPC_Male_Trader01_v04"
 local PROVEN_MERCHANT_CHARACTER_CLASS_PATH =
-    "/Game/Pal/Blueprint/Character/NPC/Fat/"
-        .. "BP_NPC_DarkTrader.BP_NPC_DarkTrader_C"
-local PROVEN_MERCHANT_SPAWNER_CLASS_PATH =
+    "/Game/Pal/Blueprint/Character/NPC/Normal/"
+        .. "BP_NPC_Male_Trader01_v04."
+        .. "BP_NPC_Male_Trader01_v04_C"
+local ITEM_MERCHANT_SPAWNER_CLASS_PATH =
     "/Game/Pal/Blueprint/Spawner/HumanNPCBoss/"
-        .. "BP_MonoNPCSpawnerBossBase_BOSS_DarkTrader."
-        .. "BP_MonoNPCSpawnerBossBase_BOSS_DarkTrader_C"
+        .. "BP_MonoNPCSpawnerBossBase_Male_Trader01."
+        .. "BP_MonoNPCSpawnerBossBase_Male_Trader01_C"
 local ITEM_SHOP_FLOW_ASSET_PATH =
     "/Game/Pal/Blueprint/FlowGraph/NPCTalkFlow/CommonNode/"
         .. "FNBP_OpenItemShop"
@@ -36,7 +38,6 @@ local ITEM_SHOP_PARAMETER_OBJECT_PATH =
 local ITEM_SHOP_PARAMETER_CLASS_PATH =
     ITEM_SHOP_PARAMETER_ASSET_PATH
         .. ".BP_PalUIDispatchParameter_ItemShop_C"
-
 local function copy(value)
     if type(value) ~= "table" then
         return value
@@ -63,6 +64,46 @@ local function is_valid_uobject(object)
         return object:IsValid()
     end)
     return ok and valid == true
+end
+
+local function unwrap_remote_value(value)
+    if value == nil then
+        return nil
+    end
+    local ok, unwrapped = pcall(function()
+        return value:get()
+    end)
+    if ok and unwrapped ~= nil then
+        return unwrapped
+    end
+    return value
+end
+
+local function safe_uobject_name(object)
+    object = unwrap_remote_value(object)
+    if not is_valid_uobject(object) then
+        return "<invalid>"
+    end
+    local ok, name = pcall(function()
+        return object:GetFullName()
+    end)
+    return ok and tostring(name) or "<unreadable>"
+end
+
+local function safe_row_key(vendor, property_name)
+    local row = nil
+    local read_ok = pcall(function()
+        row = vendor[property_name]
+    end)
+    if not read_ok or row == nil then
+        return "<unavailable>"
+    end
+    local key = nil
+    local key_ok = pcall(function()
+        key = row.Key
+    end)
+    return key_ok and tostring(unwrap_remote_value(key))
+        or "<unreadable>"
 end
 
 local function require_non_empty_string(value, name)
@@ -236,15 +277,13 @@ function FactionEconomyMerchantRuntime:merchant_plan(
         -- the executable baseline deliberately reuses the one merchant
         -- lifecycle already proven in the current game build.
         characterId = PROVEN_MERCHANT_CHARACTER_ID,
-        -- Keep the known Dark Trader identifiers as content metadata, but
-        -- instantiate the neutral base pawn directly.  Build 24467282 live
-        -- verification proved the boss-spawner variant creates hostile boss
-        -- pawns, whereas the deferred BP_NPC_DarkTrader_C route creates a
-        -- stable salesperson with the required controller and interaction.
-        uniqueNpcId = "DarkTrader",
+        -- Instantiate the ordinary item merchant pawn directly.  The
+        -- spawner path is retained as descriptive/fallback metadata; the
+        -- direct deferred route avoids persistent map-spawner state.
+        uniqueNpcId = "None",
         characterClassPath = PROVEN_MERCHANT_CHARACTER_CLASS_PATH,
-        expectedActorClassToken = "BP_NPC_DarkTrader_C",
-        spawnerClassPath = PROVEN_MERCHANT_SPAWNER_CLASS_PATH,
+        expectedActorClassToken = "BP_NPC_Male_Trader01_v04_C",
+        spawnerClassPath = ITEM_MERCHANT_SPAWNER_CLASS_PATH,
         spawnerSaveKey = "PFT" .. "_Economy_" .. string.gsub(
             faction_id,
             "[^%w_]",
@@ -257,7 +296,7 @@ function FactionEconomyMerchantRuntime:merchant_plan(
         -- their shared neutral merchant model is the 1.0 baseline.
         nativeSpawnerRequired = false,
         npcManagerServerSpawnRequired = false,
-        provenNativeSpawnerRoute = "DirectDarkTraderDeferredActor",
+        provenNativeSpawnerRoute = "DirectItemTraderDeferredActor",
         clothingColour = shop.clothingColour,
         commercialTruce = true,
         location = offset_location(
@@ -467,6 +506,7 @@ function FactionEconomyMerchantRuntime:_register_ready_actor(
     record.pending = false
     record.pendingHandle = nil
     record.nativeHandle = native_handle
+    record.plan = plan
     record.lastError = nil
     record.shopRefreshDetail = refresh_detail
     self.activationCount = self.activationCount + 1
@@ -648,6 +688,7 @@ function FactionEconomyMerchantRuntime:deactivate_faction(
             record.pending = false
             record.pendingHandle = nil
             record.nativeHandle = nil
+            record.plan = nil
             record.lastError = nil
             self.deactivationCount = self.deactivationCount + 1
             return result(
@@ -694,6 +735,7 @@ function FactionEconomyMerchantRuntime:deactivate_faction(
     record.actor = nil
     record.owned = false
     record.nativeHandle = nil
+    record.plan = nil
     self.deactivationCount = self.deactivationCount + 1
     return result(true, "economy-merchant-deactivated", {
         factionId = faction_id,
@@ -940,13 +982,12 @@ local function find_or_load_class(asset_path, class_path, object_path)
     return nil, "asset-load-failed:" .. tostring(last_loaded)
 end
 
--- Reproduce FNBP_OpenItemShop.OpenItemShop_Internal byte-for-byte at the
--- reflected UObject boundary.  A standalone FNBP node has no running FlowAsset
--- and therefore resolves PalUtility.GetHUDService(self) against an invalid
--- world context.  Use the local player as the authored WorldContextObject,
--- create BP_PalUIDispatchParameter_ItemShop with the HUD service as Outer, set
--- the two fields seen in the cooked Blueprint bytecode, and let PalHUDService
--- own the native WBP_ItemShop stack lifecycle.
+-- Reproduce FNBP_OpenItemShop.OpenItemShop_Internal at the reflected UObject
+-- boundary. A standalone FNBP node cannot accept WeakWorldContextObject in
+-- UE4SS 3.0.1 (Push_weakobjectproperty Set is unsupported), so use the local
+-- player as the authored world context, create the game's native dispatch
+-- parameter, and let PalHUDService own the WBP_ItemShop stack lifecycle. This
+-- is the route already proven twice in Build 24467282 live evidence.
 function FactionEconomyMerchantRuntime:_open_native_item_shop(
     actor,
     player_actor
@@ -958,11 +999,51 @@ function FactionEconomyMerchantRuntime:_open_native_item_shop(
     if not vendor_ok or vendor == nil then
         return false, "merchant-vendor-component-unavailable"
     end
-    local shop = nil
-    local shop_ok = pcall(function()
-        shop = vendor.MyItemShop
+    -- Match the cooked FNBP_OpenItemShop path: TryGetItemShop is the
+    -- authoritative source and its UObject out parameter can be returned as
+    -- the second Lua result by UE4SS.  MyItemShop remains a compatibility
+    -- fallback for builds where the reflected out parameter is unavailable.
+    local direct_shop = nil
+    pcall(function()
+        direct_shop = unwrap_remote_value(vendor.MyItemShop)
     end)
-    if not shop_ok or shop == nil then
+    local try_ok, returned_shop, out_shop = pcall(function()
+        return vendor:TryGetItemShop()
+    end)
+    returned_shop = unwrap_remote_value(returned_shop)
+    out_shop = unwrap_remote_value(out_shop)
+    local shop = nil
+    local shop_source = nil
+    if try_ok and is_valid_uobject(returned_shop) then
+        shop = returned_shop
+        shop_source = "TryGetItemShop:return"
+    elseif try_ok and is_valid_uobject(out_shop) then
+        shop = out_shop
+        shop_source = "TryGetItemShop:out"
+    elseif is_valid_uobject(direct_shop) then
+        shop = direct_shop
+        shop_source = "MyItemShop"
+    end
+    local pal_shop = nil
+    pcall(function()
+        pal_shop = unwrap_remote_value(vendor.MyPalShop)
+    end)
+    local shop_state = string.format(
+        "itemRow=%s palRow=%s source=%s itemShop=%s palShop=%s tryOk=%s tryReturn=%s tryOut=%s",
+        safe_row_key(vendor, "itemShopSimpleLotteryTableName"),
+        safe_row_key(vendor, "palShopSimpleLotteryTableName"),
+        tostring(shop_source or "none"),
+        safe_uobject_name(direct_shop),
+        safe_uobject_name(pal_shop),
+        tostring(try_ok),
+        safe_uobject_name(returned_shop),
+        safe_uobject_name(out_shop)
+    )
+    if self.adapter ~= nil
+        and type(self.adapter._log) == "function" then
+        self.adapter:_log("MERCHANT_OPEN_SHOP_STATE " .. shop_state)
+    end
+    if shop == nil then
         return false, "merchant-item-shop-unavailable"
     end
     local widget_class, widget_class_error = find_or_load_class(
@@ -996,7 +1077,6 @@ function FactionEconomyMerchantRuntime:_open_native_item_shop(
         return false, "item-shop-native-hud-service-unavailable:"
             .. tostring(hud_service)
     end
-
     local gameplay_ok, gameplay = pcall(function()
         return StaticFindObject(
             "/Script/Engine.Default__GameplayStatics"
@@ -1036,6 +1116,8 @@ function FactionEconomyMerchantRuntime:_open_native_item_shop(
         dispatchParameter = parameter,
         widgetClass = widget_class,
         uiId = ui_id_or_error,
+        shopSource = shop_source,
+        shopState = shop_state,
     }
 end
 
@@ -1105,40 +1187,51 @@ function FactionEconomyMerchantRuntime:interact_nearest(
     if nearest_actor == nil then
         return result(false, "no-economy-merchant-in-range")
     end
-    local interaction = nil
-    local component_ok = pcall(function()
-        interaction = nearest_actor.BP_NPCInteractionComponent
-    end)
-    if not component_ok or interaction == nil then
-        return result(false, "merchant-interaction-component-unavailable", {
+    local record = self.records[nearest_faction_id]
+    local plan = record and record.plan
+    if type(plan) ~= "table" then
+        return result(false, "merchant-plan-unavailable", {
             factionId = nearest_faction_id,
             actor = nearest_actor,
         })
     end
-    -- Build 24467282 exposes OnTriggerInteract(Other,
-    -- EPalInteractiveObjectIndicatorType).  Runtime-created merchants use the
-    -- ordinary NPC "Talk" route, whose reflected enum value is 39.  Passing
-    -- only Other is rejected by UE4SS before the native function runs.
-    local talk_indicator_type = 39
-    local triggered, trigger_error = pcall(function()
-        interaction:OnTriggerInteract(player_actor, talk_indicator_type)
+    -- Dark Trader's authored OnTriggerInteract opens its PalShop flow.  That
+    -- asynchronous push can race and cover the economy ItemShop with a Pal
+    -- list.  Rebind the faction ItemShop immediately before opening and do
+    -- not invoke the Dark Trader's PalShop interaction route here.
+    local refreshed_ok, refreshed, refresh_detail = pcall(function()
+        return self.adapter:refresh_merchant_shop(nearest_actor, plan)
     end)
-    if not triggered then
-        return result(false, "merchant-native-interaction-failed", {
+    if not refreshed_ok or refreshed ~= true then
+        return result(false, "merchant-shop-refresh-before-open-failed", {
             factionId = nearest_faction_id,
             actor = nearest_actor,
-            detail = tostring(trigger_error),
+            detail = tostring(
+                refreshed_ok and refresh_detail or refreshed
+            ),
+        })
+    end
+    local context_ok, context_detail =
+        self.commerceBridge:begin_vendor_interaction(
+            nearest_faction_id,
+            nearest_actor
+        )
+    if not context_ok then
+        return result(false, "merchant-commerce-context-failed", {
+            factionId = nearest_faction_id,
+            actor = nearest_actor,
+            detail = tostring(context_detail),
         })
     end
     local item_shop_opened, item_shop_route, item_shop_detail =
         self:_open_native_item_shop(nearest_actor, player_actor)
     if not item_shop_opened then
+        self.commerceBridge:clear_vendor_interaction()
         return result(false, "merchant-item-shop-open-failed", {
             factionId = nearest_faction_id,
             actor = nearest_actor,
             distance = math.sqrt(nearest_distance_squared),
-            route = "PalNPCInteractionComponent.OnTriggerInteract",
-            indicatorType = talk_indicator_type,
+            route = "refresh_merchant_shop",
             detail = tostring(item_shop_route),
         })
     end
@@ -1146,10 +1239,12 @@ function FactionEconomyMerchantRuntime:interact_nearest(
         factionId = nearest_faction_id,
         actor = nearest_actor,
         distance = math.sqrt(nearest_distance_squared),
-        route = "PalNPCInteractionComponent.OnTriggerInteract -> "
+        route = "refresh_merchant_shop -> "
             .. tostring(item_shop_route),
-        indicatorType = talk_indicator_type,
         shop = item_shop_detail and item_shop_detail.shop,
+        shopSource = item_shop_detail
+            and item_shop_detail.shopSource,
+        detail = item_shop_detail and item_shop_detail.shopState,
         dispatchParameter = item_shop_detail
             and item_shop_detail.dispatchParameter,
         uiId = item_shop_detail and item_shop_detail.uiId,

@@ -19,7 +19,7 @@ assert(status.unresolvedProductCount == 0)
 assert(status.merchantOrganisationDisplayNameZhHans == "商人商会")
 assert(status.customProductRowsEnabled == false)
 assert(status.dynamicPriceRuntimeEnabled == false)
-assert(status.requestedSaleReputationSettlementEnabled == false)
+assert(status.requestedSaleReputationSettlementEnabled == true)
 assert(status.balanceProfileId == "pwft.economy.balance.supply_band_v1")
 assert(status.balanceRuntimeAuthority == false)
 assert(status.balanceStatus

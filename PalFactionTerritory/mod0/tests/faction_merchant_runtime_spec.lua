@@ -122,7 +122,7 @@ assert(fpa_plan.mode == "fixed-market")
 assert(fpa_plan.commercialTruce == true)
 assert(fpa_plan.characterId == "NPC_Male_Trader01_v04")
 assert(fpa_plan.shopRowName == "CaravanShop4")
-assert(math.floor(fpa_plan.location.X + 0.5) == 1600)
+assert(math.floor(fpa_plan.location.X + 0.5) == 1120)
 assert(math.floor(fpa_plan.location.Y + 0.5) == 2000)
 
 local caravan = runtime:dispatch_caravan(

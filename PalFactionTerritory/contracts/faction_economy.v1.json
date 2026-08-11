@@ -547,7 +547,7 @@
     "nativeMerchantSpawnEnabled": false,
     "customProductRowsEnabled": false,
     "dynamicPriceRuntimeEnabled": false,
-    "requestedSaleReputationSettlementEnabled": false,
-    "reason": "balance_confirmation_custom_shop_rows_and_live_sale_replication_acceptance_pending"
+    "requestedSaleReputationSettlementEnabled": true,
+    "reason": "native_itemshop_server_request_and_inventory_replication_gate_enabled"
   }
 }

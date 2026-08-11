@@ -9,6 +9,11 @@ return {
             factionId = "pwft.faction.desert_pal_tribe",
             tokenQuota = 1,
             maximumAffinityPerDiscourse = 10,
+            -- Native group names are data owned by the content pack. The
+            -- Core observes only groups that are explicitly mapped here.
+            nativeRaidGroupNames = {
+                "Invader_Group_ModAuthor_Example",
+            },
             representative = {
                 representativeId = "example.minimal.pal.representative.primary",
                 nameKey = Keys.palRepresentativeName,

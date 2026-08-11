@@ -68,6 +68,10 @@ local presenter = FactionUiPresenter.create(
     {
         enabled = true,
         key = "F5",
+        panelPosition = { X = 435.0, Y = 35.0 },
+        panelSize = { X = 1050.0, Y = 985.0 },
+        minTextWidth = 1010.0,
+        targetFontSize = 17,
     },
     backend
 )

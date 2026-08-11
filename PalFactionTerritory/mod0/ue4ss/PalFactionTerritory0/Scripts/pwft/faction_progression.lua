@@ -90,7 +90,7 @@ local function validate_contract(contract)
     local membership = contract.membershipPolicy
     assert(type(membership) == "table", "membership policy is required")
     assert(
-        membership.joinDiplomacyEffectsStatus == "runtime_overlay_and_content_adapter_ready_native_presenter_pending",
+        membership.joinDiplomacyEffectsStatus == "runtime_overlay_content_adapter_and_native_presenter_ready",
         "human faction relation matrix must be ingested before runtime diplomacy work"
     )
     local diplomacy = membership.joinDiplomacyEffects

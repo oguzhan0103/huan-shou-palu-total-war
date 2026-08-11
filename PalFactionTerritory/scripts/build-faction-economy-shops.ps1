@@ -160,7 +160,8 @@ try {
     Write-Output (
         "BUILT faction economy shops: " +
         "7 representatives, 26 products, 37 requested items, " +
-        "8 PAK entries; runtime activation remains disabled"
+        "8 PAK entries; confirmed requested-sale reputation enabled; " +
+        "dynamic restock and money bonus remain disabled"
     )
 }
 finally {

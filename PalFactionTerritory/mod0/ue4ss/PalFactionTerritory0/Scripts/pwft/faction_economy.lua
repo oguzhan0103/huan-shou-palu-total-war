@@ -304,8 +304,8 @@ local function validate_contract(contract)
         "dynamic price runtime must remain disabled"
     )
     assert(
-        activation.requestedSaleReputationSettlementEnabled == false,
-        "requested-sale settlement must remain disabled"
+        activation.requestedSaleReputationSettlementEnabled == true,
+        "requested-sale settlement must use the confirmed native-sale gate"
     )
 
     return {

@@ -1,36 +1,64 @@
 # PWFT 最小内容包作者 SDK
 
-这是一个无剧情、无游戏资产、默认不加载的机制示例。Lua 文件只返回数据表；它们不会自行执行结算、写入存档或修改游戏世界。所有玩家可见内容都以 localization key 表示，实际文本由内容作者在自己的本地化层中提供。
+这是一个无官方剧情、无游戏资产、默认不加载的机制示例。Lua 文件只返回数据表；它们不会自行执行结算、写入 Palworld 存档或修改游戏世界。所有玩家可见内容都以 localization key 表示，演示字符串仅用于验证接线，内容作者必须替换。
 
 ## 文件用途
 
 - `manifest.lua`：内容包身份、版本、依赖、冲突、能力和本地化键声明。
 - `localization_keys.lua`：唯一的 key 目录，不包含任何显示文本。
+- `localization_catalogs.lua`：`zh-CN` / `en-US` 演示字符串；实际内容包在这里填写正文。
 - `quest_template.lua`：一个包含推进、选择和完成阶段的通用任务模板。
 - `strategic_world.lua`：一只唯一帕鲁和一座城邦的占位定义。
 - `ending_routes.lua`：保留、移交、移除三个纯规则路线槽。
 - `pal_discourse.lua`：一个通用帕鲁代表和一棵可完成或放弃的有向无环论道树。
-- `pack.lua`：供加载器一次取得上述所有数据表的聚合入口。
+- `bundle.lua`：可被 Core 原子校验和注册的 `pwft.content-bundle.v1` 整包。
+- `content_module.lua`：游戏内加载入口，只导出 `bundle`。
+- `pack.lua`：兼容测试和工具链的一览入口。
 
 ## 作者必须替换的字段
 
 1. 将 `example.minimal`、`example.minimal.foundation` 和版本号替换为作者自己的稳定命名空间、包 ID 与 SemVer。所有任务、城邦、唯一帕鲁、路线、代表、节点、选择、flag 和 result tag 都必须留在该命名空间内。
-2. 在 `localization_keys.lua` 中建立完整 key 目录，并在作者自己的本地化文件中为这些 key 提供文本。不要把剧情、标题、描述或对话直接写入机制表。
+2. 在 `localization_keys.lua` 中建立完整 key 目录，在 `localization_catalogs.lua` 中为这些 key 提供文本。不要把剧情、标题、描述或对话直接写入任务或机制表。
 3. 将 `speciesId`、人类/帕鲁 `factionId`、城邦归属、信物额度和好感度上限替换为目标内容。引用的核心 ID 必须存在于当前 PWFT registry。
 4. 按需要改写任务阶段图、三条路线的 `conditions`/`effects` 和论道树节点。任务的每个阶段必须可达且存在完成路径；论道树必须无环、全部可达、所有路径终止。
 5. 修改已发布定义时必须提升 `contentVersion` 并提供迁移；不得在相同版本下静默改动内容。
 
-## 注册顺序
+## 游戏内安装与加载
 
-加载器应先 `require("minimal-content-pack.pack")`，然后按下列顺序调用：
+1. 将整个 `minimal-content-pack` 文件夹复制到 `PalFactionTerritory0/Scripts/`。
+2. 在 `pwft/config.lua` 的 `contentModules.modules` 数组中加入：
 
-1. `ContentPackRegistry:register(pack.manifest)`；失败时停止，不能注册后续定义。
-2. `QuestRuntime:register_template(pack.questTemplate)`。
-3. 使用 `{ contentPackRegistry = registry }` 创建 `StrategicWorld`，再调用 `register_pack(pack.strategicWorld)`。
-4. 在战略定义注册后创建 `EndingRuntime`，同样传入内容包 registry，再调用 `register_pack(pack.endingRoutes)`。
-5. 创建 `PalReconciliation` 与 `PalDiscourseRuntime` 后调用 `register_pack(pack.palDiscourse)`；原生对话呈现仍须独立实机验收。
+```lua
+contentModules = {
+    enabled = true,
+    modules = {
+        "minimal-content-pack.content_module",
+    },
+    fallbackLocale = "zh-CN",
+}
+```
 
-示例不会被 `runtime.lua` 自动加载。正式内容加载器必须先完整验证一批 manifest，再提交注册，避免半包状态。
+3. 启动后检查 UE4SS 日志：该包必须出现 `CONTENT_MODULE ... registered=true activated=true`，汇总必须为 `CONTENT_MODULE_LOADER_READY ... failed=0`。
+
+Core 会在同一个 Lua 环境中 `require` 配置的模块，先把 manifest、任务、战略世界、结局、帕鲁论道和本地化全部放入临时运行时校验，再进行确定性提交。任何一域失败时，整包不注册。不同 UE4SS Mod 的 `_G` 相互隔离，因此不支持另建一个 Mod 后通过 `_G.PWFT_*` 注入内容。
+
+默认 `modules = {}`，所以机制基座本身仍然不携带剧情。
+
+## 离线校验
+
+在仓库根目录运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/validate-content-pack.ps1 -PackPath examples/minimal-content-pack
+```
+
+如果使用发布 ZIP，在解压目录运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File AuthorSDK/validate-content-pack.ps1 -PackPath AuthorSDK/minimal-content-pack
+```
+
+命令会返回可读错误并以非零退出码拒绝无效 manifest、未声明的本地化 key、非法论道树、依赖/冲突或跨领域 ID/版本不一致。
 
 ## 确定性 Core 结算
 

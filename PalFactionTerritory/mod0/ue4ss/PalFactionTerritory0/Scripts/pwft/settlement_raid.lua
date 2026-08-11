@@ -432,6 +432,7 @@ local function target_residents(instance, attacker, source, target_hate)
     local added_target_count = 0
     local hate_target_count = 0
     local nearest = nil
+    local nearest_preferred = nil
     for _, resident in ipairs(residents) do
         resident.distanceSquared = squared_distance(
             attacker_position,
@@ -440,6 +441,24 @@ local function target_residents(instance, attacker, source, target_hate)
         if nearest == nil
             or resident.distanceSquared < nearest.distanceSquared then
             nearest = resident
+        end
+        -- Reward and shop actors are frequently fixed behind counters or
+        -- inside non-navigable settlement geometry. Keep them as fallback
+        -- targets, but prefer an ordinary resident for the initial assault so
+        -- the wave visibly reaches and attacks the town instead of staring at
+        -- an unreachable service NPC.
+        local preferred = string.find(
+            resident.name,
+            "Reward_",
+            1,
+            true
+        ) == nil
+            and string.find(resident.name, "Trader", 1, true) == nil
+            and string.find(resident.name, "Shop", 1, true) == nil
+        if preferred and (nearest_preferred == nil
+            or resident.distanceSquared
+                < nearest_preferred.distanceSquared) then
+            nearest_preferred = resident
         end
         local added = safe_call(
             controller,
@@ -466,6 +485,35 @@ local function target_residents(instance, attacker, source, target_hate)
         end
     end
 
+    local primary = nearest_preferred or nearest
+    local primary_bonus = resident_hate * 2.0
+    local primary_boosted = false
+    local primary_target_set = false
+    local primary_approach_requested = false
+    if primary ~= nil and hate_ok and is_valid(hate) then
+        primary_boosted = safe_call(
+            hate,
+            "ChangeHate",
+            primary.actor,
+            primary_bonus
+        ) == true
+        primary_target_set = pcall(function()
+            controller.R1AttackTarget = primary.actor
+        end)
+        -- Palworld's combat module exposes AIMoveToTargetActor, but the module
+        -- itself is not a reflected controller property in build 24467282.
+        -- Drive the same controller toward the chosen actor through its public
+        -- ground-aware move helper; once in range, the native combat action and
+        -- skill selection remain fully game-owned.
+        primary_approach_requested = safe_call(
+            controller,
+            "SimpleMoveToActorWithLineTraceGround",
+            primary.actor,
+            0
+        ) == true
+
+    end
+
     local most_hated = nil
     if hate_ok and is_valid(hate) then
         local found, value = safe_call(hate, "FindMostHateTarget")
@@ -473,7 +521,7 @@ local function target_residents(instance, attacker, source, target_hate)
     end
     instance.targetAssignments = instance.targetAssignments + 1
     log(string.format(
-        "TARGET_ASSIGNED source=%s attacker=%s residents=%d addedTargets=%d hateTargets=%d hatePerTarget=%.1f nearest=%s mostHated=%s assignments=%d",
+        "TARGET_ASSIGNED source=%s attacker=%s residents=%d addedTargets=%d hateTargets=%d hatePerTarget=%.1f nearest=%s primary=%s primaryBonus=%.1f primaryBoosted=%s primaryTargetSet=%s approachRequested=%s mostHated=%s assignments=%d",
         tostring(source),
         safe_full_name(attacker),
         #residents,
@@ -481,6 +529,11 @@ local function target_residents(instance, attacker, source, target_hate)
         hate_target_count,
         resident_hate,
         nearest and nearest.name or "<none>",
+        primary and primary.name or "<none>",
+        primary_bonus,
+        tostring(primary_boosted),
+        tostring(primary_target_set),
+        tostring(primary_approach_requested),
         safe_full_name(most_hated),
         instance.targetAssignments
     ))
@@ -2072,6 +2125,10 @@ local function prepare_attendance_attacker(
         attacker,
         source
     )
+    local combat_activated = activate_attacker_combat(
+        attacker,
+        source .. "-combat"
+    )
     local player_targeted = target_player_for_attendance(
         instance,
         attacker,
@@ -2083,10 +2140,6 @@ local function prepare_attendance_attacker(
         attacker,
         source .. "-residents",
         instance.config.attendanceSimulation.targetResidentHate
-    )
-    local combat_activated = activate_attacker_combat(
-        attacker,
-        source .. "-combat"
     )
     local ready = configured
         and player_targeted

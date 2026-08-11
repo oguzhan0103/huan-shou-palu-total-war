@@ -7,11 +7,11 @@ return {
     ["gameBuild"] = "Steam v1.0.1 / build 24181527",
     ["contractHashes"] = {
         ["factions.v1.json"] = "14ccacd6806a19dae4c2e4e781d8cefd42e346a1bf8b752a678653212fcc46a2",
-        ["faction_commerce.v1.json"] = "d6f5e3e92e9851779c827f220159c66ec9d0ee3873ec4488c57388f3fe255179",
-        ["faction_economy.v1.json"] = "8ac4b1c2c8e3ba2c7e08365cd8223b340aed6c3f8e4cae23e6bed500f7457fe5",
-        ["faction_economy_shops.v1.json"] = "bc051914c66eaae7c2e4e45686eb6d8895e1c3afa55a843f18f584007e984086",
-        ["pal_reconciliation.v1.json"] = "84469dc58ae6d3f57a9d8ba282e85694dc7486f95d931e298cce4831f1ceb639",
-        ["faction_progression.v1.json"] = "a790d8d4274c2e946e6fff9341975c250aaf919477b209913a9404613414fbd0",
+        ["faction_commerce.v1.json"] = "fe0330ec6fa0c9d91ddac10cbbb0ae0ed49972d2d0c83a60c7a52b0d9dbb3b07",
+        ["faction_economy.v1.json"] = "f6b001bddbc078aed7fa129241dc57382eb72fffb21a4766e90ac06f6b6eae41",
+        ["faction_economy_shops.v1.json"] = "7711e15558e4c9ea784421cf503af2d591e40976a9fac6cd0630b74a7680c54e",
+        ["pal_reconciliation.v1.json"] = "ffda7cb5391d1654d300801aad0f65a705f4627d08c0d1e06d64d39c889bbee5",
+        ["faction_progression.v1.json"] = "a4435da16d35adefcf25cee1a99f9174809f974dd5c53a74f2d8360ea8729a86",
         ["territory_assignments.v1.json"] = "0b4542014338178ab311f73a876dea640a1d393e9cd68801b3c852e2849e0f7b",
         ["fast_travel_territories.v1.json"] = "a2945338ca661ef001b1603a077209f06efae5fad2b25a43d432acde9419dbf4",
         ["island_territories.v2.json"] = "2a24d45822234f9064cdaee26c56423ab59cf074a54e780ce7aa79be1eb39e27",
@@ -165,7 +165,7 @@ return {
         ["merchantIsland"] = {
             ["id"] = "pwft.commerce.faction_market_island",
             ["displayNameZhHans"] = "七势力商人岛",
-            ["placementStatus"] = "user_selected_ftpoint90_island_live_ground_validation_pending",
+            ["placementStatus"] = "ftpoint90_live_ground_accepted_2026_08_11",
             ["selectionDecision"] = {
                 ["decisionSource"] = "user_confirmed_2026-07-29",
                 ["landmarkZhHans"] = "泰拉瑞亚密域旁的独立小岛",
@@ -188,42 +188,50 @@ return {
             },
             ["merchantCount"] = 7,
             ["oneFixedBuyerPerHumanFaction"] = true,
-            ["rootLocation"] = nil,
-            ["rootRotation"] = nil,
+            ["rootLocation"] = {
+                ["X"] = -492507.908,
+                ["Y"] = -42766.375,
+                ["Z"] = -1992.57
+            },
+            ["rootRotation"] = {
+                ["Pitch"] = 0,
+                ["Yaw"] = 235.46,
+                ["Roll"] = 0
+            },
             ["slotOffsets"] = {
                 {
                     ["forward"] = 0,
-                    ["right"] = -900,
+                    ["right"] = -360,
                     ["up"] = 0
                 },
                 {
                     ["forward"] = 0,
-                    ["right"] = -600,
+                    ["right"] = -120,
                     ["up"] = 0
                 },
                 {
                     ["forward"] = 0,
-                    ["right"] = -300,
+                    ["right"] = 120,
                     ["up"] = 0
                 },
                 {
                     ["forward"] = 0,
+                    ["right"] = 360,
+                    ["up"] = 0
+                },
+                {
+                    ["forward"] = 260,
+                    ["right"] = -240,
+                    ["up"] = 0
+                },
+                {
+                    ["forward"] = 260,
                     ["right"] = 0,
                     ["up"] = 0
                 },
                 {
-                    ["forward"] = 0,
-                    ["right"] = 300,
-                    ["up"] = 0
-                },
-                {
-                    ["forward"] = 0,
-                    ["right"] = 600,
-                    ["up"] = 0
-                },
-                {
-                    ["forward"] = 0,
-                    ["right"] = 900,
+                    ["forward"] = 260,
+                    ["right"] = 240,
                     ["up"] = 0
                 }
             }
@@ -256,7 +264,7 @@ return {
                 "PalItemSlot.StackCount"
             },
             ["sellUiAcceptanceIsServerConfirmation"] = false,
-            ["sellSettlementStatus"] = "server_inventory_replication_probe_ready_settlement_disabled_live_acceptance_pending"
+            ["sellSettlementStatus"] = "native_server_request_plus_inventory_replication_confirmation_enabled"
         },
         ["factions"] = {
             {
@@ -1293,8 +1301,8 @@ return {
             ["nativeMerchantSpawnEnabled"] = false,
             ["customProductRowsEnabled"] = false,
             ["dynamicPriceRuntimeEnabled"] = false,
-            ["requestedSaleReputationSettlementEnabled"] = false,
-            ["reason"] = "balance_confirmation_custom_shop_rows_and_live_sale_replication_acceptance_pending"
+            ["requestedSaleReputationSettlementEnabled"] = true,
+            ["reason"] = "native_itemshop_server_request_and_inventory_replication_gate_enabled"
         }
     },
     ["economyShops"] = {
@@ -1318,9 +1326,18 @@ return {
             ["sourceContract"] = "faction_commerce.v1.json",
             ["placementId"] = "pwft.commerce.faction_market_island",
             ["referenceFastTravelPointId"] = "FTPoint90",
-            ["rootLocation"] = nil,
-            ["rootRotation"] = nil,
-            ["liveGroundValidationRequired"] = true
+            ["rootLocation"] = {
+                ["X"] = -492507.908,
+                ["Y"] = -42766.375,
+                ["Z"] = -1992.57
+            },
+            ["rootRotation"] = {
+                ["Pitch"] = 0,
+                ["Yaw"] = 235.46,
+                ["Roll"] = 0
+            },
+            ["liveGroundValidationRequired"] = false,
+            ["liveGroundValidationEvidence"] = "docs/43_FTPoint90商人商会正式落位_2026-08-11.md"
         },
         ["nativeItemShopAssets"] = {
             ["createData"] = {
@@ -1439,9 +1456,9 @@ return {
             ["playerMayUseNativeSellUIForOtherItems"] = true,
             ["unrequestedItemCommerceReputation"] = 0,
             ["targetPriceSettlementMode"] = "native_sale_plus_mod_bonus_after_confirmed_server_success",
-            ["serverSuccessSignalStatus"] = "replication_probe_ready_settlement_disabled_live_acceptance_pending",
+            ["serverSuccessSignalStatus"] = "native_server_request_plus_inventory_replication_confirmation_enabled",
             ["moneyBonusMutationEnabled"] = false,
-            ["commerceReputationSettlementEnabled"] = false
+            ["commerceReputationSettlementEnabled"] = true
         },
         ["generatedArtifacts"] = {
             ["catalog"] = "generated/faction-economy-shops/catalog.v1.json",
@@ -1459,8 +1476,8 @@ return {
             ["nativeShopBindingEnabled"] = true,
             ["dynamicRestockEnabled"] = false,
             ["procurementMoneyBonusEnabled"] = false,
-            ["procurementCommerceReputationEnabled"] = false,
-            ["reason"] = "merchant_island_ground_refresh_and_server_sale_success_live_validation_pending"
+            ["procurementCommerceReputationEnabled"] = true,
+            ["reason"] = "native_server_request_and_inventory_replication_confirmation_gate_enabled"
         }
     },
     ["palReconciliation"] = {
@@ -1505,7 +1522,7 @@ return {
         },
         ["raidResultAdapterPolicy"] = {
             ["normalizedAdapterEnabled"] = true,
-            ["nativeBindingEnabled"] = false,
+            ["nativeBindingEnabled"] = true,
             ["leaderDesignation"] = "first-spawn-of-final-wave",
             ["eventAuthority"] = "pal-invader-incident-group-guid-v1",
             ["spawnAuthority"] = "pal-invader-on-character-spawned-v1",
@@ -1551,7 +1568,7 @@ return {
         },
         ["offlineDialogueTreePolicy"] = {
             ["runtimeEnabled"] = true,
-            ["nativePresenterEnabled"] = false,
+            ["nativePresenterEnabled"] = true,
             ["representativeRegistrationRequired"] = true,
             ["explicitIrreversibleConfirmationRequired"] = true,
             ["baseStoryContentIncluded"] = false,
@@ -1584,11 +1601,11 @@ return {
         },
         ["runtimeActivation"] = {
             ["coreEnabled"] = true,
-            ["nativeRaidResultBindingEnabled"] = false,
+            ["nativeRaidResultBindingEnabled"] = true,
             ["dialoguePresenterRouterEnabled"] = true,
             ["representativeInteractionRouterEnabled"] = true,
             ["representativeInteractionDistance"] = 500,
-            ["nativeDialoguePresenterEnabled"] = false,
+            ["nativeDialoguePresenterEnabled"] = true,
             ["agentAdapterEnabled"] = true,
             ["persistenceFollowsFactionProgressionSidecar"] = true
         }
@@ -1641,7 +1658,7 @@ return {
             ["joinMinimumReputation"] = 0,
             ["humanOnly"] = true,
             ["joinOperationProvidedByContent"] = true,
-            ["joinDiplomacyEffectsStatus"] = "runtime_overlay_and_content_adapter_ready_native_presenter_pending",
+            ["joinDiplomacyEffectsStatus"] = "runtime_overlay_content_adapter_and_native_presenter_ready",
             ["joinDiplomacyEffects"] = {
                 ["schemaVersion"] = "1.0.0",
                 ["sourceThreadId"] = "019f7d91-89f6-7c33-809c-2bb61aedc2a6",
@@ -1723,7 +1740,7 @@ return {
                 ["dialogueContentIncluded"] = false,
                 ["pendingOfferPersistence"] = "transient",
                 ["playerIdentitySource"] = "content_supplied_until_native_profile_adapter",
-                ["nativePresenterStatus"] = "public_adapter_ready_native_presenter_pending"
+                ["nativePresenterStatus"] = "native_presenter_and_exact_actor_router_ready_content_actor_binding_required"
             }
         },
         ["rankPolicy"] = {
@@ -1754,6 +1771,26 @@ return {
                     ["guardAccess"] = true
                 }
             }
+        },
+        ["guardPolicy"] = {
+            ["enabled"] = true,
+            ["humanOnly"] = true,
+            ["unlockRanks"] = {
+                "Leader",
+                "Lord"
+            },
+            ["maximumActivePerFaction"] = 1,
+            ["providerStatus"] = "native_blueprint_provider_and_player_entry_ready",
+            ["controllerClassPath"] = "/Game/Pal/Blueprint/Controller/NPC/BP_NPCAIController_Visitor_Guardman.BP_NPCAIController_Visitor_Guardman_C",
+            ["leaderBinding"] = "VisitorLeader=local-player",
+            ["followRoute"] = "AIController.MoveToActor lifecycle-scoped pulse",
+            ["combatPolicy"] = "preserve-native-hate-target-before-follow-resume",
+            ["deathPolicy"] = "stop-follow-and-await-recall-or-native-body-cleanup",
+            ["cleanupPolicy"] = "cancel-pulse-and-K2_DestroyActor-or-stale-record-cleanup",
+            ["playerEntry"] = "pwft.guard status|deploy|recall",
+            ["storyContentIncluded"] = false,
+            ["offlineStatus"] = "complete",
+            ["liveStatus"] = "follow-combat-down-and-cleanup-validation-pending"
         },
         ["reputationSources"] = {
             ["task"] = {

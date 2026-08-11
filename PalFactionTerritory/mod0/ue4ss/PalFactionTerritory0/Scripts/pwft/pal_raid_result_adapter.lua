@@ -37,13 +37,13 @@ local function validate_policy(contract, config)
     local policy = contract.raidResultAdapterPolicy
     assert(type(policy) == "table", "Pal raid-result adapter policy is required")
     assert(policy.normalizedAdapterEnabled == true, "normalized Pal raid adapter must be enabled")
-    assert(policy.nativeBindingEnabled == false, "native Pal raid binding requires live acceptance")
+    assert(policy.nativeBindingEnabled == true, "native Pal raid binding contract must be enabled")
     assert(policy.leaderDesignation == "first-spawn-of-final-wave", "unsupported Pal raid leader designation")
     assert(policy.timerCleanupMaySettleRaid == false, "timer cleanup cannot settle a Pal raid")
     assert(policy.conflictingEvidenceBehavior == "block-event-fail-closed", "conflicting Pal raid evidence must fail closed")
     assert(type(config) == "table", "Pal raid-result adapter configuration is required")
     assert(config.normalizedRaidAdapterEnabled == true, "normalized Pal raid adapter is disabled")
-    assert(config.nativeRaidResultBindingEnabled == false, "native Pal raid binding requires live acceptance")
+    assert(config.nativeRaidResultBindingEnabled == true, "native Pal raid binding is disabled")
     assert(config.leaderDesignation == policy.leaderDesignation, "Pal raid leader designation drifted")
     return policy
 end
@@ -387,7 +387,7 @@ function PalRaidResultAdapter:status()
     return {
         apiVersion = self.version,
         normalizedRaidAdapterEnabled = true,
-        nativeRaidResultBindingEnabled = false,
+        nativeRaidResultBindingEnabled = true,
         leaderDesignation = self.policy.leaderDesignation,
         activeEventCount = active_count,
         blockedEventCount = blocked_count,

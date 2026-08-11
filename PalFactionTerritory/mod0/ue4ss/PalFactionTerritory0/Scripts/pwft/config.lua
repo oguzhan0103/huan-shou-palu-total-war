@@ -12,6 +12,34 @@ return {
     -- Palworld's own SaveGames payload.
     factionProgression = {
         enabled = true,
+        joinRepresentative = {
+            nativeJoinRepresentativeEnabled = true,
+            representativeInteractionDistance = 500,
+            confirmationKeys = "F1/F2",
+            storyContentIncluded = false,
+        },
+        playerGuard = {
+            nativePlayerGuardEnabled = true,
+            controllerClassPath =
+                "/Game/Pal/Blueprint/Controller/NPC/"
+                    .. "BP_NPCAIController_Visitor_Guardman."
+                    .. "BP_NPCAIController_Visitor_Guardman_C",
+            followIntervalMs = 1000,
+            acceptanceRadius = 350,
+            followFailureLimit = 8,
+            storyContentIncluded = false,
+            liveTest = {
+                enabled = false,
+                key = "F4",
+                factionId = "pwft.faction.rayne_syndicate",
+                characterId = "NPC_Hunter",
+                characterClassPath =
+                    "/Game/Pal/Blueprint/Character/NPC/Normal/"
+                        .. "BP_NPC_Hunter.BP_NPC_Hunter_C",
+                spawnBackDistance = 180,
+                spawnSideDistance = 160,
+            },
+        },
         persistence = {
             enabled = true,
             mode = "mod-sidecar-json",
@@ -35,15 +63,28 @@ return {
     -- Finite Pal reconciliation is implemented as a Mod-owned service inside
     -- the progression snapshot. Fan content packs register each tribe's
     -- token quota, quests, and discourse content through its public API.
-    -- Native raid-result and dialogue presentation stay disabled until their
-    -- authoritative callbacks have been accepted in-game. The optional Agent
+    -- Native raid results are observed through the manager-owned start/end
+    -- broadcasts and the enemy incident's spawn/death callbacks. Events stay
+    -- fail-closed until a content pack maps the native invader group to one
+    -- Pal faction. The native dialogue presenter uses
+    -- a Mod-owned text panel and only handles registered representative actors;
+    -- it never supplies story content or mutates deterministic outcomes. The optional Agent
     -- adapter is active as a presentation-only bridge: unavailable or invalid
     -- responses fall back to the deterministic offline tree, and a model can
     -- never directly mutate affinity, quests, inventory, saves, or world state.
     palReconciliation = {
         enabled = true,
         normalizedRaidAdapterEnabled = true,
-        nativeRaidResultBindingEnabled = false,
+        nativeRaidResultBindingEnabled = true,
+        nativeRaidLiveTest = {
+            enabled = false,
+            groupName = "Invader_Group_Monster_Grade5_Basic",
+            palFactionId = "pwft.faction.dark_nocturnal_pal_tribe",
+            contentPackId = "pwft.qa.native-raid",
+            contentVersion = "1.0.0",
+            tokenQuota = 3,
+            maximumAffinityPerDiscourse = 10,
+        },
         leaderDesignation = "first-spawn-of-final-wave",
         offlineDialogueTreeEnabled = true,
         -- The router is data/UI-backend agnostic and may run before a cooked
@@ -52,10 +93,22 @@ return {
         dialoguePresenterRouterEnabled = true,
         representativeInteractionRouterEnabled = true,
         representativeInteractionDistance = 500,
-        nativeDialoguePresenterEnabled = false,
+        nativeDialoguePresenterEnabled = true,
         agentAdapterEnabled = true,
         agentDefaultLocale = "zh-CN",
         storyContentIncluded = false,
+    },
+
+    -- Content authors install Lua data modules inside this Mod's Scripts
+    -- search path and opt them in here. UE4SS isolates each Mod's Lua global
+    -- environment, so cross-Mod _G registration is intentionally unsupported.
+    -- The base ships with no enabled story pack: an empty list means the Core
+    -- remains a mechanics-only foundation.
+    contentModules = {
+        enabled = true,
+        modules = {},
+        fallbackLocale = "zh-CN",
+        storyContentIncludedByBase = false,
     },
 
     -- Player-facing read-only faction panel. It uses a dedicated cooked
@@ -66,6 +119,12 @@ return {
         enabled = true,
         key = "F5",
         zOrder = 90,
+        -- 1080p-safe wide layout. The original 575x610 panel wrapped every
+        -- faction row and clipped the Pal section below the viewport.
+        panelPosition = { X = 435.0, Y = 35.0 },
+        panelSize = { X = 1050.0, Y = 985.0 },
+        minTextWidth = 1010.0,
+        targetFontSize = 17,
     },
 
     -- Seven-faction commerce is driven by the versioned commerce contract.
@@ -88,7 +147,7 @@ return {
             "runtime-created-generic-spawner-replaced-by-native-merchant-reuse",
         nativeFactionMerchantSpawnEnabled = false,
         nativeFactionMerchantSpawnReason =
-            "ftpoint90-market-island-selected-live-ground-and-variant-review-pending",
+            "ftpoint90-market-island-live-ground-accepted-2026-08-11",
         nativeCharacterAdapter = {
             enabled = true,
             collisionHandlingOverride = 2,
@@ -417,10 +476,10 @@ return {
                     "MysteryMask",
                 },
                 offsets = {
-                    { X = 1200.0, Y = 0.0, Z = 250.0 },
-                    { X = -1200.0, Y = 0.0, Z = 250.0 },
-                    { X = 0.0, Y = 1200.0, Z = 250.0 },
-                    { X = 0.0, Y = -1200.0, Z = 250.0 },
+                    { X = 450.0, Y = 450.0, Z = 100.0 },
+                    { X = -450.0, Y = 450.0, Z = 100.0 },
+                    { X = 450.0, Y = -450.0, Z = 100.0 },
+                    { X = -450.0, Y = -450.0, Z = 100.0 },
                 },
                 resolveIntervalMs = 250,
                 maxResolveAttempts = 40,

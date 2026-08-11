@@ -9,7 +9,9 @@
     "manifest",
     "questTemplates",
     "strategicWorld",
-    "endingRoutes"
+    "endingRoutes",
+    "palDiscourse",
+    "localization"
   ],
   "registrationPolicy": {
     "crossDomainValidationBeforeCommit": true,
@@ -17,7 +19,11 @@
     "localizationKeysOnly": true,
     "allDomainPackIdsMustMatchManifest": true,
     "dependenciesAndConflictsResolvedBeforeCommit": true,
-    "deterministicCommitAfterSuccessfulStaging": true
+    "deterministicCommitAfterSuccessfulStaging": true,
+    "palDiscourseValidatedBeforeCommit": true,
+    "localizationOwnershipValidatedBeforeCommit": true,
+    "crossModGlobalsRequired": false,
+    "configuredInternalModuleLoading": true
   },
   "authorityPolicy": {
     "contentAuthorsDeclareRulesAndTextKeys": true,

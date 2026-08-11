@@ -82,6 +82,8 @@ function PalDialogueController.create(discourse, configuration, options)
         version = API_VERSION,
         discourse = discourse,
         enabled = configuration.agentAdapterEnabled,
+        nativePresenterEnabled =
+            configuration.nativeDialoguePresenterEnabled == true,
         defaultLocale = configuration.agentDefaultLocale or "zh-CN",
         resolveAgentBridge = options.resolveAgentBridge or default_bridge_resolver,
         nowUtc = options.nowUtc or default_now_utc,
@@ -100,7 +102,8 @@ function PalDialogueController.create(discourse, configuration, options)
             deterministicRuleEngineOwnsOutcome = true,
             directAgentStateMutation = false,
             PalworldSaveMutation = false,
-            nativePresenter = false,
+            nativePresenter =
+                configuration.nativeDialoguePresenterEnabled == true,
             authoredStoryContent = false,
         },
     }, { __index = PalDialogueController })
@@ -548,7 +551,7 @@ function PalDialogueController:status()
         proposalRequiresPlayerConfirmation = true,
         deterministicRuleEngineOwnsOutcome = true,
         directAgentStateMutation = false,
-        nativePresenterEnabled = false,
+        nativePresenterEnabled = self.nativePresenterEnabled,
         storyContentIncluded = false,
     }
 end

@@ -40,7 +40,15 @@ local function safe_unwrap(value)
         end
         return value
     end)
-    return ok and unwrapped or nil
+    -- RemoteUnrealParam:get() is a no-argument unwrap, while UE4SS container
+    -- wrappers such as TArray also expose get(index).  Once a hook parameter
+    -- has already been unwrapped to a TArray, calling get() without an index
+    -- raises.  Preserve that wrapper so ForEach can enumerate it instead of
+    -- silently turning a valid sale selection into an empty list.
+    if ok then
+        return unwrapped
+    end
+    return value
 end
 
 local function object_key(value)
@@ -291,7 +299,25 @@ function CommerceBridge.create(commerce, options)
         nativeSellSettlementAttemptCount = 0,
         nativeSellSettlementRetryCount = 0,
         nativeSellSettlementFailureCount = 0,
+        pendingVendorInteraction = nil,
     }, { __index = CommerceBridge })
+end
+
+function CommerceBridge:begin_vendor_interaction(faction_id, actor)
+    local actor_key = object_key(actor)
+    if self.vendorFactions[actor_key] ~= faction_id then
+        return false, "vendor-interaction-faction-mismatch"
+    end
+    self.pendingVendorInteraction = {
+        factionId = faction_id,
+        actorKey = actor_key,
+        metadata = copy(self.vendorMetadata[actor_key] or {}),
+    }
+    return true, self.pendingVendorInteraction
+end
+
+function CommerceBridge:clear_vendor_interaction()
+    self.pendingVendorInteraction = nil
 end
 
 function CommerceBridge:register_vendor_actor(
@@ -472,38 +498,114 @@ end
 
 function CommerceBridge:on_sell_request(component, shop_guid, raw_items)
     local component_key = object_key(component)
-    local faction_id = self.componentFactions[component_key]
+    local ui_attempt = self.activeUiSaleAttempt
+    local faction_id = ui_attempt
+            and ui_attempt.factionId
+        or self.componentFactions[component_key]
     if faction_id == nil then
         return false, "component-unregistered"
     end
     local shop_id = guid_text(shop_guid)
-    local shop_metadata =
-        copy(self.componentMetadata[component_key] or {})
+    local shop_metadata = copy(
+        ui_attempt
+                and ui_attempt.vendorMetadata
+            or self.componentMetadata[component_key]
+            or {}
+    )
     shop_metadata.source = "native-network-shop"
     self.commerce:register_shop(
         shop_id,
         faction_id,
         shop_metadata
     )
+    if ui_attempt ~= nil then
+        -- UE4SS RegisterHook callbacks expose the UFunction inputs, but not
+        -- the original return value.  Reaching the authoritative server RPC
+        -- from PalUIItemShopBase:TrySell is the native acceptance signal.
+        if ui_attempt.accepted ~= true then
+            ui_attempt.accepted = true
+            self.itemSellUiAcceptedCount =
+                self.itemSellUiAcceptedCount + 1
+        end
+    end
     self.pendingSales[component_key] = {
         shopId = shop_id,
         factionId = faction_id,
         rawItems = safe_unwrap(raw_items),
-        extractedItems = self.activeUiSaleAttempt
-                and self.activeUiSaleAttempt.items
+        extractedItems = ui_attempt
+                and ui_attempt.items
             or nil,
-        uiAttempt = self.activeUiSaleAttempt,
+        uiAttempt = ui_attempt,
         replicationConfirmed = false,
         confirmationId = nil,
         commerceWindowId = nil,
         settlementAttemptCount = 0,
     }
-    if self.activeUiSaleAttempt ~= nil then
-        self.activeUiSaleAttempt.pendingComponentKey =
+    if ui_attempt ~= nil then
+        ui_attempt.pendingComponentKey =
             component_key
     end
+    self.activeUiSaleAttempt = nil
     self.sellRequestCount = self.sellRequestCount + 1
+    log(self, string.format(
+        "NATIVE_SELL_SERVER_REQUEST faction=%s component=%s items=%d uiAccepted=%s",
+        tostring(faction_id),
+        tostring(component_key),
+        type(self.pendingSales[component_key].extractedItems) == "table"
+                and #self.pendingSales[component_key].extractedItems
+            or 0,
+        tostring(ui_attempt ~= nil and ui_attempt.accepted == true)
+    ))
+    self:schedule_native_sale_state_confirmation(component_key)
     return true, self.pendingSales[component_key]
+end
+
+function CommerceBridge:schedule_native_sale_state_confirmation(
+    component_key
+)
+    if not self.nativeSaleReplicationProbeEnabled
+        or type(ExecuteWithDelay) ~= "function" then
+        return false
+    end
+    local max_attempts = 12
+    local delay_ms = 200
+    local function schedule(attempt)
+        ExecuteWithDelay(delay_ms, function()
+            local function evaluate()
+                local pending = self.pendingSales[component_key]
+                if pending == nil then
+                    return
+                end
+                local confirmed, reason =
+                    self:evaluate_native_sale_replication(
+                        component_key,
+                        "server-request-authoritative-slot-state"
+                    )
+                if confirmed then
+                    return
+                end
+                if reason == "sale-replication-incomplete"
+                    and attempt < max_attempts then
+                    schedule(attempt + 1)
+                    return
+                end
+                if reason == "sale-replication-incomplete" then
+                    log(self, string.format(
+                        "NATIVE_SELL_STATE_CONFIRMATION_TIMEOUT component=%s attempts=%d settlement=false",
+                        tostring(component_key),
+                        attempt
+                    ))
+                end
+            end
+            if type(ExecuteInGameThread) == "function" then
+                ExecuteInGameThread(evaluate)
+            else
+                evaluate()
+            end
+        end)
+    end
+    schedule(1)
+    return true
 end
 
 function CommerceBridge:on_item_sell_ui_request(
@@ -511,15 +613,28 @@ function CommerceBridge:on_item_sell_ui_request(
     raw_slots
 )
     local items = extract_item_slots(raw_slots)
+    local vendor_context = self.pendingVendorInteraction
+    self.pendingVendorInteraction = nil
     self.activeUiSaleAttempt = {
         uiKey = object_key(ui),
         items = items,
         accepted = nil,
+        factionId = vendor_context
+            and vendor_context.factionId,
+        vendorActorKey = vendor_context
+            and vendor_context.actorKey,
+        vendorMetadata = vendor_context
+            and copy(vendor_context.metadata),
     }
     self.itemSellUiRequestCount =
         self.itemSellUiRequestCount + 1
     self.extractedSaleItemCount =
         self.extractedSaleItemCount + #items
+    log(self, string.format(
+        "NATIVE_SELL_UI_REQUEST ui=%s items=%d acceptance=awaiting-server-request",
+        tostring(self.activeUiSaleAttempt.uiKey),
+        #items
+    ))
     return true, self.activeUiSaleAttempt
 end
 
@@ -876,16 +991,6 @@ function CommerceBridge:start()
                 instance:on_item_sell_ui_request(
                     safe_unwrap(context),
                     safe_unwrap(item_slots)
-                )
-            end,
-            postCallback = function(
-                context,
-                _,
-                return_value
-            )
-                instance:on_item_sell_ui_result(
-                    safe_unwrap(context),
-                    safe_unwrap(return_value)
                 )
             end,
         },
