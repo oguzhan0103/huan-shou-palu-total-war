@@ -1049,8 +1049,8 @@ def main() -> int:
     )
     require("SettlementRaid.start(" in runtime_text, "small settlement raid runtime is not started")
     require(
-        'executionMode = "native-negotiator"' in config_text,
-        "settlement raid must select exactly one execution route",
+        'executionMode = "attendance-simulation"' in config_text,
+        "settlement raid must select the live-validated attendance route",
     )
     require("Grass_Village_001" in config_text, "small settlement native region binding missing")
     require("FTPoint24" in config_text, "small settlement fast-travel binding missing")
@@ -1072,7 +1072,22 @@ def main() -> int:
     require("StartInvaderMarchForBaseCamp" in settlement_raid_text, "native base-camp invasion lifecycle entry missing")
     require("PalInvaderIncidentBase:SelectInvaders" in settlement_raid_text, "native Grade 80 Meadow selection adapter missing")
     require("RequestIncidentInvaderEnemy_BP" not in settlement_raid_text, "unsafe internal incident request must stay removed")
-    require("RequestIncidentInvaderEnemy(" not in settlement_raid_text, "unsafe native incident request must stay removed")
+    require(
+        settlement_raid_text.count("invader_manager:RequestIncidentVisitorNPC(") == 1
+        and settlement_raid_text.count("invader_manager:RequestIncidentInvaderEnemy(") == 1
+        and "nativeDirectIncidentFallbackEnabled == true" in settlement_raid_text
+        and "NATIVE_DIRECT_VISITOR_REQUESTED" in settlement_raid_text
+        and "NATIVE_DIRECT_VISITOR_CONFIRMED" in settlement_raid_text
+        and "NATIVE_DIRECT_ENEMY_REQUESTED" in settlement_raid_text
+        and "NATIVE_DIRECT_ENEMY_CONFIRMED" in settlement_raid_text
+        and "source=negotiator-open-ground-missing" in settlement_raid_text,
+        "bounded manager-owned direct incident fallback is missing or duplicated",
+    )
+    require(
+        "nativeDirectIncidentFallbackEnabled = true" in config_text
+        and "nativeDirectIncidentConfirmationDelayMs = 15000" in config_text,
+        "dense-base direct incident fallback contract is missing",
+    )
     require("Debug_InvaderMarchForNearCamp" not in settlement_raid_text, "silent player-controller debug route must stay removed")
     require("InvaderMarchForNearestCamp" not in settlement_raid_text, "cheat-manager invasion route must stay removed")
     require("StaticConstructObject" not in settlement_raid_text, "settlement raid must not construct lifecycle objects manually")
@@ -1116,6 +1131,26 @@ def main() -> int:
         "ATTENDANCE_RAID_STARTED" in settlement_raid_text
         and "AddTargetPlayer_ForEnemy" in settlement_raid_text,
         "present-player expanded hate route missing",
+    )
+    attendance_bridge_text = (
+        SCRIPTS_ROOT
+        / "pwft"
+        / "attendance_raid_result_bridge.lua"
+    ).read_text(encoding="utf-8")
+    require(
+        "resultBindingEnabled = true" in config_text
+        and "liveValidated = true" in config_text
+        and "ATTENDANCE_RAID_RESULT_STARTED" in attendance_bridge_text
+        and "ATTENDANCE_RAID_RESULT_DEATH" in attendance_bridge_text
+        and "ATTENDANCE_RAID_RESULT_SETTLED" in attendance_bridge_text
+        and "ATTENDANCE_RAID_RESULT_CANCELLED" in attendance_bridge_text,
+        "attendance raid authoritative result bridge is incomplete",
+    )
+    require(
+        "/Script/Pal.PalCharacter:OnDeadCharacter" in settlement_raid_text
+        and "timerCleanupMaySettleRaid = false" in attendance_bridge_text
+        and "pwft-attendance-all-members-dead-v1" in attendance_bridge_text,
+        "attendance death/victory authority contract is missing",
     )
     require(
         "PWFT_SETTLEMENT_RAID_API_V1" in settlement_raid_text,

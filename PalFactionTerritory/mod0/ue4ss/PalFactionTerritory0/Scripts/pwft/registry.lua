@@ -10,7 +10,7 @@ return {
         ["faction_commerce.v1.json"] = "fe0330ec6fa0c9d91ddac10cbbb0ae0ed49972d2d0c83a60c7a52b0d9dbb3b07",
         ["faction_economy.v1.json"] = "f6b001bddbc078aed7fa129241dc57382eb72fffb21a4766e90ac06f6b6eae41",
         ["faction_economy_shops.v1.json"] = "7711e15558e4c9ea784421cf503af2d591e40976a9fac6cd0630b74a7680c54e",
-        ["pal_reconciliation.v1.json"] = "ffda7cb5391d1654d300801aad0f65a705f4627d08c0d1e06d64d39c889bbee5",
+        ["pal_reconciliation.v1.json"] = "65d465f6aeb5927c058c7233d63d73036803c3ef5e1ca8a54e102cd4a6b82807",
         ["faction_progression.v1.json"] = "a4435da16d35adefcf25cee1a99f9174809f974dd5c53a74f2d8360ea8729a86",
         ["territory_assignments.v1.json"] = "0b4542014338178ab311f73a876dea640a1d393e9cd68801b3c852e2849e0f7b",
         ["fast_travel_territories.v1.json"] = "a2945338ca661ef001b1603a077209f06efae5fad2b25a43d432acde9419dbf4",
@@ -1528,6 +1528,11 @@ return {
             ["spawnAuthority"] = "pal-invader-on-character-spawned-v1",
             ["deathAuthority"] = "pal-damage-reaction-dead-info-v1",
             ["outcomeAuthority"] = "pal-invader-end-wave-clear-v1",
+            ["attendanceBindingEnabled"] = true,
+            ["attendanceEventAuthority"] = "pwft-attendance-event-v1",
+            ["attendanceSpawnAuthority"] = "pwft-npc-manager-spawn-v1",
+            ["attendanceDeathAuthority"] = "pal-character-on-dead-character-v1",
+            ["attendanceOutcomeAuthority"] = "pwft-attendance-all-members-dead-v1",
             ["acceptedLeaderKillAttribution"] = {
                 "direct-local-player",
                 "local-player-owned-pal"

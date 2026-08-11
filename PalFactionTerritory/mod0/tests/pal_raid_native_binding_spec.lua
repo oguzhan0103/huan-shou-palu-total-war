@@ -38,6 +38,7 @@ assert(reconciliation:register_content(faction_id, {
 local adapter = PalRaidResultAdapter.create(reconciliation, {
     normalizedRaidAdapterEnabled = true,
     nativeRaidResultBindingEnabled = true,
+    attendanceRaidResultBindingEnabled = true,
     leaderDesignation = "first-spawn-of-final-wave",
 })
 

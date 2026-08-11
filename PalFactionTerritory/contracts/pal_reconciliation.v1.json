@@ -46,6 +46,11 @@
     "spawnAuthority": "pal-invader-on-character-spawned-v1",
     "deathAuthority": "pal-damage-reaction-dead-info-v1",
     "outcomeAuthority": "pal-invader-end-wave-clear-v1",
+    "attendanceBindingEnabled": true,
+    "attendanceEventAuthority": "pwft-attendance-event-v1",
+    "attendanceSpawnAuthority": "pwft-npc-manager-spawn-v1",
+    "attendanceDeathAuthority": "pal-character-on-dead-character-v1",
+    "attendanceOutcomeAuthority": "pwft-attendance-all-members-dead-v1",
     "acceptedLeaderKillAttribution": [
       "direct-local-player",
       "local-player-owned-pal"

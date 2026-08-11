@@ -453,6 +453,10 @@ function PalRaidNativeBinding:_death_attribution(attacker)
     }
 end
 
+function PalRaidNativeBinding:attribute_attacker(attacker)
+    return self:_death_attribution(attacker)
+end
+
 function PalRaidNativeBinding:_on_death(incident, dead_info)
     local _, event = self:_event_from_guid(property(incident, "GroupGuid"))
     if event == nil then

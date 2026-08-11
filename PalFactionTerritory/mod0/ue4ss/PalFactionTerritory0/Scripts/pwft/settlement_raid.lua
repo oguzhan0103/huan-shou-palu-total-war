@@ -1,4 +1,6 @@
 local SettlementRaid = {}
+local AttendanceRaidResultBridge =
+    require("pwft.attendance_raid_result_bridge")
 
 local PREFIX = "[PalFactionTerritory0][SettlementRaid]"
 
@@ -20,6 +22,8 @@ local NATIVE_VISITOR_START_POINT_PATH =
     "/Game/Pal/Blueprint/Incident/Invader/BP_PalIncidentInvaderVisitorNPC.BP_PalIncidentInvaderVisitorNPC_C:GetInvaderStartPoint"
 local NATIVE_VISITOR_ALL_SPAWNED_PATH =
     "/Game/Pal/Blueprint/Incident/Invader/BP_PalIncidentInvaderVisitorNPC.BP_PalIncidentInvaderVisitorNPC_C:OnAllCharacterSpawned"
+local ATTENDANCE_DEATH_PATH =
+    "/Script/Pal.PalCharacter:OnDeadCharacter"
 local NATIVE_REQUIRED_HOOK_PATHS = {
     NATIVE_SELECT_INVADERS_PATH,
     NATIVE_START_POINT_PATH,
@@ -28,6 +32,7 @@ local NATIVE_REQUIRED_HOOK_PATHS = {
     NATIVE_ENEMY_SPAWNED_PATH,
     NATIVE_VISITOR_START_POINT_PATH,
     NATIVE_VISITOR_ALL_SPAWNED_PATH,
+    ATTENDANCE_DEATH_PATH,
 }
 local NATIVE_BASE_ASSET_PATH =
     "/Game/Pal/Blueprint/Incident/Invader/BP_PalIncidentInvaderBase.BP_PalIncidentInvaderBase"
@@ -663,9 +668,10 @@ local function configure_native_attacker(instance, attacker, source)
     end
 
     log(string.format(
-        "NATIVE_ATTACKER_CONFIG source=%s actor=%s level80=%s predator=%s hpRate=2.0 damageRate=2.0 uncapturable=%s spawnType=%s",
+        "NATIVE_ATTACKER_CONFIG source=%s actor=%s level=%d levelSet=%s predator=%s hpRate=2.0 damageRate=2.0 uncapturable=%s spawnType=%s",
         tostring(source),
         safe_full_name(attacker),
+        tonumber(instance.config.level) or 0,
         tostring(level_ok),
         tostring(predator_ok),
         tostring(uncapturable_ok),
@@ -1480,6 +1486,55 @@ local function register_native_incident_hooks(instance)
         NATIVE_VISITOR_ALL_SPAWNED_PATH,
         visitor_all_spawned_callback
     )
+
+    local attendance_death_callback = function(
+        context,
+        dead_info_parameter
+    )
+        local ok, error_message = pcall(function()
+            local bridge = instance.attendanceResultBridge
+            if bridge == nil then
+                return
+            end
+            local bridge_status = bridge:status()
+            if bridge_status.active ~= true then
+                return
+            end
+            local dead_info = safe_hook_param_get(
+                dead_info_parameter
+            )
+            local victim = safe_property(dead_info, "SelfActor")
+            if not is_valid(victim) then
+                victim = safe_hook_param_get(context)
+            end
+            local attacker = safe_property(dead_info, "LastAttacker")
+            local recorded = bridge:record_death(victim, attacker)
+            if recorded.ok and recorded.reason == "raid-event-settled" then
+                instance.active = false
+                instance.nativePhase = "complete"
+                log(string.format(
+                    "ATTENDANCE_RAID_AUTHORITATIVE_COMPLETE event=%s playerSideWon=true allMembersDead=true tokenAwarded=%s",
+                    tostring(bridge_status.eventId),
+                    tostring(recorded.settlement
+                        and recorded.settlement.tokenAwarded == true)
+                ))
+            elseif not recorded.ok
+                and recorded.reason
+                    ~= "death-not-from-active-attendance-raid" then
+                instance.lastError = "attendance-death-result:"
+                    .. tostring(recorded.reason)
+            end
+        end)
+        if not ok then
+            instance.lastError = "attendance-death-hook:"
+                .. tostring(error_message)
+        end
+    end
+    try_register_hook(
+        instance,
+        ATTENDANCE_DEATH_PATH,
+        attendance_death_callback
+    )
 end
 
 local function count_native_hooks(instance)
@@ -1900,6 +1955,204 @@ local function launch_native_invasion(instance)
 
             instance.lastError =
                 "native-negotiator-not-created:check-open-ground-near-target-base-camp"
+            if instance.config.nativeDirectIncidentFallbackEnabled == true
+                and is_valid(observer) then
+                local function request_direct_enemy(source)
+                    local enemy_ok, enemy_result = pcall(function()
+                        return invader_manager:RequestIncidentInvaderEnemy(
+                            camp_id,
+                            observer
+                        )
+                    end)
+                    local enemy_accepted = enemy_ok
+                        and enemy_result == true
+                    log(string.format(
+                        "NATIVE_DIRECT_ENEMY_REQUESTED attempted=true accepted=%s callOk=%s result=%s source=%s campId=%s observer=%s saveWrites=0 error=%s",
+                        tostring(enemy_accepted),
+                        tostring(enemy_ok),
+                        tostring(enemy_result),
+                        tostring(source),
+                        safe_guid_string(camp_id),
+                        safe_full_name(observer),
+                        enemy_ok and "nil" or tostring(enemy_result)
+                    ))
+                    if not enemy_accepted then
+                        return false, enemy_ok
+                                and "native-direct-enemy-rejected"
+                            or tostring(enemy_result)
+                    end
+
+                    instance.nativeDirectIncidentRequestCount =
+                        instance.nativeDirectIncidentRequestCount + 1
+                    instance.nativePhase = "direct-enemy-requested"
+                    instance.lastError = nil
+                    schedule(
+                        instance,
+                        "native-direct-enemy-confirm-g"
+                            .. tostring(instance.generation),
+                        instance.config
+                            .nativeDirectIncidentConfirmationDelayMs,
+                        function()
+                            if not instance.active then
+                                return
+                            end
+                            local direct_info_ok, direct_info = safe_call(
+                                invader_manager,
+                                "GetInvaderInfo"
+                            )
+                            instance.nativeManagerInfoObserved =
+                                direct_info_ok and is_valid(direct_info)
+                            if instance.nativeIncidentCount > 0
+                                and instance.selectionOverrideCount > 0 then
+                                instance.nativePhase =
+                                    "direct-assault-confirmed"
+                                log(string.format(
+                                    "NATIVE_DIRECT_ENEMY_CONFIRMED incidents=%d managerInfo=%s selectionOverrides=%d spawned=%d startOverrides=%d targetOverrides=%d afterMs=%d",
+                                    instance.nativeIncidentCount,
+                                    tostring(
+                                        instance.nativeManagerInfoObserved
+                                    ),
+                                    instance.selectionOverrideCount,
+                                    instance.nativeSpawnedCount,
+                                    instance.startPointOverrideCount,
+                                    instance.targetPositionOverrideCount,
+                                    instance.config
+                                        .nativeDirectIncidentConfirmationDelayMs
+                                ))
+                                return
+                            end
+
+                            instance.lastError =
+                                "native-direct-enemy-not-created"
+                            local fallback_started, fallback_error =
+                                attempt_rampaging_pal_fallback(
+                                    instance,
+                                    "direct-enemy-missing"
+                                )
+                            if fallback_started then
+                                set_native_invader_disabled(
+                                    instance,
+                                    instance.config
+                                        .replaceNativePlayerBaseInvasion
+                                        == true,
+                                    "rampaging-fallback"
+                                )
+                                return
+                            end
+                            instance.nativePhase = "failed"
+                            instance.nativeRedirectActive = false
+                            instance.nativeRedirectArmed = false
+                            instance.active = false
+                            set_native_invader_disabled(
+                                instance,
+                                instance.config
+                                    .replaceNativePlayerBaseInvasion == true,
+                                "direct-enemy-missing"
+                            )
+                            log(string.format(
+                                "NATIVE_DIRECT_ENEMY_MISSING afterMs=%d incidents=%d managerInfo=%s selectionOverrides=%d fallback=%s fallbackError=%s lastError=%s",
+                                instance.config
+                                    .nativeDirectIncidentConfirmationDelayMs,
+                                instance.nativeIncidentCount,
+                                tostring(
+                                    instance.nativeManagerInfoObserved
+                                ),
+                                instance.selectionOverrideCount,
+                                tostring(instance.rampagingFallbackStatus),
+                                tostring(fallback_error),
+                                instance.lastError
+                            ))
+                        end
+                    )
+                    return true, nil
+                end
+
+                local visitor_ok, visitor_result = pcall(function()
+                    return invader_manager:RequestIncidentVisitorNPC(
+                        camp_id,
+                        observer,
+                        true
+                    )
+                end)
+                local visitor_accepted = visitor_ok
+                    and visitor_result == true
+                log(string.format(
+                    "NATIVE_DIRECT_VISITOR_REQUESTED attempted=true accepted=%s callOk=%s result=%s ignoreDeclaration=true source=negotiator-open-ground-missing campId=%s observer=%s saveWrites=0 error=%s",
+                    tostring(visitor_accepted),
+                    tostring(visitor_ok),
+                    tostring(visitor_result),
+                    safe_guid_string(camp_id),
+                    safe_full_name(observer),
+                    visitor_ok and "nil" or tostring(visitor_result)
+                ))
+                if visitor_accepted then
+                    instance.nativeDirectIncidentRequestCount =
+                        instance.nativeDirectIncidentRequestCount + 1
+                    instance.nativePhase = "direct-visitor-requested"
+                    instance.lastError = nil
+                    schedule(
+                        instance,
+                        "native-direct-visitor-confirm-g"
+                            .. tostring(instance.generation),
+                        instance.config
+                            .nativeDirectIncidentConfirmationDelayMs,
+                        function()
+                            if not instance.active then
+                                return
+                            end
+                            local visitor_info_ok, visitor_info = safe_call(
+                                invader_manager,
+                                "GetInvaderInfo"
+                            )
+                            instance.nativeManagerInfoObserved =
+                                visitor_info_ok and is_valid(visitor_info)
+                            if instance.nativeVisitorCount > 0
+                                or instance.negotiatorObserved == true
+                                or instance.nativeManagerInfoObserved == true then
+                                instance.nativePhase =
+                                    "direct-negotiation-confirmed"
+                                log(string.format(
+                                    "NATIVE_DIRECT_VISITOR_CONFIRMED visitors=%d negotiatorObserved=%s managerInfo=%s startOverrides=%d afterMs=%d",
+                                    instance.nativeVisitorCount,
+                                    tostring(instance.negotiatorObserved),
+                                    tostring(
+                                        instance.nativeManagerInfoObserved
+                                    ),
+                                    instance.startPointOverrideCount,
+                                    instance.config
+                                        .nativeDirectIncidentConfirmationDelayMs
+                                ))
+                                return
+                            end
+
+                            instance.lastError =
+                                "native-direct-visitor-not-created"
+                            log(string.format(
+                                "NATIVE_DIRECT_VISITOR_MISSING afterMs=%d visitors=%d negotiatorObserved=%s managerInfo=%s startOverrides=%d lastError=%s",
+                                instance.config
+                                    .nativeDirectIncidentConfirmationDelayMs,
+                                instance.nativeVisitorCount,
+                                tostring(instance.negotiatorObserved),
+                                tostring(
+                                    instance.nativeManagerInfoObserved
+                                ),
+                                instance.startPointOverrideCount,
+                                instance.lastError
+                            ))
+                            request_direct_enemy(
+                                "direct-visitor-accepted-but-missing"
+                            )
+                        end
+                    )
+                    return
+                end
+                local enemy_started = request_direct_enemy(
+                    "direct-visitor-request-rejected"
+                )
+                if enemy_started then
+                    return
+                end
+            end
             local fallback_started, fallback_error =
                 attempt_rampaging_pal_fallback(
                     instance,
@@ -2225,6 +2478,38 @@ local function engage_attendance_candidates(
             instance.attackerNames[name] = true
             table.insert(instance.attackers, attacker)
         end
+    end
+
+    if attendance.resultBindingEnabled == true then
+        if instance.attendanceResultBridge == nil then
+            instance.lastError =
+                "attendance-result-bridge-unavailable"
+            instance.nativePhase = "failed"
+            instance.active = false
+            destroy_attendance_attackers(
+                instance,
+                "result-bridge-unavailable"
+            )
+            return false, instance.lastError
+        end
+        local begun = instance.attendanceResultBridge:begin(
+            instance.generation,
+            candidates
+        )
+        if not begun.ok then
+            instance.lastError = "attendance-result-begin:"
+                .. tostring(begun.reason)
+            instance.nativePhase = "failed"
+            instance.active = false
+            destroy_attendance_attackers(
+                instance,
+                "result-bridge-begin-failed"
+            )
+            return false, instance.lastError
+        end
+    end
+
+    for _, attacker in ipairs(candidates) do
         local configured, player_targeted, residents_targeted,
             combat_activated = prepare_attendance_attacker(
             instance,
@@ -2315,6 +2600,11 @@ local function engage_attendance_candidates(
         "attendance-cleanup-g" .. tostring(instance.generation),
         instance.config.cleanupDelayMs,
         function()
+            if instance.attendanceResultBridge ~= nil then
+                instance.attendanceResultBridge:cancel(
+                    "attendance-event-timeout"
+                )
+            end
             destroy_attendance_attackers(
                 instance,
                 "attendance-event-complete"
@@ -2938,7 +3228,7 @@ is_night = function(world_context)
     return result == true, nil
 end
 
-local function force_qa_night(instance, world_context)
+local function force_qa_night(instance, controller, world_context)
     local target_hour = tonumber(instance.config.qaForceNightHour)
     if target_hour == nil then
         return true, "disabled"
@@ -2960,6 +3250,15 @@ local function force_qa_night(instance, world_context)
             tostring(existing_night_error)
         ))
         return true, "already-native-night"
+    end
+    local rpc_ok = false
+    local rpc_error = "disabled"
+    if instance.config.qaAuthoritativeNightRpcEnabled == true then
+        rpc_ok, rpc_error = safe_call(
+            controller,
+            "Debug_SetPalWorldTime",
+            math.floor(target_hour)
+        )
     end
     local utility = load_pal_utility()
     if not is_valid(utility) then
@@ -2994,8 +3293,10 @@ local function force_qa_night(instance, world_context)
     local current_hour, current_day_type, time_debug =
         native_time_diagnostics(world_context)
     log(string.format(
-        "QA_NIGHT_SET target=%d before=%s beforeOk=%s after=%s afterOk=%s currentHour=%s dayType=%s timeDebug=%s isNight=%s nightError=%s manager=%s saveRestoreRequired=true",
+        "QA_NIGHT_SET target=%d rpc=%s rpcError=%s before=%s beforeOk=%s after=%s afterOk=%s currentHour=%s dayType=%s timeDebug=%s isNight=%s nightError=%s manager=%s saveRestoreRequired=true",
         math.floor(target_hour),
+        tostring(rpc_ok),
+        tostring(rpc_error),
         tostring(before_hour),
         tostring(before_ok),
         tostring(after_hour),
@@ -3066,6 +3367,7 @@ local function begin_event(
     instance.nativeVisitorCount = 0
     instance.nativeSpawnedCount = 0
     instance.selectionOverrideCount = 0
+    instance.nativeDirectIncidentRequestCount = 0
     instance.nativeManagerInfoObserved = false
     instance.negotiatorObserved = false
     instance.negotiatorSpawnCallbackCount = 0
@@ -3168,6 +3470,10 @@ function SettlementRaid.validate_config(config)
             "QA force-night hour must be a valid hour"
         )
         assert(
+            type(config.qaAuthoritativeNightRpcEnabled) == "boolean",
+            "QA authoritative-night RPC gate must be explicit"
+        )
+        assert(
             type(config.qaNightSettleDelayMs) == "number"
                 and config.qaNightSettleDelayMs >= 500
                 and config.qaNightSettleDelayMs <= 5000,
@@ -3186,6 +3492,16 @@ function SettlementRaid.validate_config(config)
                 > config.nativeIncidentConfirmationDelayMs
             and config.nativeNegotiatorTimeoutMs <= 5 * 60 * 1000,
         "native negotiator timeout must follow confirmation and stay bounded"
+    )
+    assert(
+        type(config.nativeDirectIncidentFallbackEnabled) == "boolean",
+        "native direct-incident fallback gate must be explicit"
+    )
+    assert(
+        type(config.nativeDirectIncidentConfirmationDelayMs) == "number"
+            and config.nativeDirectIncidentConfirmationDelayMs >= 5000
+            and config.nativeDirectIncidentConfirmationDelayMs <= 60000,
+        "native direct-incident confirmation window must be bounded"
     )
     assert(
         type(config.nativeFallbackLaunchEnabled) == "boolean",
@@ -3253,6 +3569,18 @@ function SettlementRaid.validate_config(config)
             and type(attendance.liveValidated) == "boolean",
         "attendance simulation gates must be explicit"
     )
+    assert(
+        type(attendance.resultBindingEnabled) == "boolean",
+        "attendance raid-result binding gate is required"
+    )
+    if attendance.resultBindingEnabled then
+        assert(
+            attendance.liveValidated == true
+                and attendance.nativeCountdownSpawn
+                    .loadedWorldFallbackEnabled == false,
+            "attendance result binding requires the live-validated native-spawn route"
+        )
+    end
     if config.executionMode == "attendance-simulation" then
         assert(
             attendance.enabled == true,
@@ -3425,6 +3753,19 @@ function SettlementRaid.native_contract(config)
         startPointOverridesSuccessFlag = true,
         fallbackLaunchEnabled = config.nativeFallbackLaunchEnabled,
         negotiatorTimeoutMs = config.nativeNegotiatorTimeoutMs,
+        directIncidentFallback = {
+            enabled = config.nativeDirectIncidentFallbackEnabled,
+            request = table.concat({
+                "PalInvaderManager.RequestIncidentVisitorNPC(campId, observer, true)",
+                "PalInvaderManager.RequestIncidentInvaderEnemy(campId, observer)",
+            }, " -> "),
+            activationPolicy =
+                "after-native-negotiator-open-ground-confirmation-fails",
+            confirmationDelayMs =
+                config.nativeDirectIncidentConfirmationDelayMs,
+            ownsCharacterLifecycle = false,
+            saveWrites = false,
+        },
         rampagingPalFallback = {
             enabled = config.rampagingPalFallback.enabled,
             liveValidated =
@@ -3445,6 +3786,21 @@ function SettlementRaid.native_contract(config)
             qaOnly = config.attendanceSimulation.qaOnly,
             liveValidated =
                 config.attendanceSimulation.liveValidated,
+            resultBindingEnabled =
+                config.attendanceSimulation.resultBindingEnabled,
+            resultBridge = {
+                eventAuthority = "pwft-attendance-event-v1",
+                spawnAuthority = "pwft-npc-manager-spawn-v1",
+                deathAuthority =
+                    "pal-character-on-dead-character-v1",
+                outcomeAuthority =
+                    "pwft-attendance-all-members-dead-v1",
+                deathPath = ATTENDANCE_DEATH_PATH,
+                participationRule =
+                    "designated-leader-killed-by-local-player-or-owned-pal",
+                victoryRule = "all-registered-attackers-dead",
+                timerCleanupMaySettleRaid = false,
+            },
             playerPresentRadius =
                 config.attendanceSimulation.playerPresentRadius,
             aggroRadius = config.attendanceSimulation.aggroRadius,
@@ -3493,7 +3849,8 @@ function SettlementRaid.native_contract(config)
             NATIVE_BASE_SPAWNED_PATH,
             NATIVE_ENEMY_SPAWNED_PATH,
         },
-        ownsCharacterLifecycle = false,
+        ownsCharacterLifecycle =
+            config.executionMode == "attendance-simulation",
         saveWrites = false,
     }
 end
@@ -3501,6 +3858,30 @@ end
 function SettlementRaid.start(config, options)
     SettlementRaid.validate_config(config)
     options = options or {}
+    local attendance_result_bridge = nil
+    if config.attendanceSimulation.resultBindingEnabled == true then
+        assert(
+            type(options.palRaidResultAdapter) == "table",
+            "attendance raid-result adapter is required"
+        )
+        attendance_result_bridge =
+            AttendanceRaidResultBridge.create(
+                options.palRaidResultAdapter,
+                {
+                    palFactionId = config.nearestPalFactionId,
+                    nativeGroupName = config.nativeInvaderGroupName,
+                    settlementId = config.settlement.id,
+                    expectedAttackerCount =
+                        #config.attendanceSimulation
+                            .nativeCountdownSpawn.palIds,
+                },
+                {
+                    logger = log,
+                    attributionResolver =
+                        options.attendanceAttributionResolver,
+                }
+            )
+    end
     local instance = {
         config = config,
         callbacks = {},
@@ -3522,6 +3903,7 @@ function SettlementRaid.start(config, options)
         nativeSpawnedCount = 0,
         selectionOverrideCount = 0,
         nativeLaunchCount = 0,
+        nativeDirectIncidentRequestCount = 0,
         nativeRedirectActive = false,
         nativeRedirectArmed = false,
         startPointOverrideCount = 0,
@@ -3570,9 +3952,15 @@ function SettlementRaid.start(config, options)
         attendanceSpawnedActorNames = {},
         attendanceDestroyedCount = 0,
         attendanceDestroyFailureCount = 0,
+        attendanceResultBridge = attendance_result_bridge,
     }
 
     function instance:on_world_loaded(source)
+        if self.attendanceResultBridge ~= nil then
+            self.attendanceResultBridge:cancel(
+                source or "world-loaded"
+            )
+        end
         destroy_attendance_attackers(
             self,
             source or "world-loaded"
@@ -3597,6 +3985,7 @@ function SettlementRaid.start(config, options)
         self.attendanceNativeSpawnHandles = {}
         self.attendanceSpawnedActorNames = {}
         self.selectionOverrideCount = 0
+        self.nativeDirectIncidentRequestCount = 0
         self.startPointOverrideCount = 0
         self.targetPositionOverrideCount = 0
         self.targetAssignments = 0
@@ -3658,6 +4047,8 @@ function SettlementRaid.start(config, options)
     end
 
     function instance:status()
+        local result_bridge_status = self.attendanceResultBridge
+            and self.attendanceResultBridge:status() or nil
         return {
             version = "1.0.0",
             executionMode = self.config.executionMode,
@@ -3679,6 +4070,14 @@ function SettlementRaid.start(config, options)
                 self.attendanceLastPlayerPresent,
             attendanceLastPlayerDistance =
                 self.attendanceLastPlayerDistance,
+            attendanceResultBindingActive = result_bridge_status
+                and result_bridge_status.active == true or false,
+            attendanceResultSettlements = result_bridge_status
+                and result_bridge_status.settlements or 0,
+            attendanceResultCancellations = result_bridge_status
+                and result_bridge_status.cancellations or 0,
+            attendanceResultFailures = result_bridge_status
+                and result_bridge_status.failures or 0,
             nativeVisitorCount = self.nativeVisitorCount,
             nativeIncidentCount = self.nativeIncidentCount,
             nativeSpawnedCount = self.nativeSpawnedCount,
@@ -3791,7 +4190,7 @@ function SettlementRaid.start(config, options)
         and ModifierKey.CONTROL ~= nil then
         local callback = function()
             local apply = function()
-                local _, pawn, player_error = find_local_player()
+                local controller, pawn, player_error = find_local_player()
                 if not is_valid(pawn) then
                     log(
                         "QA_HOTKEY_TRIGGER started=false reason="
@@ -3801,6 +4200,7 @@ function SettlementRaid.start(config, options)
                 end
                 local forced, force_error = force_qa_night(
                     instance,
+                    controller,
                     pawn
                 )
                 if not forced then
@@ -3815,6 +4215,26 @@ function SettlementRaid.start(config, options)
                     "qa-night-settle",
                     instance.config.qaNightSettleDelayMs,
                     function()
+                        local authoritative_night, night_error =
+                            is_night(pawn)
+                        local current_hour,
+                            current_day_type,
+                            time_debug =
+                            native_time_diagnostics(pawn)
+                        log(string.format(
+                            "QA_NIGHT_CONFIRMED isNight=%s nightError=%s hour=%s dayType=%s timeDebug=%s",
+                            tostring(authoritative_night),
+                            tostring(night_error),
+                            current_hour,
+                            current_day_type,
+                            time_debug
+                        ))
+                        if authoritative_night ~= true then
+                            log(
+                                "QA_HOTKEY_TRIGGER started=false reason=authoritative-night-not-ready"
+                            )
+                            return
+                        end
                         -- Entering the settlement legitimately starts its
                         -- normal 15-minute event before a tester can press
                         -- the hotkey.  Only in the explicit QA path, replace

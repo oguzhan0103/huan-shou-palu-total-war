@@ -76,6 +76,7 @@ return {
         enabled = true,
         normalizedRaidAdapterEnabled = true,
         nativeRaidResultBindingEnabled = true,
+        attendanceRaidResultBindingEnabled = true,
         nativeRaidLiveTest = {
             enabled = false,
             groupName = "Invader_Group_Monster_Grade5_Basic",
@@ -390,10 +391,12 @@ return {
     settlementRaid = {
         enabled = true,
         replaceNativePlayerBaseInvasion = true,
-        -- Each live-test round selects exactly one execution route. Keep the
-        -- production candidate on the native negotiator lifecycle. The other
-        -- routes cannot run accidentally in the same countdown.
-        executionMode = "native-negotiator",
+        -- The game-owned incident API reports success on build 24467282 but
+        -- creates no visitor or enemy incident at dense player bases. Use the
+        -- live-accepted NPC-manager wave as the production route; its result
+        -- bridge still requires an actual all-members-dead victory plus direct
+        -- player/owned-Pal credit for the designated leader.
+        executionMode = "attendance-simulation",
         -- Concentrated live-test switch only. Ctrl+F8 calls this module's
         -- existing force_start path with a five-second countdown; it does not
         -- own actor spawning, AI, targeting, cleanup, or save persistence.
@@ -403,8 +406,9 @@ return {
         -- the public PalTimeManager API, wait one second, then request the
         -- same manager-owned invasion lifecycle. The preflight snapshot is
         -- restored after testing.
-        qaForceNightHour = 22,
-        qaNightSettleDelayMs = 1000,
+        qaForceNightHour = 23,
+        qaAuthoritativeNightRpcEnabled = true,
+        qaNightSettleDelayMs = 3000,
         nearestPalFactionId = "pwft.faction.dark_nocturnal_pal_tribe",
         -- Reuse Palworld's own Grade 5 meadow Pal invasion. The native data
         -- table contains several 61-80 compositions under this group, and the
@@ -422,6 +426,16 @@ return {
         -- destination without manufacturing a second invasion.
         nativeIncidentConfirmationDelayMs = 30000,
         nativeNegotiatorTimeoutMs = 180000,
+        -- Dense player bases can make the manager's travel-stage open-ground
+        -- search reject every visitor route even though the target camp and
+        -- observer are valid.  After the normal request has had a full
+        -- confirmation window, ask the same world-owned manager for its native
+        -- visitor incident with declaration travel ignored.  If even that
+        -- accepted request creates no incident, make one final manager-owned
+        -- enemy-incident request for the same camp/observer.  Both routes keep
+        -- the game's incident, wave, death and settlement callbacks.
+        nativeDirectIncidentFallbackEnabled = true,
+        nativeDirectIncidentConfirmationDelayMs = 15000,
         -- Repeated random/all launches can overlap the visitor and enemy
         -- phases. Keep the legacy diagnostic delays but disable those launch
         -- retries; one manager-owned base-camp request is the only production
@@ -452,17 +466,18 @@ return {
         -- no actors are created or modified; only an in-memory/log settlement
         -- record is emitted for a future external backend adapter.
         attendanceSimulation = {
-            enabled = false,
-            qaOnly = true,
-            liveValidated = false,
+            enabled = true,
+            qaOnly = false,
+            liveValidated = true,
+            resultBindingEnabled = true,
             playerPresentRadius = 22000.0,
             aggroRadius = 65000.0,
             -- When the countdown completes with the player in town, request
             -- several native NPC-manager Pal actors immediately around the
             -- player.  This avoids depending on field-spawner streaming
             -- distance or on a Pal walking in from outside the settlement.
-            -- The parent attendance gate remains disabled in production
-            -- until this route has completed live acceptance.
+            -- This route is the live-accepted production event source for
+            -- Build 24467282; the separate QA hotkey remains disabled.
             nativeCountdownSpawn = {
                 enabled = true,
                 -- The accepted siege route must create its own attackers.

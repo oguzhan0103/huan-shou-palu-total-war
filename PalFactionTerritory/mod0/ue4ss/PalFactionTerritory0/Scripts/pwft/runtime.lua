@@ -3817,6 +3817,7 @@ function Runtime.start(config, registry, policy)
     assert(config.palReconciliation.enabled == true, "Pal reconciliation core must be enabled")
     assert(config.palReconciliation.normalizedRaidAdapterEnabled == true, "normalized Pal raid-result adapter must be enabled")
     assert(config.palReconciliation.nativeRaidResultBindingEnabled == true, "Pal raid-result native binding must be enabled")
+    assert(config.palReconciliation.attendanceRaidResultBindingEnabled == true, "Pal raid-result attendance binding must be enabled")
     assert(type(config.palReconciliation.nativeRaidLiveTest) == "table", "Pal raid native live-test configuration is required")
     assert(type(config.palReconciliation.nativeRaidLiveTest.enabled) == "boolean", "Pal raid native live-test flag is required")
     assert(config.palReconciliation.leaderDesignation == "first-spawn-of-final-wave", "unsupported Pal raid leader designation")
@@ -4740,8 +4741,30 @@ function Runtime.start(config, registry, policy)
     ))
     state.rayneMerchant = RayneMerchant.create(config.rayneMerchant, state)
     state.settlementRaid = SettlementRaid.start(
-        config.settlementRaid
+        config.settlementRaid,
+        {
+            palRaidResultAdapter = state.palRaidResultAdapter,
+            attendanceAttributionResolver = function(attacker)
+                return state.palRaidNativeBinding
+                    :attribute_attacker(attacker)
+            end,
+        }
     )
+    _G.PWFT_ATTENDANCE_RAID_RESULT_BRIDGE_V1 =
+        state.settlementRaid.attendanceResultBridge
+    if state.settlementRaid.attendanceResultBridge ~= nil then
+        local bridge_status = state.settlementRaid
+            .attendanceResultBridge:status()
+        log(string.format(
+            "ATTENDANCE_RAID_RESULT_BRIDGE_READY api=%s eventAuthority=%s spawnAuthority=%s deathAuthority=%s outcomeAuthority=%s timerSettlement=%s",
+            bridge_status.apiVersion,
+            bridge_status.eventAuthority,
+            bridge_status.spawnAuthority,
+            bridge_status.deathAuthority,
+            bridge_status.outcomeAuthority,
+            tostring(bridge_status.timerCleanupMaySettleRaid)
+        ))
+    end
     local world_balance_config = config.worldBalance
     local unsafe_world_batch_requested =
         world_balance_config.palFactionRage.enabled == true
