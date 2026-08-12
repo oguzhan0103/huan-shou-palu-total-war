@@ -3,14 +3,14 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ExpectedBuildId = "24467282"
+$ExpectedBuildId = "24575825"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $SourceMod = Join-Path $ProjectRoot "mod0\ue4ss\PalFactionTerritory0"
 $Win64Root = Join-Path $GameRoot "Pal\Binaries\Win64"
 $TargetMod = Join-Path $Win64Root "ue4ss\Mods\PalFactionTerritory0"
 $SteamManifest = "E:\SteamLibrary\steamapps\appmanifest_1623730.acf"
 $EvidenceRoot = Join-Path $ProjectRoot "evidence\deployments"
-$EvidencePath = Join-Path $EvidenceRoot "mod0-dev-build24467282.json"
+$EvidencePath = Join-Path $EvidenceRoot "mod0-dev-build24575825.json"
 $RelativeFiles = @(
     Get-ChildItem -LiteralPath $SourceMod -Recurse -File |
         ForEach-Object { $_.FullName.Substring($SourceMod.Length + 1) } |
@@ -73,7 +73,7 @@ $BackupFiles = foreach ($RelativeFile in $RelativeFiles) {
 }
 [ordered]@{
     createdAt = (Get-Date).ToString("o")
-    reason = "Deploy Build 24467282 settlement-raid negotiator lifecycle fix, start-point success override, per-resident hate targeting, and fail-closed multi-route live-test diagnostics alongside the existing mechanism base."
+    reason = "Deploy Build 24575825 mechanism base with reciprocal combat-defender targeting, guard termination release, and the previously accepted commerce, siege, and dialogue runtimes."
     targetMod = $TargetMod
     backupFiles = $BackupFiles
 } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $BackupRoot "backup-manifest.json") -Encoding UTF8

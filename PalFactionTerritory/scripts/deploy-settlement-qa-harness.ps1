@@ -2,7 +2,7 @@
 param()
 
 $ErrorActionPreference = 'Stop'
-$ExpectedBuildId = '24467282'
+$ExpectedBuildId = '24575825'
 $ModuleRoot = Split-Path -Parent $PSScriptRoot
 $Source = Join-Path $ModuleRoot 'mod0\ue4ss\PalFactionTerritoryQAHarness0'
 $ModsRoot = 'E:\SteamLibrary\steamapps\common\Palworld\Pal\Binaries\Win64\ue4ss\Mods'

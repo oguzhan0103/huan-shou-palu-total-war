@@ -177,6 +177,10 @@ function NativeCharacterAdapter.create(options)
             options.executeInGameThread or _G.ExecuteInGameThread,
         logger = options.logger,
         records = {},
+        -- Palworld's AI hate system can retain a valid actor reference after
+        -- OnDeadCharacter has already authoritatively fired. Remember those
+        -- exact actors so guard follow does not wait for reflected IsDead.
+        observedDeadActorNames = {},
         -- SetupInteraction binds BP_InteractableSphere delegates.  Keep a
         -- per-actor latch so a commerce refresh/re-entry cannot bind the same
         -- Blueprint delegate twice; SetActive_Interact_ToAll remains safe to
@@ -1669,10 +1673,17 @@ function NativeCharacterAdapter:_guard_is_dead(actor)
     if not is_valid_object(actor) then
         return true, "guard-actor-unavailable"
     end
-    local component_ok, component = pcall(function()
-        return actor:GetCharacterParameterComponent()
-    end)
-    if not component_ok or not is_valid_object(component) then
+    if self.observedDeadActorNames[safe_full_name(actor)] == true then
+        return true, "authoritative-death-observed"
+    end
+    local component = safe_property(actor, "CharacterParameterComponent")
+    if not is_valid_object(component) then
+        local component_ok, component_value = pcall(function()
+            return actor:GetCharacterParameterComponent()
+        end)
+        component = component_ok and component_value or nil
+    end
+    if not is_valid_object(component) then
         return false, "death-probe-unavailable"
     end
     local dead_ok, dead = pcall(function()
@@ -1687,7 +1698,77 @@ function NativeCharacterAdapter:_guard_is_dead(actor)
         or "guard-alive"
 end
 
-function NativeCharacterAdapter:_guard_combat_target(controller)
+function NativeCharacterAdapter:observe_character_death(actor)
+    if actor == nil then
+        return false, "death-actor-unavailable"
+    end
+    local actor_name = safe_full_name(actor)
+    if actor_name == "<invalid>"
+        or actor_name == "<unreadable>" then
+        return false, "death-actor-name-unavailable"
+    end
+    self.observedDeadActorNames[actor_name] = true
+    self:_log(string.format(
+        "CHARACTER_DEATH_OBSERVED actor=%s authority=PalCharacter.OnDeadCharacter",
+        actor_name
+    ))
+    return true, "authoritative-death-recorded"
+end
+
+local function same_native_object(left, right)
+    if not is_valid_object(left) or not is_valid_object(right) then
+        return false
+    end
+    if left == right then
+        return true
+    end
+    local left_name = safe_full_name(left)
+    return left_name ~= "<invalid>"
+        and left_name ~= "<unreadable>"
+        and left_name == safe_full_name(right)
+end
+
+function NativeCharacterAdapter:_guard_target_is_follow_ally(
+    target,
+    follow_target
+)
+    if same_native_object(target, follow_target) then
+        return true, "follow-target"
+    end
+    local static_component = safe_property(
+        target,
+        "StaticCharacterParameterComponent"
+    )
+    if not is_valid_object(static_component)
+        or safe_property(static_component, "IsPal") ~= true then
+        return false, "not-pal"
+    end
+    local component = safe_property(
+        target,
+        "CharacterParameterComponent"
+    )
+    if not is_valid_object(component) then
+        local component_ok, component_value = pcall(function()
+            return target:GetCharacterParameterComponent()
+        end)
+        component = component_ok and component_value or nil
+    end
+    if not is_valid_object(component) then
+        return false, "pal-character-parameter-unavailable"
+    end
+    local owned_ok, is_owned_pal = pcall(function()
+        return component:IsPlayersOtomo()
+    end)
+    if not owned_ok or is_owned_pal ~= true then
+        return false, "not-player-owned-pal"
+    end
+    return true, "player-owned-pal"
+end
+
+function NativeCharacterAdapter:_guard_combat_target(
+    controller,
+    follow_target
+)
     if not is_valid_object(controller) then
         return nil
     end
@@ -1701,9 +1782,23 @@ function NativeCharacterAdapter:_guard_combat_target(controller)
         return hate_system:FindMostHateTarget()
     end)
     if target_ok and is_valid_object(target) then
-        return target
+        -- Palworld's hate system can retain a native actor for a short time
+        -- after that character has died.  Treating that stale reference as
+        -- live combat leaves a guard permanently parked after a raid.
+        local target_dead = self:_guard_is_dead(target)
+        if not target_dead then
+            local allied, allied_reason =
+                self:_guard_target_is_follow_ally(
+                    target,
+                    follow_target
+                )
+            if allied then
+                return nil, allied_reason, target
+            end
+            return target, nil, nil
+        end
     end
-    return nil
+    return nil, nil, nil
 end
 
 function NativeCharacterAdapter:_guard_follow_once(record)
@@ -1719,6 +1814,8 @@ function NativeCharacterAdapter:_guard_follow_once(record)
     if dead then
         record.downed = true
         record.following = false
+        record.followScheduled = false
+        record.cancelled = true
         if not record.downedLogged then
             record.downedLogged = true
             self:_log(string.format(
@@ -1726,6 +1823,34 @@ function NativeCharacterAdapter:_guard_follow_once(record)
                 record.runtimeId,
                 safe_full_name(record.actor),
                 tostring(death_reason)
+            ))
+        end
+        if self.records[record.runtimeId] == record then
+            self.records[record.runtimeId] = nil
+        end
+        if not record.terminatedNotified then
+            record.terminatedNotified = true
+            local callback_ok = true
+            local callback_detail = "not-registered"
+            if type(record.onTerminated) == "function" then
+                callback_ok, callback_detail = pcall(
+                    record.onTerminated,
+                    {
+                        runtimeId = record.runtimeId,
+                        actor = record.actor,
+                        reason = "guard-downed",
+                    }
+                )
+                if callback_ok then
+                    callback_detail = "notified"
+                end
+            end
+            self:_log(string.format(
+                "PLAYER_GUARD_RUNTIME_RELEASED runtime=%s actor=%s reason=guard-downed callback=%s detail=%s",
+                record.runtimeId,
+                safe_full_name(record.actor),
+                tostring(callback_ok),
+                tostring(callback_detail)
             ))
         end
         return false, "guard-downed"
@@ -1760,7 +1885,11 @@ function NativeCharacterAdapter:_guard_follow_once(record)
         record.guardAIInitialized = true
     end
 
-    local combat_target = self:_guard_combat_target(controller)
+    local combat_target, ignored_reason, ignored_target =
+        self:_guard_combat_target(
+            controller,
+            record.followTarget
+        )
     if combat_target ~= nil then
         if record.inCombat ~= true then
             self:_log(string.format(
@@ -1773,6 +1902,23 @@ function NativeCharacterAdapter:_guard_follow_once(record)
         record.inCombat = true
         record.following = false
         return true, "guard-combat-preserved"
+    end
+
+    local ignored_target_name = ignored_target ~= nil
+        and safe_full_name(ignored_target)
+        or nil
+    if ignored_target_name ~= nil
+        and record.lastIgnoredFriendlyTargetName
+            ~= ignored_target_name then
+        record.lastIgnoredFriendlyTargetName =
+            ignored_target_name
+        self:_log(string.format(
+            "PLAYER_GUARD_FRIENDLY_TARGET_IGNORED runtime=%s actor=%s target=%s reason=%s",
+            record.runtimeId,
+            safe_full_name(record.actor),
+            safe_full_name(ignored_target),
+            tostring(ignored_reason)
+        ))
     end
 
     local resumed = record.inCombat == true
@@ -1987,6 +2133,10 @@ function NativeCharacterAdapter:create_guard_provider(
                 rotation = context.rotation
                     or { Pitch = 0, Yaw = 0, Roll = 0 },
             })
+            local record = adapter.records[runtime_id]
+            if type(record) == "table" then
+                record.onTerminated = context.onTerminated
+            end
             local follow_ready, follow_error =
                 adapter:_activate_guard_follow(
                     runtime_id,

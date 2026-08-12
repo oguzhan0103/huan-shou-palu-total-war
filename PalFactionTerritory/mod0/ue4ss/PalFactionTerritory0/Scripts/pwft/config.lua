@@ -1,7 +1,7 @@
 return {
     schemaVersion = "1.0.0",
     releaseId = "PalFactionTerritory0-mod0",
-    expectedSteamBuildId = "24467282",
+    expectedSteamBuildId = "24575825",
     defaultMapMode = "Original",
 
     -- The progression core owns reputation, independent human memberships,

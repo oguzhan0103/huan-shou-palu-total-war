@@ -6,7 +6,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ExpectedBuildId = "24467282"
+$ExpectedBuildId = "24575825"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $WorkspaceRoot = Split-Path -Parent $ProjectRoot
 $AppManifest = "E:\SteamLibrary\steamapps\appmanifest_1623730.acf"
@@ -26,7 +26,7 @@ $LogicModsRoot = Join-Path $PaksRoot "LogicMods"
 $FactionProject = $ProjectRoot
 $EconomyShopContract = Join-Path $FactionProject "contracts\faction_economy_shops.v1.json"
 $EvidenceRoot = Join-Path $ProjectRoot "evidence\preflight"
-$EvidencePath = Join-Path $EvidenceRoot "install-audit-build24467282.json"
+$EvidencePath = Join-Path $EvidenceRoot "install-audit-build24575825.json"
 
 $BlockingProcesses = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
     $_.ProcessName -in @("Palworld-Win64-Shipping", "Palworld", "UnrealEditor", "UnrealEditor-Cmd", "UAssetGUI", "FModel")
@@ -154,7 +154,7 @@ $ExpectedQaHotkeySetting = if ($AllowQaHotkey) {
     "qaHotkeyEnabled = false"
 }
 foreach ($RequiredConfig in @(
-    'expectedSteamBuildId = "24467282"',
+    'expectedSteamBuildId = "24575825"',
     "enableSaveWrites = false",
     $ExpectedQaHotkeySetting,
     "nativeFactionMerchantSpawnEnabled = false",

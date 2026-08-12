@@ -626,7 +626,7 @@ def main() -> int:
     pal_mask_text = (SCRIPTS_ROOT / "pwft" / "pal_faction_island_mask.lua").read_text(encoding="utf-8")
 
     require(
-        'expectedSteamBuildId = "24467282"' in config_text,
+        'expectedSteamBuildId = "24575825"' in config_text,
         "runtime host build must match the current Steam appmanifest",
     )
     require(

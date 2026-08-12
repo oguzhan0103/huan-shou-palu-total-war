@@ -97,6 +97,78 @@ for index, request in ipairs(requests) do
     assert(request.Squad == nil)
 end
 
+local defender_attacker = valid_object("PalCharacter DefenderTarget")
+local defender_hate = valid_object("PalHate Defender")
+local defender_hate_calls = 0
+function defender_hate:ChangeHate(target, value)
+    assert(target == defender_attacker)
+    assert(value == Config.settlementRaid.attendanceSimulation
+        .targetResidentHate * 2.0)
+    defender_hate_calls = defender_hate_calls + 1
+end
+local defender_controller = valid_object("PalAIController Defender")
+local defender_add_calls = 0
+local defender_active_calls = 0
+local defender_approach_calls = 0
+function defender_controller:GetHateSystem()
+    return defender_hate
+end
+function defender_controller:AddTargetNPC(target)
+    assert(target == defender_attacker)
+    defender_add_calls = defender_add_calls + 1
+end
+function defender_controller:SetActiveAI(active)
+    assert(active == true)
+    defender_active_calls = defender_active_calls + 1
+end
+function defender_controller:SimpleMoveToActorWithLineTraceGround(
+    target,
+    acceptance_radius
+)
+    assert(target == defender_attacker)
+    assert(acceptance_radius == 0)
+    defender_approach_calls = defender_approach_calls + 1
+end
+local defender_actor = valid_object("BP_NPC_Hunter_C Defender")
+local defender_battle_calls = 0
+function defender_actor:GetController()
+    return defender_controller
+end
+function defender_actor:ChangeBattleModeFlag_ToAll(active)
+    assert(active == true)
+    defender_battle_calls = defender_battle_calls + 1
+end
+local defender_ready, defender_error = test.arm_resident_defender(
+    {
+        actor = defender_actor,
+        name = defender_actor:GetFullName(),
+    },
+    defender_attacker,
+    "offline-spec",
+    Config.settlementRaid.attendanceSimulation.targetResidentHate * 2.0
+)
+assert(defender_ready == true)
+assert(defender_error == nil)
+assert(defender_hate_calls == 1)
+assert(defender_add_calls == 1)
+assert(defender_active_calls == 1)
+assert(defender_battle_calls == 1)
+assert(defender_approach_calls == 1)
+assert(defender_controller.R1AttackTarget == defender_attacker)
+
+local civilian_ready, civilian_error = test.arm_resident_defender(
+    {
+        actor = defender_actor,
+        name = "BP_NPC_Trader_C Civilian",
+    },
+    defender_attacker,
+    "offline-spec",
+    350000.0
+)
+assert(civilian_ready == false)
+assert(civilian_error == "resident-not-combat-defender")
+assert(defender_hate_calls == 1)
+
 local destroyed = {}
 local attacker_one = valid_object("PalCharacter SpawnedAttacker1")
 function attacker_one:K2_DestroyActor()
@@ -135,4 +207,4 @@ assert(destroyed[attacker_two:GetFullName()] == true)
 assert(#cleanup_instance.attendanceNativeSpawnHandles == 0)
 assert(next(cleanup_instance.attendanceSpawnedActorNames) == nil)
 
-print("PASS settlement raid native countdown spawn (Kismet FName fallback; four immediate NPC-manager requests; resident-priority siege; explicit actor cleanup; no loaded-world fallback)")
+print("PASS settlement raid native countdown spawn (Kismet FName fallback; four immediate NPC-manager requests; reciprocal combat-defender arming; resident-priority siege; explicit actor cleanup; no loaded-world fallback)")

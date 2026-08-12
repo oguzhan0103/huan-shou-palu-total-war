@@ -13,7 +13,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "Mod 0 verification failed; package was not created."
 }
 
-$ReleaseName = "PalFactionTerritory0-v1.0.2-build24467282"
+$ReleaseName = "PalFactionTerritory0-v1.0.2-build24575825"
 $StageRoot = Join-Path $OutputRoot "$ReleaseName-staging"
 $ZipPath = Join-Path $OutputRoot "$ReleaseName.zip"
 $HashPath = "$ZipPath.sha256.json"
@@ -65,7 +65,7 @@ $Manifest = [ordered]@{
     schemaVersion = "1.0.0"
     releaseId = "PalFactionTerritory0-v1.0.2"
     releaseVersion = "1.0.2"
-    expectedSteamBuildId = "24467282"
+    expectedSteamBuildId = "24575825"
     installRelativeRoot = "Pal/Binaries/Win64/ue4ss"
     safetyMode = "mod-owned-state-no-palworld-save-write"
     files = $ManifestFiles

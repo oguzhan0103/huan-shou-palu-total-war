@@ -366,6 +366,87 @@ local function player_is_near_settlement(instance, player_location)
             * instance.config.settlement.triggerRadius
 end
 
+local function is_combat_resident_name(name)
+    return string.find(name, "BP_NPC_Hunter_C", 1, true) ~= nil
+        or string.find(name, "BP_NPC_Police_C", 1, true) ~= nil
+        or string.find(name, "Guardman", 1, true) ~= nil
+end
+
+-- Native Pal attackers already receive every nearby human as a hate target.
+-- Combat-capable residents need the reciprocal target as well; otherwise a
+-- visitor guard can keep obeying its follow order while an invader is walking
+-- toward it.  Do not arm traders or ordinary residents: this route is limited
+-- to police/guard archetypes and lets their native controller own the fight.
+local function arm_resident_defender(
+    resident,
+    attacker,
+    source,
+    defender_hate
+)
+    if type(resident) ~= "table"
+        or not is_valid(resident.actor)
+        or not is_combat_resident_name(resident.name or "") then
+        return false, "resident-not-combat-defender"
+    end
+    local controller_ok, controller = safe_call(
+        resident.actor,
+        "GetController"
+    )
+    if not controller_ok or not is_valid(controller) then
+        return false, "defender-controller-not-ready"
+    end
+    local hate_ok, hate = safe_call(controller, "GetHateSystem")
+    if not hate_ok or not is_valid(hate) then
+        return false, "defender-hate-not-ready"
+    end
+
+    local add_ok = safe_call(controller, "AddTargetNPC", attacker)
+    local change_ok = safe_call(
+        hate,
+        "ChangeHate",
+        attacker,
+        defender_hate
+    )
+    local target_set = pcall(function()
+        controller.R1AttackTarget = attacker
+    end)
+    local active_ok = safe_call(controller, "SetActiveAI", true)
+    local battle_ok = safe_call(
+        resident.actor,
+        "ChangeBattleModeFlag_ToAll",
+        true
+    )
+    local approach_ok = safe_call(
+        controller,
+        "SimpleMoveToActorWithLineTraceGround",
+        attacker,
+        0
+    )
+    local ready = add_ok
+        and change_ok
+        and target_set
+        and active_ok
+        and battle_ok
+    log(string.format(
+        "SETTLEMENT_DEFENDER_ARMED source=%s defender=%s attacker=%s hate=%.1f added=%s changed=%s targetSet=%s activeAI=%s battle=%s approach=%s ready=%s",
+        tostring(source),
+        resident.name,
+        safe_full_name(attacker),
+        defender_hate,
+        tostring(add_ok),
+        tostring(change_ok),
+        tostring(target_set),
+        tostring(active_ok),
+        tostring(battle_ok),
+        tostring(approach_ok),
+        tostring(ready)
+    ))
+    if ready then
+        return true, nil
+    end
+    return false, "defender-activation-incomplete"
+end
+
 local function find_residents(instance)
     local residents = {}
     if type(FindAllOf) ~= "function" then
@@ -436,6 +517,7 @@ local function target_residents(instance, attacker, source, target_hate)
         or instance.config.targetHate
     local added_target_count = 0
     local hate_target_count = 0
+    local defenders_armed = 0
     local nearest = nil
     local nearest_preferred = nil
     for _, resident in ipairs(residents) do
@@ -488,6 +570,15 @@ local function target_residents(instance, attacker, source, target_hate)
                 hate_target_count = hate_target_count + 1
             end
         end
+        local armed = arm_resident_defender(
+            resident,
+            attacker,
+            source,
+            resident_hate * 2.0
+        )
+        if armed then
+            defenders_armed = defenders_armed + 1
+        end
     end
 
     local primary = nearest_preferred or nearest
@@ -526,12 +617,13 @@ local function target_residents(instance, attacker, source, target_hate)
     end
     instance.targetAssignments = instance.targetAssignments + 1
     log(string.format(
-        "TARGET_ASSIGNED source=%s attacker=%s residents=%d addedTargets=%d hateTargets=%d hatePerTarget=%.1f nearest=%s primary=%s primaryBonus=%.1f primaryBoosted=%s primaryTargetSet=%s approachRequested=%s mostHated=%s assignments=%d",
+        "TARGET_ASSIGNED source=%s attacker=%s residents=%d addedTargets=%d hateTargets=%d defendersArmed=%d hatePerTarget=%.1f nearest=%s primary=%s primaryBonus=%.1f primaryBoosted=%s primaryTargetSet=%s approachRequested=%s mostHated=%s assignments=%d",
         tostring(source),
         safe_full_name(attacker),
         #residents,
         added_target_count,
         hate_target_count,
+        defenders_armed,
         resident_hate,
         nearest and nearest.name or "<none>",
         primary and primary.name or "<none>",
@@ -1506,6 +1598,10 @@ local function register_native_incident_hooks(instance)
             local victim = safe_property(dead_info, "SelfActor")
             if not is_valid(victim) then
                 victim = safe_hook_param_get(context)
+            end
+            if type(instance.attendanceDeathObserver) == "function"
+                and is_valid(victim) then
+                instance.attendanceDeathObserver(victim)
             end
             local attacker = safe_property(dead_info, "LastAttacker")
             local recorded = bridge:record_death(victim, attacker)
@@ -3953,6 +4049,7 @@ function SettlementRaid.start(config, options)
         attendanceDestroyedCount = 0,
         attendanceDestroyFailureCount = 0,
         attendanceResultBridge = attendance_result_bridge,
+        attendanceDeathObserver = options.attendanceDeathObserver,
     }
 
     function instance:on_world_loaded(source)
@@ -4334,6 +4431,7 @@ SettlementRaid._test = {
     make_native_name = make_native_name,
     spawn_native_attendance_wave = spawn_native_attendance_wave,
     destroy_attendance_attackers = destroy_attendance_attackers,
+    arm_resident_defender = arm_resident_defender,
 }
 
 return SettlementRaid

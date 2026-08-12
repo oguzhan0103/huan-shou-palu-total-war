@@ -41,7 +41,6 @@ local string_library =
 function string_library:Conv_StringToName(value)
     return "FName:" .. value
 end
-
 local merchant_class = valid_object(
     "BlueprintGeneratedClass BP_NPC_Male_Trader01_v04_C"
 )
@@ -366,6 +365,8 @@ local provider = adapter:create_guard_provider(
 )
 local local_player = valid_object("BP_Player_Female_C LocalPlayer")
 local_player.location = { X = 100, Y = 200, Z = 5 }
+local guard_terminated_count = 0
+local guard_terminated_detail = nil
 local provider_handle = provider.deploy(
     "pwft.faction.free_pal_alliance",
     "leader-guard-001",
@@ -373,6 +374,10 @@ local provider_handle = provider.deploy(
         location = { X = 100, Y = 200, Z = 5 },
         rotation = { Pitch = 0, Yaw = 180, Roll = 0 },
         followTarget = local_player,
+        onTerminated = function(detail)
+            guard_terminated_count = guard_terminated_count + 1
+            guard_terminated_detail = detail
+        end,
     }
 )
 assert(provider_handle.actor:IsValid())
@@ -406,15 +411,51 @@ assert(provider_controller.moveCount == 2)
 provider_handle.actor.location = { X = 250, Y = 200, Z = 5 }
 local_player.location = { X = 500, Y = 200, Z = 5 }
 local hostile = valid_object("BP_NPC_Hostile_C Test")
+local hostile_parameters = valid_object(
+    "PalCharacterParameterComponent HostileTest"
+)
+hostile_parameters.dead = false
+function hostile_parameters:IsDead()
+    return self.dead
+end
+hostile.CharacterParameterComponent = hostile_parameters
+function hostile:GetCharacterParameterComponent()
+    error("real Pal raid actors expose the reflected property")
+end
 provider_handle.actor.hateSystem.target = hostile
 run_next_guard_pulse()
 assert(provider_controller.moveCount == 2)
-provider_handle.actor.hateSystem.target = nil
+-- The native hate system may select the local player's summoned Pal after
+-- the hostile target dies.  That actor is an ally, not ongoing combat.
+local owned_pal = valid_object("BP_PlayerOwnedPal_C Test")
+owned_pal.StaticCharacterParameterComponent = valid_object(
+    "PalStaticCharacterParameterComponent OwnedPalTest"
+)
+owned_pal.StaticCharacterParameterComponent.IsPal = true
+owned_pal.CharacterParameterComponent = valid_object(
+    "PalCharacterParameterComponent OwnedPalTest"
+)
+function owned_pal.CharacterParameterComponent:IsPlayersOtomo()
+    return true
+end
+provider_handle.actor.hateSystem.target = owned_pal
 run_next_guard_pulse()
 assert(provider_controller.moveCount == 3)
+-- The engine keeps the dead actor as FindMostHateTarget until cleanup.  The
+-- follower must ignore that stale reference and immediately resume.
+provider_handle.actor.hateSystem.target = hostile
+hostile_parameters.dead = true
+local observed, observed_reason = adapter:observe_character_death(hostile)
+assert(observed == true)
+assert(observed_reason == "authoritative-death-recorded")
+run_next_guard_pulse()
+assert(provider_controller.moveCount == 4)
 provider_handle.actor.characterParameters.dead = true
 run_next_guard_pulse()
 assert(#delayed_callbacks == 0)
+assert(adapter.records[provider_handle.runtimeId] == nil)
+assert(guard_terminated_count == 1)
+assert(guard_terminated_detail.reason == "guard-downed")
 -- Palworld may remove a dead body before the player requests recall.  The
 -- adapter must still clear its runtime record so that faction can redeploy.
 provider_handle.actor:K2_DestroyActor()
@@ -424,8 +465,11 @@ assert(adapter.records[provider_handle.runtimeId] == nil)
 local follow_ready_logged = false
 local combat_preserved_logged = false
 local downed_logged = false
+local runtime_released_logged = false
 local pulse_logged = false
 local movement_logged = false
+local resumed_logged = false
+local friendly_target_ignored_logged = false
 for _, message in ipairs(adapter_logs) do
     follow_ready_logged = follow_ready_logged
         or string.find(
@@ -448,6 +492,13 @@ for _, message in ipairs(adapter_logs) do
             1,
             true
         ) ~= nil
+    runtime_released_logged = runtime_released_logged
+        or string.find(
+            message,
+            "PLAYER_GUARD_RUNTIME_RELEASED",
+            1,
+            true
+        ) ~= nil
     pulse_logged = pulse_logged
         or string.find(
             message,
@@ -462,12 +513,39 @@ for _, message in ipairs(adapter_logs) do
             1,
             true
         ) ~= nil
+    resumed_logged = resumed_logged
+        or (string.find(
+            message,
+            "PLAYER_GUARD_FOLLOW_READY",
+            1,
+            true
+        ) ~= nil and string.find(
+            message,
+            "resumedAfterCombat=true",
+            1,
+            true
+        ) ~= nil)
+    friendly_target_ignored_logged = friendly_target_ignored_logged
+        or (string.find(
+            message,
+            "PLAYER_GUARD_FRIENDLY_TARGET_IGNORED",
+            1,
+            true
+        ) ~= nil and string.find(
+            message,
+            "reason=player-owned-pal",
+            1,
+            true
+        ) ~= nil)
 end
 assert(follow_ready_logged)
 assert(combat_preserved_logged)
 assert(downed_logged)
+assert(runtime_released_logged)
 assert(pulse_logged)
 assert(movement_logged)
+assert(resumed_logged)
+assert(friendly_target_ignored_logged)
 
 -- UE4SS can return another Lua wrapper for the same native actor.  Recall
 -- must cancel the authoritative runtime record, not depend on actor-wrapper

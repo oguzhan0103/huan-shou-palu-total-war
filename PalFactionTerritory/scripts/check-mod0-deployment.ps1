@@ -3,12 +3,12 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ExpectedBuildId = "24467282"
+$ExpectedBuildId = "24575825"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $SourceMod = Join-Path $ProjectRoot "mod0\ue4ss\PalFactionTerritory0"
 $TargetMod = Join-Path $GameRoot "Pal\Binaries\Win64\ue4ss\Mods\PalFactionTerritory0"
 $SteamManifest = "E:\SteamLibrary\steamapps\appmanifest_1623730.acf"
-$EvidencePath = Join-Path $ProjectRoot "evidence\deployments\mod0-dev-build24467282.json"
+$EvidencePath = Join-Path $ProjectRoot "evidence\deployments\mod0-dev-build24575825.json"
 
 foreach ($RequiredPath in @($SteamManifest, $SourceMod, $TargetMod, $EvidencePath)) {
     if (-not (Test-Path -LiteralPath $RequiredPath)) {

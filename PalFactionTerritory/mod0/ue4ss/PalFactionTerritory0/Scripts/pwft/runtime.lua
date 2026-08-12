@@ -2699,6 +2699,26 @@ local function register_guard_live_test(config, state)
                         Roll = 0,
                     },
                     followTarget = pawn,
+                    onTerminated = function(detail)
+                        local live_handle =
+                            state.guardLiveTestHandle
+                        local matches =
+                            type(live_handle) == "table"
+                            and type(detail) == "table"
+                            and live_handle.runtimeId
+                                == detail.runtimeId
+                        if matches then
+                            state.guardLiveTestHandle = nil
+                        end
+                        log(string.format(
+                            "PLAYER_GUARD_LIVE_TEST_TERMINATED faction=%s runtime=%s actor=%s reason=%s slotReleased=%s saveWrites=0",
+                            qa.factionId,
+                            tostring(detail and detail.runtimeId),
+                            safe_full_name(detail and detail.actor),
+                            tostring(detail and detail.reason),
+                            tostring(matches)
+                        ))
+                    end,
                 }
             )
             if not deployed or type(handle_or_error) ~= "table" then
@@ -4747,6 +4767,12 @@ function Runtime.start(config, registry, policy)
             attendanceAttributionResolver = function(attacker)
                 return state.palRaidNativeBinding
                     :attribute_attacker(attacker)
+            end,
+            attendanceDeathObserver = function(victim)
+                if state.nativeCharacterAdapter ~= nil then
+                    state.nativeCharacterAdapter
+                        :observe_character_death(victim)
+                end
             end,
         }
     )
