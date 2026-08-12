@@ -141,11 +141,11 @@ return {
         -- the economy contract settlement switch remains false.
         nativeSaleReplicationProbeEnabled = true,
         -- Merchant Guild economy counters use the generated PFT_Economy_*
-        -- ItemShop rows. Keep native spawning locked until the FTPoint90
-        -- island ground transform and the compiled rows pass live review.
-        nativeEconomyMerchantSpawnEnabled = false,
+        -- ItemShop rows. Their native spawn, interaction, seven-row binding,
+        -- ground placement and cleanup all passed live review at FTPoint90.
+        nativeEconomyMerchantSpawnEnabled = true,
         nativeEconomyMerchantSpawnReason =
-            "runtime-created-generic-spawner-replaced-by-native-merchant-reuse",
+            "ftpoint90-seven-counter-live-accepted-2026-08-11",
         nativeFactionMerchantSpawnEnabled = false,
         nativeFactionMerchantSpawnReason =
             "ftpoint90-market-island-live-ground-accepted-2026-08-11",
@@ -177,6 +177,20 @@ return {
             key = "F9",
             factionId = "pwft.faction.rayne_syndicate",
             forwardDistance = 600,
+        },
+        -- Production lifecycle: load the accepted fixed market only while a
+        -- local player is near the island, then destroy all owned counters
+        -- after departure. The wider removal radius prevents border thrash.
+        economyMerchantPresence = {
+            enabled = true,
+            -- The accepted market is offset from FTPoint90 and the tower's
+            -- level-object origin is not its visible mesh pivot. UE units
+            -- are centimetres, so use a forgiving 180 m island-arrival
+            -- envelope with 240 m hysteresis.
+            activationRadius = 18000,
+            deactivationRadius = 24000,
+            pollIntervalMs = 2000,
+            initialDelayMs = 2500,
         },
     },
 
@@ -228,7 +242,7 @@ return {
     -- the existing FTPoint24 map-icon click handler after the map is open.
     -- This temporary route is used to reach Small Settlement for the
     -- authorised raid test and is reverted before release.
-    enableMapFastTravelSelectionProbe = true,
+    enableMapFastTravelSelectionProbe = false,
     mapFastTravelSelectionProbeTarget = "FTPoint24",
     -- Palworld queries this for every visible map point during refresh.  The
     -- gate may return false for hostile destinations, but must never create a

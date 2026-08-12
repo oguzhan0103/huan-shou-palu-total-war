@@ -372,6 +372,12 @@ assert(manager_runtime:status().activeCount == 1)
 
 local market_spawn_rows = {}
 local market_handle_despawns = 0
+local market_world_abandons = 0
+local bridge_world_clears = 0
+bridge.clear_world_vendor_state = function()
+    bridge_world_clears = bridge_world_clears + 1
+    return true, "world-vendor-state-cleared"
+end
 local market_adapter = {
     asyncMerchantSpawnerEnabled = true,
     spawn_merchant_async = function(_, plan, callbacks)
@@ -395,6 +401,10 @@ local market_adapter = {
         assert(handle.factionId ~= nil)
         market_handle_despawns = market_handle_despawns + 1
         return true
+    end,
+    abandon_world_records = function()
+        market_world_abandons = market_world_abandons + 1
+        return { ok = true, abandonedCount = 7 }
     end,
 }
 local market_runtime = FactionEconomyMerchantRuntime.create(
@@ -426,6 +436,20 @@ assert(market_runtime:status().activeCount == 0)
 market_spawn_rows = {}
 local reentered_market = market_runtime:activate_market(root, rotation)
 assert(reentered_market.ok)
+assert(market_runtime:status().activeCount == 7)
+local world_reloaded = market_runtime:deactivate_market(
+    "merchant-presence-world-reload"
+)
+assert(world_reloaded.ok)
+assert(world_reloaded.reason == "economy-market-world-reload-abandoned")
+assert(#world_reloaded.removedFactionIds == 7)
+assert(market_runtime:status().activeCount == 0)
+assert(market_handle_despawns == 7)
+assert(market_world_abandons == 1)
+assert(bridge_world_clears == 1)
+market_spawn_rows = {}
+local after_world_reload = market_runtime:activate_market(root, rotation)
+assert(after_world_reload.ok)
 assert(market_runtime:status().activeCount == 7)
 
 local routed_player = {

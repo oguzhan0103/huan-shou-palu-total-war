@@ -155,6 +155,15 @@ assert(
     _G.PWFT_ECONOMY_MERCHANT_RUNTIME_V1
         == state.factionEconomyMerchantRuntime
 )
+assert(
+    _G.PWFT_ECONOMY_MERCHANT_PRESENCE_V1
+        == state.factionEconomyMerchantPresence
+)
+assert(state.factionEconomyMerchantPresence:status().enabled == true)
+assert(
+    state.factionEconomyMerchantPresence:status().lastReason
+        == "waiting-for-world"
+)
 assert(_G.PWFT_FACTION_UI_MODEL_V1 == state.factionUiModel)
 assert(_G.PWFT_FACTION_UI_V1 == state.factionUiPresenter)
 assert(
@@ -423,7 +432,7 @@ assert(
 assert(
     string.find(
         output.messages[#output.messages],
-        "guildAuthorised=false guildCounters=0",
+        "guildAuthorised=true guildCounters=0",
         1,
         true
     ) ~= nil

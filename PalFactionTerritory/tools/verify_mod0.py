@@ -576,6 +576,9 @@ def main() -> int:
     faction_economy_merchant_runtime_text = (
         SCRIPTS_ROOT / "pwft" / "faction_economy_merchant_runtime.lua"
     ).read_text(encoding="utf-8")
+    faction_economy_merchant_presence_text = (
+        SCRIPTS_ROOT / "pwft" / "faction_economy_merchant_presence.lua"
+    ).read_text(encoding="utf-8")
     faction_defense_text = (SCRIPTS_ROOT / "pwft" / "faction_defense.lua").read_text(encoding="utf-8")
     faction_guard_text = (SCRIPTS_ROOT / "pwft" / "faction_guard.lua").read_text(encoding="utf-8")
     faction_join_text = (SCRIPTS_ROOT / "pwft" / "faction_join.lua").read_text(encoding="utf-8")
@@ -783,6 +786,16 @@ def main() -> int:
     require("io." not in faction_economy_shop_text, "economy shop catalog cannot write files")
     require("FactionEconomyMerchantRuntime.create(" in runtime_text, "Merchant Guild economy runtime is not wired")
     require("_G.PWFT_ECONOMY_MERCHANT_RUNTIME_V1" in runtime_text, "versioned Merchant Guild economy runtime is not exported")
+    require("FactionEconomyMerchantPresence.create(" in runtime_text, "Merchant Guild production presence is not wired")
+    require("_G.PWFT_ECONOMY_MERCHANT_PRESENCE_V1" in runtime_text, "versioned Merchant Guild presence is not exported")
+    require("merchant-presence-world-reload" in faction_economy_merchant_presence_text, "Merchant Guild world reload cleanup is missing")
+    require("merchant-presence-player-departed" in faction_economy_merchant_presence_text, "Merchant Guild distance cleanup is missing")
+    require("io." not in faction_economy_merchant_presence_text, "Merchant Guild presence cannot write files")
+    require("LoopAsync(presence.pollIntervalMs, callback)" in runtime_text, "Merchant Guild durable presence scheduler is missing")
+    require("ECONOMY_MERCHANT_PRESENCE_SCHEDULER_READY" in runtime_text, "Merchant Guild scheduler evidence log is missing")
+    require('"PalPlayerController_C"' in runtime_text and "UEHelpers.GetPlayerController" in runtime_text, "Merchant Guild local-player fallback routes are missing")
+    require("ECONOMY_MERCHANT_PRESENCE_LIVE_ROOT" in runtime_text and "referenceFastTravelPointId" in runtime_text, "Merchant Guild FTPoint live-root rebasing is missing")
+    require("set_live_root" in faction_economy_merchant_presence_text, "Merchant Guild live-root update API is missing")
     require("PFT_Economy_" not in faction_economy_merchant_runtime_text, "economy runtime must consume generated catalog rows instead of hardcoding row names")
     require("economyCatalogBinding = true" in faction_economy_merchant_runtime_text, "represented-faction economy settlement metadata missing")
     require("economy-market-runtime-disabled" in faction_economy_merchant_runtime_text, "economy market activation safety gate missing")

@@ -320,6 +320,21 @@ function CommerceBridge:clear_vendor_interaction()
     self.pendingVendorInteraction = nil
 end
 
+function CommerceBridge:clear_world_vendor_state()
+    -- A load-map callback runs after the previous UWorld has already started
+    -- tearing down. Do not stringify or invoke any vendor/component UObject
+    -- from that world: replace the string-keyed routing tables atomically.
+    self.vendorFactions = {}
+    self.vendorMetadata = {}
+    self.componentFactions = {}
+    self.componentMetadata = {}
+    self.pendingBuys = {}
+    self.pendingSales = {}
+    self.activeUiSaleAttempt = nil
+    self.pendingVendorInteraction = nil
+    return true, "world-vendor-state-cleared"
+end
+
 function CommerceBridge:register_vendor_actor(
     faction_id,
     actor,

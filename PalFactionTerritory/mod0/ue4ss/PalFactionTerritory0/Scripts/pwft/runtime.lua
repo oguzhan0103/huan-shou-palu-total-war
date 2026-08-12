@@ -13,6 +13,8 @@ local FactionEconomyShopCatalog =
     require("pwft.faction_economy_shop_catalog")
 local FactionEconomyMerchantRuntime =
     require("pwft.faction_economy_merchant_runtime")
+local FactionEconomyMerchantPresence =
+    require("pwft.faction_economy_merchant_presence")
 local FactionGuard = require("pwft.faction_guard")
 local FactionJoin = require("pwft.faction_join")
 local FactionJoinNativePresenter =
@@ -2443,17 +2445,55 @@ local function scan_tower_bindings(config, registry, state)
 end
 
 local function find_local_player_transform()
-    if type(FindAllOf) ~= "function" then
-        return nil, nil, "FindAllOf-unavailable"
+    local controllers = {}
+    local seen = {}
+    local function append_controller(controller)
+        if is_valid_object(controller) then
+            local key = safe_full_name(controller)
+            if seen[key] ~= true then
+                seen[key] = true
+                table.insert(controllers, controller)
+            end
+        end
     end
-    for _, class_name in ipairs({
-        "PalPlayerController",
-        "PlayerController",
-    }) do
-        local ok, controllers = pcall(FindAllOf, class_name)
-        if ok and type(controllers) == "table" then
-            for _, controller in pairs(controllers) do
-                if is_valid_object(controller) then
+
+    -- Prefer the same local-player routes already proven by progression and
+    -- settlement runtime. FindAllOf can retain a stale controller across a
+    -- fast-travel/world-partition transition even though FindFirstOf and
+    -- UEHelpers already expose the new local pawn.
+    if UEHelpers ~= nil
+        and type(UEHelpers.GetPlayerController) == "function" then
+        pcall(function()
+            append_controller(UEHelpers.GetPlayerController())
+        end)
+    end
+    if type(FindFirstOf) == "function" then
+        for _, class_name in ipairs({
+            "PalPlayerController",
+            "PalPlayerController_C",
+            "PlayerController",
+        }) do
+            local ok, controller = pcall(FindFirstOf, class_name)
+            if ok then
+                append_controller(controller)
+            end
+        end
+    end
+    if type(FindAllOf) == "function" then
+        for _, class_name in ipairs({
+            "PalPlayerController",
+            "PlayerController",
+        }) do
+            local ok, found = pcall(FindAllOf, class_name)
+            if ok and type(found) == "table" then
+                for _, controller in pairs(found) do
+                    append_controller(controller)
+                end
+            end
+        end
+    end
+
+    for _, controller in ipairs(controllers) do
                     local local_ok, is_local = pcall(function()
                         if controller.IsLocalPlayerController ~= nil then
                             return controller:IsLocalPlayerController()
@@ -2490,11 +2530,291 @@ local function find_local_player_transform()
                             end
                         end
                     end
+    end
+    return nil, nil, "local-player-transform-unavailable"
+end
+
+local function resolve_economy_merchant_live_root(state)
+    local presence = state.factionEconomyMerchantPresence
+    if presence == nil or type(FindAllOf) ~= "function" then
+        return nil, "merchant-presence-ftpoint-scan-unavailable"
+    end
+    local player_location, _, player_error, player_pawn =
+        find_local_player_transform()
+    if not is_valid_object(player_pawn) then
+        return nil, player_error or "merchant-presence-player-unavailable"
+    end
+    local target_id = state.runtimeRegistry.commerce.merchantIsland
+        .selectionDecision.referenceFastTravelPointId
+    local merchant_island = state.runtimeRegistry.commerce.merchantIsland
+    local reference_location = merchant_island.selectionDecision
+        .referenceWorldLocation
+    local accepted_root = merchant_island.rootLocation
+    local root_offset = {
+        X = accepted_root.X - reference_location.X,
+        Y = accepted_root.Y - reference_location.Y,
+        Z = accepted_root.Z - reference_location.Z,
+    }
+    -- Prefer PalLocationPointFastTravel. Its GetLocation result is the same
+    -- runtime coordinate used by the game's fast-travel UI. Level-object
+    -- tower actors expose persistent-map coordinates and are only a fallback
+    -- for confirming that FTPoint90's partition is loaded.
+    local partition_marker = nil
+    for _, class_name in ipairs({
+        "PalLocationPointFastTravel",
+        "BP_LevelObject_TowerFastTravelPoint_C",
+        "BP_MapObject_TowerFastTravelPoint_C",
+    }) do
+        local ok, candidates = pcall(FindAllOf, class_name)
+        if ok and type(candidates) == "table" then
+            for _, candidate in pairs(candidates) do
+                if is_valid_object(candidate)
+                    and safe_to_string(safe_property(
+                        candidate,
+                        "FastTravelPointID"
+                    )) == target_id then
+                    partition_marker = candidate
+                    local is_location_point = class_name
+                        == "PalLocationPointFastTravel"
+                    local location_ok, location = pcall(function()
+                        if is_location_point then
+                            return candidate:GetLocation()
+                        end
+                        return candidate:K2_GetActorLocation()
+                    end)
+                    if location_ok and location ~= nil and is_location_point then
+                        -- PalLocationPoint:GetLocation is the coordinate route
+                        -- used by Palworld's own fast-travel UI.  Unlike the
+                        -- level-object actor transform, it is already in the
+                        -- same runtime space as the local player pawn.
+                        local live_anchor = {
+                            X = tonumber(safe_property(location, "X")),
+                            Y = tonumber(safe_property(location, "Y")),
+                            Z = tonumber(safe_property(location, "Z")),
+                        }
+                        local live_location = {
+                            X = live_anchor.X + root_offset.X,
+                            Y = live_anchor.Y + root_offset.Y,
+                            Z = live_anchor.Z + root_offset.Z,
+                        }
+                        local coordinate_gap = math.sqrt(
+                            (live_anchor.X - player_location.X) ^ 2
+                                + (live_anchor.Y - player_location.Y) ^ 2
+                                + (live_anchor.Z - player_location.Z) ^ 2
+                        )
+                        -- World-origin rebasing is translational. Preserve the
+                        -- accepted merchant-facing yaw and only translate the
+                        -- FTPoint90-to-market offset into the live partition.
+                        local live_rotation = merchant_island.rootRotation
+                        -- Build 24575825 can expose PalLocationPoint in the
+                        -- persistent-map coordinate space while the pawn is in
+                        -- a world-partition-local space. Accept it only when
+                        -- both are plausibly co-located; otherwise fall through
+                        -- to the partition-presence calibration below.
+                        local updated = coordinate_gap <= 50000 and
+                            presence:set_live_root(
+                                live_location,
+                                live_rotation,
+                                class_name .. ":" .. target_id
+                            ) or nil
+                        if updated ~= nil and updated.ok then
+                            log(string.format(
+                                "ECONOMY_MERCHANT_PRESENCE_LIVE_ROOT fastTravelId=%s actor=%s anchor=(%s,%s,%s) root=(%s,%s,%s) yaw=%s coordinateRoute=PalLocationPoint.GetLocation",
+                                target_id,
+                                safe_full_name(candidate),
+                                tostring(live_anchor.X),
+                                tostring(live_anchor.Y),
+                                tostring(live_anchor.Z),
+                                tostring(live_location.X),
+                                tostring(live_location.Y),
+                                tostring(live_location.Z),
+                                tostring(live_rotation.Yaw)
+                            ))
+                            return live_location, nil
+                        end
+                    end
                 end
             end
         end
     end
-    return nil, nil, "local-player-transform-unavailable"
+    if partition_marker ~= nil and type(player_location) == "table" then
+        -- Seeing FTPoint90 proves its world partition is resident. The user
+        -- arrives beside the tower, so translate the already accepted
+        -- tower-to-market offset into the pawn's live coordinate space. This
+        -- deliberately preserves the simple fixed market while avoiding
+        -- fragile NPC navigation or persistent-coordinate assumptions.
+        local live_location = {
+            X = player_location.X + root_offset.X,
+            Y = player_location.Y + root_offset.Y,
+            Z = player_location.Z + root_offset.Z,
+        }
+        local live_rotation = merchant_island.rootRotation
+        local updated = presence:set_live_root(
+            live_location,
+            live_rotation,
+            "partition-loaded-player-calibration:" .. target_id
+        )
+        if updated.ok then
+            log(string.format(
+                "ECONOMY_MERCHANT_PRESENCE_LIVE_ROOT fastTravelId=%s actor=%s anchor=(%s,%s,%s) root=(%s,%s,%s) yaw=%s coordinateRoute=partition-loaded-player-calibration",
+                target_id,
+                safe_full_name(partition_marker),
+                tostring(player_location.X),
+                tostring(player_location.Y),
+                tostring(player_location.Z),
+                tostring(live_location.X),
+                tostring(live_location.Y),
+                tostring(live_location.Z),
+                tostring(live_rotation.Yaw)
+            ))
+            return live_location, nil
+        end
+    end
+    return nil, "merchant-presence-ftpoint-not-loaded"
+end
+
+local function schedule_economy_merchant_presence_poll(state, generation)
+    local presence = state.factionEconomyMerchantPresence
+    if presence == nil or presence.enabled ~= true then
+        return
+    end
+    local use_loop_async = type(LoopAsync) == "function"
+    if (not use_loop_async and type(ExecuteWithDelay) ~= "function")
+        or type(ExecuteInGameThread) ~= "function" then
+        log("ECONOMY_MERCHANT_PRESENCE_UNAVAILABLE scheduler-api")
+        return
+    end
+    local callback = function()
+        -- LoopAsync owns the durable clock on UE4SS' async thread.  Recursive
+        -- ExecuteWithDelay calls made from an ExecuteInGameThread callback can
+        -- silently stop after the first hop on the live Palworld build.
+        if presence.generation ~= generation then
+            return true
+        end
+        ExecuteInGameThread(function()
+            if presence.generation ~= generation then
+                return
+            end
+            if presence.liveRootSource == nil then
+                -- World-partition actors do not always exist when the load-map
+                -- callback first fires.  Keep resolving FTPoint90 until its
+                -- live, world-origin-rebased transform becomes available.
+                resolve_economy_merchant_live_root(state)
+            end
+            local player_location, _, player_error =
+                find_local_player_transform()
+            local previous_reason = presence.lastReason
+            local outcome = presence:tick(player_location)
+            local status = presence:status()
+            if status.tickCount <= 5
+                or outcome.reason ~= previous_reason
+                or outcome.transitioned == true
+                or outcome.reason == "economy-market-runtime-disabled"
+                or outcome.reason == "economy-merchant-spawn-failed" then
+                log(string.format(
+                    "ECONOMY_MERCHANT_PRESENCE_POLL tick=%d ok=%s reason=%s player=(%s,%s,%s) distance=%s active=%d pending=%d generation=%d transitioned=%s playerError=%s",
+                    status.tickCount,
+                    tostring(outcome.ok),
+                    tostring(outcome.reason),
+                    tostring(player_location and player_location.X or "none"),
+                    tostring(player_location and player_location.Y or "none"),
+                    tostring(player_location and player_location.Z or "none"),
+                    tostring(outcome.distance or "none"),
+                    status.activeCount,
+                    status.pendingCount,
+                    generation,
+                    tostring(outcome.transitioned == true),
+                    tostring(player_error or "none")
+                ))
+            end
+            if not use_loop_async
+                and presence.generation == generation then
+                schedule_economy_merchant_presence_poll(
+                    state,
+                    generation
+                )
+            end
+        end)
+        return false
+    end
+    state.callbacks.economyMerchantPresencePoll = callback
+    if use_loop_async then
+        LoopAsync(presence.pollIntervalMs, callback)
+        log(string.format(
+            "ECONOMY_MERCHANT_PRESENCE_SCHEDULER_READY mode=LoopAsync generation=%d intervalMs=%d",
+            generation,
+            presence.pollIntervalMs
+        ))
+    else
+        ExecuteWithDelay(presence.pollIntervalMs, callback)
+        log(string.format(
+            "ECONOMY_MERCHANT_PRESENCE_SCHEDULER_READY mode=ExecuteWithDelay-fallback generation=%d intervalMs=%d",
+            generation,
+            presence.pollIntervalMs
+        ))
+    end
+end
+
+local function start_economy_merchant_presence(
+    config,
+    state,
+    source
+)
+    local presence = state.factionEconomyMerchantPresence
+    if presence == nil or presence.enabled ~= true then
+        log("ECONOMY_MERCHANT_PRESENCE_DISABLED config=false")
+        return
+    end
+    local loaded = presence:on_world_loaded(source)
+    resolve_economy_merchant_live_root(state)
+    log(string.format(
+        "ECONOMY_MERCHANT_PRESENCE_WORLD_READY source=%s generation=%d activationRadius=%d deactivationRadius=%d pollIntervalMs=%d cleanup=%s",
+        tostring(source or "unknown"),
+        loaded.generation,
+        presence.activationRadius,
+        presence.deactivationRadius,
+        presence.pollIntervalMs,
+        tostring(loaded.removed ~= nil)
+    ))
+    if type(ExecuteWithDelay) ~= "function" then
+        log("ECONOMY_MERCHANT_PRESENCE_UNAVAILABLE scheduler-api")
+        return
+    end
+    local generation = loaded.generation
+    local initial_delay = config.factionCommerce
+        .economyMerchantPresence.initialDelayMs
+    ExecuteWithDelay(initial_delay, function()
+        if type(ExecuteInGameThread) == "function" then
+            ExecuteInGameThread(function()
+                if presence.generation == generation then
+                    if presence.liveRootSource == nil then
+                        resolve_economy_merchant_live_root(state)
+                    end
+                    local player_location = find_local_player_transform()
+                    local outcome = presence:tick(player_location)
+                    local status = presence:status()
+                    log(string.format(
+                        "ECONOMY_MERCHANT_PRESENCE_POLL tick=%d ok=%s reason=%s player=(%s,%s,%s) distance=%s active=%d pending=%d generation=%d transitioned=%s initial=true",
+                        status.tickCount,
+                        tostring(outcome.ok),
+                        tostring(outcome.reason),
+                        tostring(player_location and player_location.X or "none"),
+                        tostring(player_location and player_location.Y or "none"),
+                        tostring(player_location and player_location.Z or "none"),
+                        tostring(outcome.distance or "none"),
+                        status.activeCount,
+                        status.pendingCount,
+                        generation,
+                        tostring(outcome.transitioned == true)
+                    ))
+                    schedule_economy_merchant_presence_poll(
+                        state,
+                        generation
+                    )
+                end
+            end)
+        end
+    end)
 end
 
 local function register_guard_console_command(state)
@@ -3772,9 +4092,34 @@ local function register_runtime_probes(config, registry, policy, state)
         and config.palReconciliation ~= nil
         and config.palReconciliation
             .nativeRaidResultBindingEnabled == true
+    if config.factionCommerce.economyMerchantPresence.enabled == true
+        and type(RegisterLoadMapPreHook) == "function" then
+        local load_map_pre_callback = function()
+            local presence = state.factionEconomyMerchantPresence
+            if presence == nil then
+                return
+            end
+            local outcome = presence:on_world_unloading("load-map-pre")
+            log(string.format(
+                "ECONOMY_MERCHANT_PRESENCE_WORLD_UNLOADING ok=%s generation=%d cleanup=%s reason=%s",
+                tostring(outcome.ok == true),
+                outcome.generation,
+                tostring(outcome.removed ~= nil
+                    and outcome.removed.ok == true),
+                tostring(outcome.removed
+                    and outcome.removed.reason or "none")
+            ))
+        end
+        state.callbacks.loadMapPre = load_map_pre_callback
+        RegisterLoadMapPreHook(load_map_pre_callback)
+        log("ECONOMY_MERCHANT_PRESENCE_PRE_UNLOAD_FENCE_READY readOnly=true")
+    end
+
     if (config.enableTowerBindingProbe
         or identity_probe_enabled
-        or native_raid_hook_retry_enabled)
+        or native_raid_hook_retry_enabled
+        or (config.factionCommerce.economyMerchantPresence
+            .enabled == true))
         and type(RegisterLoadMapPostHook) == "function" then
         local load_map_post_callback = function()
             if state.settlementRaid ~= nil then
@@ -3787,6 +4132,11 @@ local function register_runtime_probes(config, registry, policy, state)
             if identity_probe_enabled then
                 begin_progression_identity_probe(config, state)
             end
+            start_economy_merchant_presence(
+                config,
+                state,
+                "load-map-post"
+            )
             if type(ExecuteWithDelay) == "function" and type(ExecuteInGameThread) == "function" then
                 ExecuteWithDelay(10000, function()
                     ExecuteInGameThread(function()
@@ -3804,6 +4154,7 @@ local function register_runtime_probes(config, registry, policy, state)
                             ))
                         end
                         scan_tower_bindings(config, registry, state)
+                        resolve_economy_merchant_live_root(state)
                         if state.rayneMerchant ~= nil then
                             state.rayneMerchant:schedule_spawn(
                                 "load-map-post",
@@ -3817,9 +4168,11 @@ local function register_runtime_probes(config, registry, policy, state)
         state.callbacks.loadMapPost = load_map_post_callback
         RegisterLoadMapPostHook(load_map_post_callback)
         log(string.format(
-            "WORLD_LOAD_CALLBACK_READY towerProbe=%s towerDelayMs=10000 progressionIdentityProbe=%s readOnly=true",
+            "WORLD_LOAD_CALLBACK_READY towerProbe=%s towerDelayMs=10000 progressionIdentityProbe=%s merchantPresence=%s readOnly=true",
             tostring(config.enableTowerBindingProbe),
-            tostring(identity_probe_enabled)
+            tostring(identity_probe_enabled),
+            tostring(config.factionCommerce
+                .economyMerchantPresence.enabled == true)
         ))
     end
 end
@@ -3863,6 +4216,15 @@ function Runtime.start(config, registry, policy)
     assert(type(config.factionCommerce.nativeCharacterAdapter.merchantDefaultActionClassPath) == "string" and config.factionCommerce.nativeCharacterAdapter.merchantDefaultActionClassPath ~= "", "merchant salesperson action class is required")
     assert(type(config.factionCommerce.economyMerchantLiveTest) == "table", "economy merchant live-test configuration is required")
     assert(type(config.factionCommerce.economyMerchantLiveTest.enabled) == "boolean", "economy merchant live-test flag is required")
+    assert(type(config.factionCommerce.economyMerchantPresence) == "table", "economy merchant presence configuration is required")
+    assert(type(config.factionCommerce.economyMerchantPresence.enabled) == "boolean", "economy merchant presence flag is required")
+    assert(type(config.factionCommerce.economyMerchantPresence.activationRadius) == "number", "economy merchant activation radius is required")
+    assert(type(config.factionCommerce.economyMerchantPresence.deactivationRadius) == "number", "economy merchant deactivation radius is required")
+    assert(type(config.factionCommerce.economyMerchantPresence.pollIntervalMs) == "number", "economy merchant poll interval is required")
+    assert(type(config.factionCommerce.economyMerchantPresence.initialDelayMs) == "number", "economy merchant initial delay is required")
+    if config.factionCommerce.economyMerchantPresence.enabled == true then
+        assert(config.factionCommerce.nativeEconomyMerchantSpawnEnabled == true, "merchant presence requires native economy merchant spawn")
+    end
     assert(type(config.factionProgression.playerGuard) == "table", "player guard configuration is required")
     assert(type(config.factionProgression.playerGuard.nativePlayerGuardEnabled) == "boolean", "native player guard flag is required")
     assert(type(config.factionProgression.playerGuard.controllerClassPath) == "string" and config.factionProgression.playerGuard.controllerClassPath ~= "", "player guard controller class is required")
@@ -4393,6 +4755,12 @@ function Runtime.start(config, registry, policy)
                         .nativeEconomyMerchantSpawnEnabled,
             }
         )
+    state.factionEconomyMerchantPresence =
+        FactionEconomyMerchantPresence.create(
+            state.factionEconomyMerchantRuntime,
+            registry.commerce,
+            config.factionCommerce.economyMerchantPresence
+        )
     state.factionUiModel = FactionUiModel.create(
         registry,
         state.factionProgression,
@@ -4478,6 +4846,8 @@ function Runtime.start(config, registry, policy)
     _G.PWFT_MERCHANT_RUNTIME_V1 = state.factionMerchantRuntime
     _G.PWFT_ECONOMY_MERCHANT_RUNTIME_V1 =
         state.factionEconomyMerchantRuntime
+    _G.PWFT_ECONOMY_MERCHANT_PRESENCE_V1 =
+        state.factionEconomyMerchantPresence
     _G.PWFT_FACTION_UI_MODEL_V1 = state.factionUiModel
     _G.PWFT_FACTION_UI_V1 = state.factionUiPresenter
     _G.PWFT_COMPANION_LEDGER_V1 = state.companionLedger

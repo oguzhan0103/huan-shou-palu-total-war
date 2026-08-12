@@ -56,6 +56,20 @@ local function result(ok, reason, extra)
     return value
 end
 
+local function despawn_succeeded(outcome)
+    -- Early adapters returned a boolean; the native adapter returns a result
+    -- table. Accept both while preserving explicit failure details.
+    return outcome == true
+        or (type(outcome) == "table" and outcome.ok == true)
+end
+
+local function despawn_failure_reason(outcome)
+    if type(outcome) == "table" then
+        return outcome.reason or "despawn-returned-no-result"
+    end
+    return tostring(outcome or "despawn-returned-no-result")
+end
+
 local function is_valid_uobject(object)
     if object == nil then
         return false
@@ -851,19 +865,82 @@ end
 function FactionEconomyMerchantRuntime:deactivate_market(reason)
     local removed = {}
     local preserved = {}
+    if reason == "merchant-presence-world-reload" then
+        -- At load-map-post the previous UWorld is already being destroyed.
+        -- Touching one of its UObject wrappers (even tostring/IsValid) can
+        -- crash UE4SS. The world owns actor destruction; here we only abandon
+        -- Lua routing/tracking references and let the new world start clean.
+        for faction_id, record in pairs(self.records) do
+            if record.actor ~= nil or record.pending then
+                table.insert(removed, faction_id)
+            end
+            record.actor = nil
+            record.pending = false
+            record.pendingHandle = nil
+            record.nativeHandle = nil
+            record.owned = false
+            record.plan = nil
+            record.lastError = nil
+        end
+        local cleanup_errors = {}
+        if self.commerceBridge ~= nil
+            and type(self.commerceBridge.clear_world_vendor_state)
+                == "function" then
+            local ok, detail = pcall(
+                self.commerceBridge.clear_world_vendor_state,
+                self.commerceBridge
+            )
+            if not ok then
+                table.insert(cleanup_errors,
+                    "commerce-bridge:" .. tostring(detail))
+            end
+        end
+        -- Keep this in a separate protected call: commerce cleanup must never
+        -- prevent the more important adapter generation fence from running.
+        if self.adapter ~= nil
+            and type(self.adapter.abandon_world_records) == "function" then
+            local ok, detail = pcall(
+                self.adapter.abandon_world_records,
+                self.adapter,
+                reason
+            )
+            if not ok then
+                table.insert(cleanup_errors,
+                    "native-adapter:" .. tostring(detail))
+            end
+        end
+        self.nativeItemShopHudParams = {}
+        self.deactivationCount = self.deactivationCount + 1
+        return result(#cleanup_errors == 0,
+            #cleanup_errors == 0
+                and "economy-market-world-reload-abandoned"
+                or "economy-market-world-reload-cleanup-failed", {
+            removedFactionIds = removed,
+            preservedExternalFactionIds = preserved,
+            cleanupErrors = cleanup_errors,
+        })
+    end
+    local failures = {}
     for faction_id, record in pairs(self.records) do
         if record.pending and record.pendingHandle ~= nil then
-            pcall(
+            local call_ok, outcome = pcall(
                 self.adapter.despawn,
                 self.adapter,
                 record.pendingHandle,
                 reason or "economy-market-deactivated"
             )
-            table.insert(removed, faction_id)
-            record.pending = false
-            record.pendingHandle = nil
-            record.nativeHandle = nil
-            record.lastError = nil
+            if call_ok and despawn_succeeded(outcome) then
+                table.insert(removed, faction_id)
+                record.pending = false
+                record.pendingHandle = nil
+                record.nativeHandle = nil
+                record.lastError = nil
+            else
+                table.insert(failures, faction_id)
+                record.lastError = call_ok
+                        and despawn_failure_reason(outcome)
+                    or tostring(outcome)
+            end
         elseif record.actor ~= nil then
             if record.owned then
                 if type(self.commerceBridge.unregister_vendor_actor)
@@ -874,26 +951,38 @@ function FactionEconomyMerchantRuntime:deactivate_market(reason)
                         record.actor
                     )
                 end
-                pcall(
+                local call_ok, outcome = pcall(
                     self.adapter.despawn,
                     self.adapter,
                     record.nativeHandle or record.actor,
                     reason or "economy-market-deactivated"
                 )
-                table.insert(removed, faction_id)
-                self.nativeItemShopHudParams[record.actor] = nil
-                record.actor = nil
-                record.owned = false
-                record.nativeHandle = nil
+                if call_ok and despawn_succeeded(outcome) then
+                    table.insert(removed, faction_id)
+                    self.nativeItemShopHudParams[record.actor] = nil
+                    record.actor = nil
+                    record.owned = false
+                    record.nativeHandle = nil
+                    record.lastError = nil
+                else
+                    table.insert(failures, faction_id)
+                    record.lastError = call_ok
+                            and despawn_failure_reason(outcome)
+                        or tostring(outcome)
+                end
             else
                 table.insert(preserved, faction_id)
             end
         end
     end
     self.deactivationCount = self.deactivationCount + 1
-    return result(true, "economy-market-deactivated", {
+    return result(#failures == 0,
+        #failures == 0
+            and "economy-market-deactivated"
+            or "economy-market-deactivation-incomplete", {
         removedFactionIds = removed,
         preservedExternalFactionIds = preserved,
+        failedFactionIds = failures,
     })
 end
 

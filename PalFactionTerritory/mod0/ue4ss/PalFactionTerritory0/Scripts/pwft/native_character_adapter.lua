@@ -2186,42 +2186,40 @@ function NativeCharacterAdapter:despawn(actor, reason)
         local record = actor
         record.cancelled = true
         record.pending = false
-        local destroyed = true
+        local destroyed = false
         local destroy_error = nil
         if is_valid_object(record.spawner) then
-            local despawn_ok = pcall(function()
+            local despawn_ok, detail = pcall(function()
                 record.spawner:Despawn()
             end)
-            local destroy_ok, detail = pcall(function()
-                record.spawner:K2_DestroyActor()
-            end)
-            destroyed = despawn_ok or destroy_ok
+            destroyed = despawn_ok
             destroy_error = detail
         end
         if record.nativeManagerSpawn == true
             and is_valid_object(record.handle) then
-            pcall(function()
+            local despawn_ok, detail = pcall(function()
                 record.handle:Despawn()
             end)
-            local actor_ok, managed_actor = pcall(function()
-                return record.handle:TryGetIndividualActor()
-            end)
-            if actor_ok and is_valid_object(managed_actor) then
-                record.actor = managed_actor
-            end
+            destroyed = despawn_ok
+            destroy_error = detail
         end
-        if is_valid_object(record.actor) then
+        -- A successful native Despawn owns the actor lifecycle. Never read the
+        -- handle or destroy the actor again after that call; only use the actor
+        -- fallback when no native lifecycle route was available or it failed.
+        if not destroyed and is_valid_object(record.actor) then
             self.interactionReadyActors[record.actor] = nil
-            pcall(function()
+            local actor_ok, detail = pcall(function()
                 record.actor:K2_DestroyActor()
             end)
+            destroyed = actor_ok
+            destroy_error = detail
         end
-        self.records[record.runtimeId] = nil
         if not destroyed then
             return make_result(false, "native-spawner-despawn-failed", {
                 detail = tostring(destroy_error),
             })
         end
+        self.records[record.runtimeId] = nil
         self.despawnCount = self.despawnCount + 1
         self:_log(string.format(
             "DESPAWNED runtime=%s reason=%s lifecycle=%s",
@@ -2296,6 +2294,36 @@ function NativeCharacterAdapter:despawn(actor, reason)
     ))
     return make_result(true, "despawned", {
         runtimeId = removed_runtime_id,
+    })
+end
+
+function NativeCharacterAdapter:abandon_world_records(reason)
+    -- UWorld owns these temporary actors and destroys them during map unload.
+    -- UE4SS UObject wrappers may already point at freed memory by the time the
+    -- load-map callback runs, so world-reload cleanup must drop Lua references
+    -- without calling IsValid, Despawn, K2_DestroyActor, or tostring on them.
+    local abandoned = 0
+    for _, record in pairs(self.records) do
+        abandoned = abandoned + 1
+        -- Delayed UE4SS callbacks cannot be unscheduled.  Flip only Lua-owned
+        -- state before dropping the table so every pending resolver/delegate
+        -- exits without touching an object from the unloaded world.
+        if type(record) == "table" then
+            record.cancelled = true
+            record.pending = false
+            record.callbacks = {}
+        end
+    end
+    self.records = {}
+    self.interactionReadyActors = {}
+    self.despawnCount = self.despawnCount + abandoned
+    self:_log(string.format(
+        "WORLD_RECORDS_ABANDONED count=%d reason=%s lifecycle=uworld-owned",
+        abandoned,
+        tostring(reason or "world-reload")
+    ))
+    return make_result(true, "world-records-abandoned", {
+        abandonedCount = abandoned,
     })
 end
 
