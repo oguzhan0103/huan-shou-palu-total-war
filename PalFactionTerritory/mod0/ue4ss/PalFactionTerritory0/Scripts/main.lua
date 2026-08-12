@@ -26,6 +26,12 @@ local Runtime = require("pwft.runtime")
 -- ledger only after it has resolved a stable world/player identity.
 Config.factionProgression.persistence.rootPath =
     ModDirectory .. "/State"
+Config.palReconciliation.agentBridge.rootPath =
+    ModDirectory .. "/State/AgentDialogue"
+Config.palReconciliation.agentBridge.operatorInputPath =
+    ModDirectory .. "/State/pwft-agent-operator-input-v1.json"
+Config.palReconciliation.agentBridge.operatorStatusPath =
+    ModDirectory .. "/State/pwft-agent-operator-status-v1.json"
 
 -- Keep the runtime state reachable for the entire Lua mod lifetime. UE4SS's
 -- callback garbage collector may release hooks whose Lua closures are no

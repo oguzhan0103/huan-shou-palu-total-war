@@ -37,13 +37,19 @@ local function validate_policy(contract, config)
     local policy = contract.raidResultAdapterPolicy
     assert(type(policy) == "table", "Pal raid-result adapter policy is required")
     assert(policy.normalizedAdapterEnabled == true, "normalized Pal raid adapter must be enabled")
-    assert(policy.nativeBindingEnabled == false, "native Pal raid binding requires live acceptance")
+    assert(policy.nativeBindingEnabled == true, "native Pal raid binding contract must be enabled")
     assert(policy.leaderDesignation == "first-spawn-of-final-wave", "unsupported Pal raid leader designation")
     assert(policy.timerCleanupMaySettleRaid == false, "timer cleanup cannot settle a Pal raid")
     assert(policy.conflictingEvidenceBehavior == "block-event-fail-closed", "conflicting Pal raid evidence must fail closed")
+    assert(policy.attendanceBindingEnabled == true, "attendance Pal raid binding contract must be enabled")
+    assert(is_non_empty_string(policy.attendanceEventAuthority), "attendance event authority is required")
+    assert(is_non_empty_string(policy.attendanceSpawnAuthority), "attendance spawn authority is required")
+    assert(is_non_empty_string(policy.attendanceDeathAuthority), "attendance death authority is required")
+    assert(is_non_empty_string(policy.attendanceOutcomeAuthority), "attendance outcome authority is required")
     assert(type(config) == "table", "Pal raid-result adapter configuration is required")
     assert(config.normalizedRaidAdapterEnabled == true, "normalized Pal raid adapter is disabled")
-    assert(config.nativeRaidResultBindingEnabled == false, "native Pal raid binding requires live acceptance")
+    assert(config.nativeRaidResultBindingEnabled == true, "native Pal raid binding is disabled")
+    assert(config.attendanceRaidResultBindingEnabled == true, "attendance Pal raid binding is disabled")
     assert(config.leaderDesignation == policy.leaderDesignation, "Pal raid leader designation drifted")
     return policy
 end
@@ -70,6 +76,9 @@ local function public_event(event)
         leaderAttributionKind = event.leaderAttributionKind,
         playerSideWon = event.playerSideWon,
         allWavesCleared = event.allWavesCleared,
+        lifecycleKind = event.lifecycleKind,
+        cancelled = event.cancelled == true,
+        cancelReason = event.cancelReason,
         settlement = copy(event.settlement),
     }
 end
@@ -105,6 +114,8 @@ function PalRaidResultAdapter.create(pal_reconciliation, config)
         version = API_VERSION,
         service = pal_reconciliation,
         policy = policy,
+        attendanceBindingEnabled =
+            config.attendanceRaidResultBindingEnabled == true,
         events = {},
         resolvedEvents = {},
         capabilities = {
@@ -112,6 +123,7 @@ function PalRaidResultAdapter.create(pal_reconciliation, config)
             deterministicFinalWaveLeader = true,
             directLocalPlayerCredit = true,
             localOwnedPalCredit = true,
+            attendanceRaidAggregation = true,
             remotePlayerCredit = false,
             timerSettlement = false,
             PalworldSaveMutation = false,
@@ -127,7 +139,15 @@ function PalRaidResultAdapter:begin_event(observation)
     if not is_non_empty_string(raid_event_id) then
         return result(false, "raid-event-id-required")
     end
-    if observation.sourceAuthority ~= self.policy.eventAuthority then
+    local lifecycle_kind = nil
+    if observation.sourceAuthority == self.policy.eventAuthority then
+        lifecycle_kind = "native-invader"
+    elseif self.attendanceBindingEnabled
+        and observation.sourceAuthority
+            == self.policy.attendanceEventAuthority then
+        lifecycle_kind = "attendance-native-actors"
+    end
+    if lifecycle_kind == nil then
         return result(false, "unauthorized-raid-event-source")
     end
     if not is_non_empty_string(observation.palFactionId) then
@@ -158,6 +178,7 @@ function PalRaidResultAdapter:begin_event(observation)
         nativeGroupGuid = observation.nativeGroupGuid,
         waveMax = observation.waveMax,
         sourceAuthority = observation.sourceAuthority,
+        lifecycleKind = lifecycle_kind,
         active = true,
         blocked = false,
         blockReason = nil,
@@ -190,7 +211,10 @@ function PalRaidResultAdapter:register_member(raid_event_id, observation)
     if type(observation) ~= "table" then
         return result(false, "raid-member-observation-required")
     end
-    if observation.spawnAuthority ~= self.policy.spawnAuthority then
+    local required_spawn_authority = event.lifecycleKind == "native-invader"
+            and self.policy.spawnAuthority
+        or self.policy.attendanceSpawnAuthority
+    if observation.spawnAuthority ~= required_spawn_authority then
         return result(false, "unauthorized-raid-member-source")
     end
     if not is_non_empty_string(observation.actorKey) then
@@ -248,7 +272,10 @@ function PalRaidResultAdapter:record_death(raid_event_id, observation)
     if type(observation) ~= "table" then
         return result(false, "raid-death-observation-required")
     end
-    if observation.deathAuthority ~= self.policy.deathAuthority then
+    local required_death_authority = event.lifecycleKind == "native-invader"
+            and self.policy.deathAuthority
+        or self.policy.attendanceDeathAuthority
+    if observation.deathAuthority ~= required_death_authority then
         return result(false, "unauthorized-raid-death-source")
     end
     if not is_non_empty_string(observation.victimActorKey) then
@@ -328,11 +355,19 @@ function PalRaidResultAdapter:finish_event(raid_event_id, observation)
     if type(observation) ~= "table" then
         return result(false, "raid-outcome-observation-required")
     end
-    if observation.outcomeAuthority ~= self.policy.outcomeAuthority then
+    local required_outcome_authority = event.lifecycleKind == "native-invader"
+            and self.policy.outcomeAuthority
+        or self.policy.attendanceOutcomeAuthority
+    if observation.outcomeAuthority ~= required_outcome_authority then
         return result(false, "unauthorized-raid-outcome-source")
     end
-    if observation.nativeEnded ~= true then
+    if event.lifecycleKind == "native-invader"
+        and observation.nativeEnded ~= true then
         return result(false, "authoritative-native-end-required", public_event(event))
+    end
+    if event.lifecycleKind == "attendance-native-actors"
+        and observation.attendanceEnded ~= true then
+        return result(false, "authoritative-attendance-end-required", public_event(event))
     end
     if type(observation.playerSideWon) ~= "boolean"
         or type(observation.allWavesCleared) ~= "boolean" then
@@ -363,6 +398,37 @@ function PalRaidResultAdapter:finish_event(raid_event_id, observation)
     })
 end
 
+function PalRaidResultAdapter:cancel_event(raid_event_id, observation)
+    if not is_non_empty_string(raid_event_id) then
+        return result(false, "raid-event-id-required")
+    end
+    local event = self.events[raid_event_id]
+    if event == nil then
+        local resolved = self.resolvedEvents[raid_event_id]
+        if resolved ~= nil then
+            return result(true, "raid-event-already-resolved", copy(resolved))
+        end
+        return result(false, "unknown-active-raid-event")
+    end
+    observation = observation or {}
+    local required_authority = event.lifecycleKind == "native-invader"
+            and self.policy.outcomeAuthority
+        or self.policy.attendanceOutcomeAuthority
+    if observation.outcomeAuthority ~= required_authority then
+        return result(false, "unauthorized-raid-cancel-source")
+    end
+    event.active = false
+    event.resolved = false
+    event.cancelled = true
+    event.cancelReason = observation.reason or "raid-event-cancelled"
+    local cancelled = public_event(event)
+    self.resolvedEvents[raid_event_id] = cancelled
+    self.events[raid_event_id] = nil
+    return result(true, "raid-event-cancelled", {
+        event = copy(cancelled),
+    })
+end
+
 function PalRaidResultAdapter:event_status(raid_event_id)
     if not is_non_empty_string(raid_event_id) then
         return nil
@@ -387,7 +453,8 @@ function PalRaidResultAdapter:status()
     return {
         apiVersion = self.version,
         normalizedRaidAdapterEnabled = true,
-        nativeRaidResultBindingEnabled = false,
+        nativeRaidResultBindingEnabled = true,
+        attendanceRaidResultBindingEnabled = self.attendanceBindingEnabled,
         leaderDesignation = self.policy.leaderDesignation,
         activeEventCount = active_count,
         blockedEventCount = blocked_count,

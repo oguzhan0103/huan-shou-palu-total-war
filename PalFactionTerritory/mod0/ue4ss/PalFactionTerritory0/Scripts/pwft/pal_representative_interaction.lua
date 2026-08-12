@@ -236,6 +236,66 @@ function PalRepresentativeInteraction:unregister(
     return result(true, "pal-representative-actor-unregistered")
 end
 
+function PalRepresentativeInteraction:representative_id_for_actor(actor)
+    if not is_valid_object(actor) then
+        return nil
+    end
+    local actor_name = safe_full_name(actor)
+    for representative_id, binding in pairs(self.bindings) do
+        if is_valid_object(binding.actor)
+            and (binding.actor == actor
+                or (actor_name ~= "<invalid>"
+                    and actor_name ~= "<unreadable>"
+                    and binding.actorName == actor_name)) then
+            return representative_id
+        end
+    end
+    return nil
+end
+
+function PalRepresentativeInteraction:offer_for_actor(
+    actor,
+    player_actor,
+    request_id
+)
+    local representative_id =
+        self:representative_id_for_actor(actor)
+    if representative_id == nil then
+        return result(false, "actor-is-not-a-registered-pal-representative")
+    end
+    if type(self.discourse.ready_tokens_for_representative)
+        ~= "function" then
+        return result(false, "pal-discourse-ready-token-api-unavailable")
+    end
+    local listed = self.discourse:ready_tokens_for_representative(
+        representative_id
+    )
+    if not listed.ok then
+        return copy(listed)
+    end
+    local token = listed.tokens and listed.tokens[1] or nil
+    if type(token) ~= "table"
+        or not non_empty_string(token.tokenInstanceId, 256) then
+        return result(false, "no-discourse-ready-token", {
+            representativeId = representative_id,
+            factionId = listed.factionId,
+            tokenCount = #(listed.tokens or {}),
+            stateMutationApplied = false,
+        })
+    end
+    local offered = self:offer(
+        representative_id,
+        player_actor,
+        token.tokenInstanceId,
+        request_id
+    )
+    if offered.ok then
+        offered.selectedToken = copy(token)
+        offered.readyTokenCount = #(listed.tokens or {})
+    end
+    return offered
+end
+
 function PalRepresentativeInteraction:_proximity(
     representative_id,
     player_actor
@@ -454,6 +514,7 @@ function PalRepresentativeInteraction:status()
         proximityGate = true,
         explicitIrreversibleConfirmation = true,
         presenterReadinessBeforeTokenConsume = true,
+        readyTokenAutoSelection = true,
         nativeDelegateBinding = false,
         deterministicRuleEngineOwnsOutcome = true,
         directInteractionStateMutation = false,

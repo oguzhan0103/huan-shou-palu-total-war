@@ -245,7 +245,7 @@ local function set_canvas_layout(widget, position, size, z_order)
         and layered == true
 end
 
-local function find_runtime_font()
+local function find_runtime_font(target_size)
     if type(FindAllOf) ~= "function" then
         return nil, nil, nil
     end
@@ -255,6 +255,10 @@ local function find_runtime_font()
     if not found or text_blocks == nil then
         return nil, nil, nil
     end
+    local best_font = nil
+    local best_size = nil
+    local best_source = nil
+    local best_distance = nil
     for _, text_block in pairs(text_blocks) do
         if is_valid(text_block) then
             local font = safe_property(text_block, "Font")
@@ -266,22 +270,43 @@ local function find_runtime_font()
                     and type(font_size) == "number"
                     and font_size >= 12
                     and font_size <= 64 then
-                    return font, font_size, safe_full_name(text_block)
+                    local distance = math.abs(
+                        font_size - (target_size or 17)
+                    )
+                    if best_distance == nil
+                        or distance < best_distance then
+                        best_font = font
+                        best_size = font_size
+                        best_source = safe_full_name(text_block)
+                        best_distance = distance
+                    end
                 end
             end
         end
     end
-    return nil, nil, nil
+    return best_font, best_size, best_source
 end
 
 local NativeBackend = {}
 
 function NativeBackend.create(options)
+    local panel_position = options.panelPosition or {}
+    local panel_size = options.panelSize or {}
     return setmetatable({
         widget = nil,
         summaryText = nil,
         viewportAdded = false,
         zOrder = options.zOrder or 90,
+        panelPosition = {
+            X = panel_position.X or 435.0,
+            Y = panel_position.Y or 35.0,
+        },
+        panelSize = {
+            X = panel_size.X or 1050.0,
+            Y = panel_size.Y or 985.0,
+        },
+        minTextWidth = options.minTextWidth or 1010.0,
+        targetFontSize = options.targetFontSize or 17,
         lastError = nil,
     }, { __index = NativeBackend })
 end
@@ -295,8 +320,8 @@ function NativeBackend:_configure(widget)
     set_widget_visibility(panel, 0)
     local panel_z_ready = set_canvas_layout(
         panel,
-        { X = 660.0, Y = 55.0 },
-        { X = 575.0, Y = 610.0 },
+        self.panelPosition,
+        self.panelSize,
         0
     )
     if is_valid(panel) then
@@ -353,7 +378,7 @@ function NativeBackend:_configure(widget)
         }
     )
     local runtime_font, runtime_font_size, runtime_font_source =
-        find_runtime_font()
+        find_runtime_font(self.targetFontSize)
     local font_ready = false
     if runtime_font ~= nil then
         font_ready = safe_call(
@@ -365,7 +390,7 @@ function NativeBackend:_configure(widget)
     local width_ready = safe_call(
         self.summaryText,
         "SetMinDesiredWidth",
-        520.0
+        self.minTextWidth
     )
     local wrap_ready = safe_call(
         self.summaryText,
@@ -374,11 +399,17 @@ function NativeBackend:_configure(widget)
     )
     safe_call(self.summaryText, "RefreshTextLayout")
     log(string.format(
-        "WIDGET_CONFIG panel=%s panelZ=%s text=%s horizontal=%s "
+        "WIDGET_CONFIG panel=%s panelZ=%s panelPosition=%.0f,%.0f "
+            .. "panelSize=%.0f,%.0f text=%s horizontal=%s "
             .. "vertical=%s padding=%s opacity=%s color=%s font=%s "
-            .. "fontSize=%s fontSource=%s width=%s wrap=%s",
+            .. "fontSize=%s targetFontSize=%s fontSource=%s "
+            .. "minTextWidth=%.0f width=%s wrap=%s",
         safe_full_name(panel),
         tostring(panel_z_ready),
+        self.panelPosition.X,
+        self.panelPosition.Y,
+        self.panelSize.X,
+        self.panelSize.Y,
         safe_full_name(self.summaryText),
         tostring(horizontal_ready),
         tostring(vertical_ready),
@@ -387,7 +418,9 @@ function NativeBackend:_configure(widget)
         tostring(color_ready),
         tostring(font_ready),
         tostring(runtime_font_size),
+        tostring(self.targetFontSize),
         tostring(runtime_font_source),
+        self.minTextWidth,
         tostring(width_ready),
         tostring(wrap_ready)
     ))
@@ -555,7 +588,7 @@ local function format_human_row(row)
         )
     end
     if row.guard ~= nil and row.guard.eligible then
-        local guard_state = "护卫待接入"
+        local guard_state = "护卫未配置"
         if row.guard.active then
             guard_state = "护卫已出战"
         elseif row.guard.providerReady then
@@ -568,7 +601,7 @@ end
 
 local function format_pal_row(row)
     local reconciliation = row.reconciliation or {}
-    local reconciliation_text = "论道机制待接入"
+    local reconciliation_text = "论道服务未启用"
     if reconciliation.serviceReady then
         if reconciliation.reconciled then
             reconciliation_text = "已和解"

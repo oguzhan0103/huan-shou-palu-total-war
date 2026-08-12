@@ -331,7 +331,7 @@ function EndingRuntime.create(progression, strategic_world, options)
     options = options or {}
     assert(type(strategic_world) == "table", "strategic-world service is required")
     assert(options.onChange == nil or type(options.onChange) == "function", "ending onChange must be a function")
-    return setmetatable({
+    local instance = setmetatable({
         version = API_VERSION,
         progression = progression,
         strategicWorld = strategic_world,
@@ -351,6 +351,52 @@ function EndingRuntime.create(progression, strategic_world, options)
             storyContentIncluded = false,
         },
     }, { __index = EndingRuntime })
+    if type(progression.register_restore_listener) == "function" then
+        local registered = progression:register_restore_listener(
+            "pwft.ending-runtime.v1",
+            function()
+                return instance:rebind_progression_state()
+            end
+        )
+        assert(registered.ok, registered.reason)
+    end
+    return instance
+end
+
+function EndingRuntime:rebind_progression_state()
+    local previous_state = self.state
+    self.state = ensure_state(self.progression)
+    local initialized = 0
+    for content_pack_id, normalized in pairs(self.packDefinitions) do
+        local existing = self.state.packs[content_pack_id]
+        if existing == nil then
+            self.state.packs[content_pack_id] = {
+                contentPackId = content_pack_id,
+                contentVersion = normalized.contentVersion,
+                definition = copy(normalized),
+            }
+            initialized = initialized + 1
+        else
+            assert(
+                existing.contentVersion == normalized.contentVersion,
+                "restored ending pack requires migration: "
+                    .. content_pack_id
+            )
+            if existing.definition ~= nil then
+                assert(
+                    deep_equal(existing.definition, normalized),
+                    "restored ending pack definition mismatch: "
+                        .. content_pack_id
+                )
+            else
+                existing.definition = copy(normalized)
+            end
+        end
+    end
+    return result(true, "progression-state-rebound", {
+        stateChanged = previous_state ~= self.state,
+        initializedPackCount = initialized,
+    })
 end
 
 function EndingRuntime:register_pack(pack)

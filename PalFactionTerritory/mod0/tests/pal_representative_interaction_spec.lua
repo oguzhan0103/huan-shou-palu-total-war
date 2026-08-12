@@ -62,7 +62,7 @@ local function make_discourse()
             irreversible = true,
         }
     end
-    function discourse:confirm(
+function discourse:confirm(
         offer_id,
         confirmation_id,
         accepted
@@ -84,6 +84,23 @@ local function make_discourse()
             reason = "pal-discourse-session-started",
             sessionId = "session:" .. confirmation_id,
             tokenConsumed = false,
+        }
+    end
+    function discourse:ready_tokens_for_representative(representative_id)
+        if representative_id ~= "fan.guide.v1" then
+            return { ok = false, reason = "unknown-pal-representative", tokens = {} }
+        end
+        return {
+            ok = true,
+            reason = "pal-discourse-ready-tokens-listed",
+            factionId = "pwft.faction.desert_pal_tribe",
+            tokens = {
+                {
+                    tokenInstanceId = "token-auto-1",
+                    cityStateId = "pwft.faction.rayne_syndicate",
+                    state = "quest-complete",
+                },
+            },
         }
     end
     return discourse
@@ -335,6 +352,41 @@ assert(status.explicitIrreversibleConfirmation == true)
 assert(status.presenterReadinessBeforeTokenConsume == true)
 assert(status.nativeDelegateBinding == false)
 assert(status.directInteractionStateMutation == false)
+
+local auto_discourse = make_discourse()
+local auto_interaction = PalRepresentativeInteraction.create(
+    auto_discourse,
+    make_presenter(true, true),
+    configuration
+)
+assert(auto_interaction:register("fan.guide.v1", representative).ok)
+assert(
+    auto_interaction:representative_id_for_actor(representative)
+        == "fan.guide.v1"
+)
+local representative_wrapper = actor(
+    "BP_PalRepresentative_C_1",
+    0,
+    0,
+    0
+)
+assert(representative_wrapper ~= representative)
+assert(
+    auto_interaction:representative_id_for_actor(
+        representative_wrapper
+    ) == "fan.guide.v1"
+)
+local auto_offer = auto_interaction:offer_for_actor(
+    representative_wrapper,
+    near_player,
+    "request-auto"
+)
+assert(auto_offer.ok)
+assert(auto_offer.tokenInstanceId == "token-auto-1")
+assert(auto_offer.readyTokenCount == 1)
+assert(auto_offer.selectedToken.cityStateId == "pwft.faction.rayne_syndicate")
+assert(#auto_discourse.offerCalls == 1)
+assert(auto_discourse.offerCalls[1].tokenInstanceId == "token-auto-1")
 
 representative.valid = false
 local stale = interaction:offer(

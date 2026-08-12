@@ -3,7 +3,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ExpectedBuildId = "24467282"
+$ExpectedBuildId = "24575825"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $SourcePak = Join-Path $ProjectRoot "artifacts\faction-economy-shops\PalFactionTerritory_FactionEconomyShops_P.pak"
 $TargetDirectory = Join-Path $GameRoot "Pal\Content\Paks\~mods"

@@ -95,6 +95,7 @@ end
 local function controller_config(enabled)
     return {
         offlineDialogueTreeEnabled = true,
+        nativeDialoguePresenterEnabled = true,
         agentAdapterEnabled = enabled,
         agentDefaultLocale = "zh-CN",
     }
@@ -174,6 +175,7 @@ local controller = PalDialogueController.create(
     {
         resolveAgentBridge = function() return bridge end,
         nowUtc = function() return "2026-08-10T00:00:00Z" end,
+        requestRunId = "test-run",
     }
 )
 local submitted = controller:submit_agent_turn(
@@ -182,13 +184,13 @@ local submitted = controller:submit_agent_turn(
     context
 )
 assert(submitted.ok and submitted.reason == "agent-request-submitted")
-assert(submitted.requestId == "pwft-agent-00000001")
+assert(submitted.requestId == "pwft-agent-test-run-00000001")
 assert(submitted.stateMutationApplied == false)
 assert(#bridge.submissions == 1)
 local payload = bridge.submissions[1]
 assert(payload.schemaVersion == "1.0.0")
 assert(payload.characterId == "fan.pal-guide.v1")
-assert(payload.sessionId == "pwft-session-00000001")
+assert(payload.sessionId == "pwft-session-test-run-00000001")
 assert(payload.worldKey == "world-test" and payload.playerKey == "player-test")
 assert(payload.playerText == "我们为什么要继续争斗？")
 assert(#payload.allowedChoices == 2)
@@ -323,7 +325,7 @@ assert(status.committedCount == 1)
 assert(status.directAgentStateMutation == false)
 assert(status.proposalRequiresPlayerConfirmation == true)
 assert(status.offlineTreeFallback == true)
-assert(status.nativePresenterEnabled == false)
+assert(status.nativePresenterEnabled == true)
 assert(status.storyContentIncluded == false)
 
 local failed_discourse = make_discourse()

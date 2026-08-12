@@ -20,7 +20,7 @@
   "merchantIsland": {
     "id": "pwft.commerce.faction_market_island",
     "displayNameZhHans": "七势力商人岛",
-    "placementStatus": "user_selected_ftpoint90_island_live_ground_validation_pending",
+    "placementStatus": "ftpoint90_live_ground_accepted_2026_08_11",
     "selectionDecision": {
       "decisionSource": "user_confirmed_2026-07-29",
       "landmarkZhHans": "泰拉瑞亚密域旁的独立小岛",
@@ -43,16 +43,24 @@
     },
     "merchantCount": 7,
     "oneFixedBuyerPerHumanFaction": true,
-    "rootLocation": null,
-    "rootRotation": null,
+    "rootLocation": {
+      "X": -492507.908,
+      "Y": -42766.375,
+      "Z": -1992.57
+    },
+    "rootRotation": {
+      "Pitch": 0,
+      "Yaw": 235.46,
+      "Roll": 0
+    },
     "slotOffsets": [
-      { "forward": 0, "right": -900, "up": 0 },
-      { "forward": 0, "right": -600, "up": 0 },
-      { "forward": 0, "right": -300, "up": 0 },
-      { "forward": 0, "right": 0, "up": 0 },
-      { "forward": 0, "right": 300, "up": 0 },
-      { "forward": 0, "right": 600, "up": 0 },
-      { "forward": 0, "right": 900, "up": 0 }
+      { "forward": 0, "right": -360, "up": 0 },
+      { "forward": 0, "right": -120, "up": 0 },
+      { "forward": 0, "right": 120, "up": 0 },
+      { "forward": 0, "right": 360, "up": 0 },
+      { "forward": 260, "right": -240, "up": 0 },
+      { "forward": 260, "right": 0, "up": 0 },
+      { "forward": 260, "right": 240, "up": 0 }
     ]
   },
   "transactionPolicy": {
@@ -83,7 +91,7 @@
       "PalItemSlot.StackCount"
     ],
     "sellUiAcceptanceIsServerConfirmation": false,
-    "sellSettlementStatus": "server_inventory_replication_probe_ready_settlement_disabled_live_acceptance_pending"
+    "sellSettlementStatus": "native_server_request_plus_inventory_replication_confirmation_enabled"
   },
   "factions": [
     {

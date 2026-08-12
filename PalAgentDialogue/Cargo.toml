@@ -1,6 +1,6 @@
 [package]
 name = "pal-agent-dialogue"
-version = "1.0.0"
+version = "1.0.1"
 description = "External, content-pack-driven multi-NPC dialogue runtime for Palworld mods"
 authors = ["PalAgentDialogue contributors"]
 edition = "2021"

@@ -9,7 +9,7 @@ local SettlementRaid = require("pwft.settlement_raid")
 
 assert(SettlementRaid.validate_config(Config.settlementRaid))
 assert(Config.settlementRaid.replaceNativePlayerBaseInvasion == true)
-assert(Config.settlementRaid.executionMode == "native-negotiator")
+assert(Config.settlementRaid.executionMode == "attendance-simulation")
 assert(Config.settlementRaid.nearestPalFactionId
     == "pwft.faction.dark_nocturnal_pal_tribe")
 assert(Config.settlementRaid.settlement.nativeRegionNameId
@@ -17,11 +17,15 @@ assert(Config.settlementRaid.settlement.nativeRegionNameId
 assert(Config.settlementRaid.settlement.fastTravelPointId
     == "FTPoint24")
 assert(Config.settlementRaid.nightOnly == true)
+assert(Config.settlementRaid.qaAuthoritativeNightRpcEnabled == true)
+assert(Config.settlementRaid.qaNightSettleDelayMs == 3000)
 assert(Config.settlementRaid.level == 80)
 assert(Config.settlementRaid.countdownSeconds == 15 * 60)
 assert(Config.settlementRaid.nativeRandomFallbackDelayMs == 8000)
 assert(Config.settlementRaid.nativeFallbackLaunchEnabled == false)
 assert(Config.settlementRaid.nativeNegotiatorTimeoutMs == 180000)
+assert(Config.settlementRaid.nativeDirectIncidentFallbackEnabled == true)
+assert(Config.settlementRaid.nativeDirectIncidentConfirmationDelayMs == 15000)
 assert(Config.settlementRaid.cleanupDelayMs == 15 * 60 * 1000)
 assert(Config.settlementRaid.rampagingPalFallback.enabled == false)
 assert(Config.settlementRaid.rampagingPalFallback.liveValidated == false)
@@ -29,9 +33,10 @@ assert(Config.settlementRaid.rampagingPalFallback.predator == true)
 assert(Config.settlementRaid.rampagingPalFallback.targetHate == 100000.0)
 assert(Config.settlementRaid.rampagingPalFallback.makeUncapturable == true)
 assert(Config.settlementRaid.rampagingPalFallback.saveWrites == false)
-assert(Config.settlementRaid.attendanceSimulation.enabled == false)
-assert(Config.settlementRaid.attendanceSimulation.qaOnly == true)
-assert(Config.settlementRaid.attendanceSimulation.liveValidated == false)
+assert(Config.settlementRaid.attendanceSimulation.enabled == true)
+assert(Config.settlementRaid.attendanceSimulation.qaOnly == false)
+assert(Config.settlementRaid.attendanceSimulation.liveValidated == true)
+assert(Config.settlementRaid.attendanceSimulation.resultBindingEnabled == true)
 assert(Config.settlementRaid.attendanceSimulation.playerPresentRadius
     == 22000.0)
 assert(Config.settlementRaid.attendanceSimulation.aggroRadius
@@ -82,7 +87,7 @@ local contract = SettlementRaid.native_contract(
 )
 assert(contract.groupName
     == "Invader_Group_Monster_Grade5_Basic")
-assert(contract.executionMode == "native-negotiator")
+assert(contract.executionMode == "attendance-simulation")
 assert(contract.managerAccessor
     == "PalUtility.GetInvaderManager")
 assert(contract.managerLaunch
@@ -108,6 +113,14 @@ assert(string.find(
 assert(contract.startPointOverridesSuccessFlag == true)
 assert(contract.fallbackLaunchEnabled == false)
 assert(contract.negotiatorTimeoutMs == 180000)
+assert(contract.directIncidentFallback.enabled == true)
+assert(contract.directIncidentFallback.request
+    == "PalInvaderManager.RequestIncidentVisitorNPC(campId, observer, true) -> PalInvaderManager.RequestIncidentInvaderEnemy(campId, observer)")
+assert(contract.directIncidentFallback.activationPolicy
+    == "after-native-negotiator-open-ground-confirmation-fails")
+assert(contract.directIncidentFallback.confirmationDelayMs == 15000)
+assert(contract.directIncidentFallback.ownsCharacterLifecycle == false)
+assert(contract.directIncidentFallback.saveWrites == false)
 assert(#contract.lifecyclePhases == 4)
 assert(contract.lifecyclePhases[2] == "negotiator-created")
 assert(contract.lifecyclePhases[4] == "assault")
@@ -118,7 +131,17 @@ assert(contract.rampagingPalFallback.targetHate == 100000.0)
 assert(contract.rampagingPalFallback.saveWrites == false)
 assert(contract.rampagingPalFallback.providerInterface
     == "spawn_wave(request, on_spawn_actor)")
-assert(contract.attendanceSimulation.enabled == false)
+assert(contract.attendanceSimulation.enabled == true)
+assert(contract.attendanceSimulation.liveValidated == true)
+assert(contract.attendanceSimulation.resultBindingEnabled == true)
+assert(contract.attendanceSimulation.resultBridge.deathPath
+    == "/Script/Pal.PalCharacter:OnDeadCharacter")
+assert(contract.attendanceSimulation.resultBridge.participationRule
+    == "designated-leader-killed-by-local-player-or-owned-pal")
+assert(contract.attendanceSimulation.resultBridge.victoryRule
+    == "all-registered-attackers-dead")
+assert(contract.attendanceSimulation.resultBridge.timerCleanupMaySettleRaid
+    == false)
 assert(contract.attendanceSimulation.aggroRadius == 65000.0)
 assert(contract.attendanceSimulation.qaSpawnRadius == 5000.0)
 assert(contract.attendanceSimulation.nativeCountdownSpawn.enabled == true)
@@ -163,16 +186,13 @@ Config.settlementRaid.rampagingPalFallback.enabled = false
 Config.settlementRaid.rampagingPalFallback.liveValidated = false
 
 Config.settlementRaid.executionMode = "attendance-simulation"
+Config.settlementRaid.attendanceSimulation.enabled = false
 local attendance_disabled_ok = pcall(function()
     SettlementRaid.validate_config(Config.settlementRaid)
 end)
 assert(attendance_disabled_ok == false)
 Config.settlementRaid.attendanceSimulation.enabled = true
-Config.settlementRaid.qaHotkeyEnabled = true
 assert(SettlementRaid.validate_config(Config.settlementRaid))
-Config.settlementRaid.executionMode = "native-negotiator"
-Config.settlementRaid.attendanceSimulation.enabled = false
-Config.settlementRaid.qaHotkeyEnabled = false
 assert(string.find(
     contract.targetPositionPath,
     "GetTargetBaseCampPosition",
@@ -180,9 +200,9 @@ assert(string.find(
     true
 ) ~= nil)
 assert(#contract.spawnedPaths == 2)
-assert(contract.ownsCharacterLifecycle == false)
+assert(contract.ownsCharacterLifecycle == true)
 assert(contract.saveWrites == false)
 assert(Config.settlementRaid.allowedCharacterIds == nil)
 assert(Config.settlementRaid.waves == nil)
 
-print("PASS settlement raid contract (world-owned negotiator then assault lifecycle; explicit QA attacker filter; AI wake and battle-mode activation; no save writes)")
+print("PASS settlement raid contract (live-validated NPC-manager siege, resident-first combat, authoritative death/result bridge, and no save writes)")

@@ -20,6 +20,9 @@ local function valid_object(full_name)
     function object:K2_DestroyActor()
         self.destroyed = true
     end
+    function object:K2_GetActorLocation()
+        return self.location
+    end
     return object
 end
 
@@ -38,13 +41,19 @@ local string_library =
 function string_library:Conv_StringToName(value)
     return "FName:" .. value
 end
-
 local merchant_class = valid_object(
     "BlueprintGeneratedClass BP_NPC_Male_Trader01_v04_C"
 )
 local guard_class = valid_object(
     "BlueprintGeneratedClass BP_NPC_Believer_C"
 )
+local guard_controller_class = valid_object(
+    "BlueprintGeneratedClass BP_NPCAIController_Visitor_Guardman_C"
+)
+local guard_controller_path =
+    "/Game/Pal/Blueprint/Controller/NPC/"
+        .. "BP_NPCAIController_Visitor_Guardman."
+        .. "BP_NPCAIController_Visitor_Guardman_C"
 local salesperson_action_class = valid_object(
     "BlueprintGeneratedClass BP_AIAction_NPC_Relax_SalesPerson_C"
 )
@@ -57,6 +66,7 @@ local class_by_path = {
         merchant_class,
     ["/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Believer.BP_NPC_Believer_C"] =
         guard_class,
+    [guard_controller_path] = guard_controller_class,
     [salesperson_action_path] = salesperson_action_class,
 }
 
@@ -70,6 +80,11 @@ function gameplay:BeginDeferredActorSpawnFromClass(
     begin_count = begin_count + 1
     local actor = valid_object(character_class.fullName)
     actor.spawnTransform = transform
+    actor.location = {
+        X = transform.location.X,
+        Y = transform.location.Y,
+        Z = transform.location.Z,
+    }
     if character_class == merchant_class then
         local controller = valid_object("BP_NPCAIController_C Test")
         function controller:OverrideDefaultAction(action_class)
@@ -128,6 +143,65 @@ function gameplay:BeginDeferredActorSpawnFromClass(
                 (self.setActiveInteractCount or 0) + 1
             self.interactActive = active
         end
+    elseif character_class == guard_class then
+        local controller = valid_object(
+            "BP_NPCAIController_Visitor_Guardman_C Test"
+        )
+        local hate_system = valid_object("PalHate GuardTest")
+        function hate_system:FindMostHateTarget()
+            return self.target
+        end
+        function controller:GetHateSystem()
+            return hate_system
+        end
+        function controller:SetInitialValue(is_squad, not_sleep)
+            self.initialValueCount =
+                (self.initialValueCount or 0) + 1
+            self.isSquad = is_squad
+            self.notSleep = not_sleep
+        end
+        function controller:SetActiveAI(active)
+            self.activeAICount =
+                (self.activeAICount or 0) + 1
+            self.activeAI = active
+        end
+        function controller:MoveToActor(
+            goal,
+            acceptance_radius,
+            stop_on_overlap,
+            use_pathfinding,
+            can_strafe,
+            filter_class,
+            allow_partial_path
+        )
+            self.moveCount = (self.moveCount or 0) + 1
+            self.lastMove = {
+                goal = goal,
+                acceptanceRadius = acceptance_radius,
+                stopOnOverlap = stop_on_overlap,
+                usePathfinding = use_pathfinding,
+                canStrafe = can_strafe,
+                filterClass = filter_class,
+                allowPartialPath = allow_partial_path,
+            }
+            return 1
+        end
+        actor.controller = controller
+        actor.hateSystem = hate_system
+        function actor:GetController()
+            return self.controller
+        end
+        local parameters = valid_object(
+            "PalCharacterParameterComponent GuardTest"
+        )
+        parameters.dead = false
+        function parameters:IsDead()
+            return self.dead
+        end
+        actor.characterParameters = parameters
+        function actor:GetCharacterParameterComponent()
+            return self.characterParameters
+        end
     end
     return actor
 end
@@ -146,6 +220,7 @@ for path, object in pairs(class_by_path) do
 end
 
 local adapter_logs = {}
+local delayed_callbacks = {}
 local adapter = NativeCharacterAdapter.create({
     staticFindObject = function(path)
         return static_objects[path]
@@ -161,6 +236,19 @@ local adapter = NativeCharacterAdapter.create({
     end,
     restockMinutes = 45,
     merchantDefaultActionClassPath = salesperson_action_path,
+    guardControllerClassPath = guard_controller_path,
+    guardFollowIntervalMs = 750,
+    guardAcceptanceRadius = 325,
+    guardFollowMaxFailures = 3,
+    executeWithDelay = function(delay_ms, callback)
+        table.insert(delayed_callbacks, {
+            delayMs = delay_ms,
+            callback = callback,
+        })
+    end,
+    executeInGameThread = function(callback)
+        callback()
+    end,
     logger = function(message)
         table.insert(adapter_logs, message)
     end,
@@ -275,22 +363,212 @@ local provider = adapter:create_guard_provider(
     "NPC_Believer",
     "/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Believer.BP_NPC_Believer_C"
 )
+local local_player = valid_object("BP_Player_Female_C LocalPlayer")
+local_player.location = { X = 100, Y = 200, Z = 5 }
+local guard_terminated_count = 0
+local guard_terminated_detail = nil
 local provider_handle = provider.deploy(
     "pwft.faction.free_pal_alliance",
     "leader-guard-001",
     {
         location = { X = 100, Y = 200, Z = 5 },
         rotation = { Pitch = 0, Yaw = 180, Roll = 0 },
-        followTarget = "local-player",
+        followTarget = local_player,
+        onTerminated = function(detail)
+            guard_terminated_count = guard_terminated_count + 1
+            guard_terminated_detail = detail
+        end,
     }
 )
 assert(provider_handle.actor:IsValid())
 assert(
     provider_handle.followBehaviourStatus
-        == "native-follow-controller-pending-live-validation"
+        == "native-visitor-leader-follow-active-live-combat-validation-pending"
 )
+local provider_controller = provider_handle.actor.controller
+assert(provider_controller.VisitorLeader == local_player)
+assert(provider_controller.initialValueCount == 1)
+assert(provider_controller.isSquad == false)
+assert(provider_controller.notSleep == true)
+assert(provider_controller.activeAI == true)
+assert(provider_controller.moveCount == 1)
+assert(provider_controller.lastMove.goal == local_player)
+assert(provider_controller.lastMove.acceptanceRadius == 325)
+assert(#delayed_callbacks == 1)
+assert(delayed_callbacks[1].delayMs == 750)
+
+-- Each pulse follows while idle, preserves the NPC's native combat target,
+-- then resumes following after combat.  The next callback is lifecycle scoped
+-- and stops permanently once the actor is dead.
+local function run_next_guard_pulse()
+    local scheduled = table.remove(delayed_callbacks, 1)
+    assert(scheduled ~= nil)
+    scheduled.callback()
+end
+
+run_next_guard_pulse()
+assert(provider_controller.moveCount == 2)
+provider_handle.actor.location = { X = 250, Y = 200, Z = 5 }
+local_player.location = { X = 500, Y = 200, Z = 5 }
+local hostile = valid_object("BP_NPC_Hostile_C Test")
+local hostile_parameters = valid_object(
+    "PalCharacterParameterComponent HostileTest"
+)
+hostile_parameters.dead = false
+function hostile_parameters:IsDead()
+    return self.dead
+end
+hostile.CharacterParameterComponent = hostile_parameters
+function hostile:GetCharacterParameterComponent()
+    error("real Pal raid actors expose the reflected property")
+end
+provider_handle.actor.hateSystem.target = hostile
+run_next_guard_pulse()
+assert(provider_controller.moveCount == 2)
+-- The native hate system may select the local player's summoned Pal after
+-- the hostile target dies.  That actor is an ally, not ongoing combat.
+local owned_pal = valid_object("BP_PlayerOwnedPal_C Test")
+owned_pal.StaticCharacterParameterComponent = valid_object(
+    "PalStaticCharacterParameterComponent OwnedPalTest"
+)
+owned_pal.StaticCharacterParameterComponent.IsPal = true
+owned_pal.CharacterParameterComponent = valid_object(
+    "PalCharacterParameterComponent OwnedPalTest"
+)
+function owned_pal.CharacterParameterComponent:IsPlayersOtomo()
+    return true
+end
+provider_handle.actor.hateSystem.target = owned_pal
+run_next_guard_pulse()
+assert(provider_controller.moveCount == 3)
+-- The engine keeps the dead actor as FindMostHateTarget until cleanup.  The
+-- follower must ignore that stale reference and immediately resume.
+provider_handle.actor.hateSystem.target = hostile
+hostile_parameters.dead = true
+local observed, observed_reason = adapter:observe_character_death(hostile)
+assert(observed == true)
+assert(observed_reason == "authoritative-death-recorded")
+run_next_guard_pulse()
+assert(provider_controller.moveCount == 4)
+provider_handle.actor.characterParameters.dead = true
+run_next_guard_pulse()
+assert(#delayed_callbacks == 0)
+assert(adapter.records[provider_handle.runtimeId] == nil)
+assert(guard_terminated_count == 1)
+assert(guard_terminated_detail.reason == "guard-downed")
+-- Palworld may remove a dead body before the player requests recall.  The
+-- adapter must still clear its runtime record so that faction can redeploy.
+provider_handle.actor:K2_DestroyActor()
 assert(provider.recall(provider_handle, "test-recall"))
 assert(not provider_handle.actor:IsValid())
+assert(adapter.records[provider_handle.runtimeId] == nil)
+local follow_ready_logged = false
+local combat_preserved_logged = false
+local downed_logged = false
+local runtime_released_logged = false
+local pulse_logged = false
+local movement_logged = false
+local resumed_logged = false
+local friendly_target_ignored_logged = false
+for _, message in ipairs(adapter_logs) do
+    follow_ready_logged = follow_ready_logged
+        or string.find(
+            message,
+            "PLAYER_GUARD_FOLLOW_READY",
+            1,
+            true
+        ) ~= nil
+    combat_preserved_logged = combat_preserved_logged
+        or string.find(
+            message,
+            "PLAYER_GUARD_COMBAT_PRESERVED",
+            1,
+            true
+        ) ~= nil
+    downed_logged = downed_logged
+        or string.find(
+            message,
+            "PLAYER_GUARD_DOWNED",
+            1,
+            true
+        ) ~= nil
+    runtime_released_logged = runtime_released_logged
+        or string.find(
+            message,
+            "PLAYER_GUARD_RUNTIME_RELEASED",
+            1,
+            true
+        ) ~= nil
+    pulse_logged = pulse_logged
+        or string.find(
+            message,
+            "PLAYER_GUARD_FOLLOW_PULSE",
+            1,
+            true
+        ) ~= nil
+    movement_logged = movement_logged
+        or string.find(
+            message,
+            "PLAYER_GUARD_FOLLOW_MOVEMENT_CONFIRMED",
+            1,
+            true
+        ) ~= nil
+    resumed_logged = resumed_logged
+        or (string.find(
+            message,
+            "PLAYER_GUARD_FOLLOW_READY",
+            1,
+            true
+        ) ~= nil and string.find(
+            message,
+            "resumedAfterCombat=true",
+            1,
+            true
+        ) ~= nil)
+    friendly_target_ignored_logged = friendly_target_ignored_logged
+        or (string.find(
+            message,
+            "PLAYER_GUARD_FRIENDLY_TARGET_IGNORED",
+            1,
+            true
+        ) ~= nil and string.find(
+            message,
+            "reason=player-owned-pal",
+            1,
+            true
+        ) ~= nil)
+end
+assert(follow_ready_logged)
+assert(combat_preserved_logged)
+assert(downed_logged)
+assert(runtime_released_logged)
+assert(pulse_logged)
+assert(movement_logged)
+assert(resumed_logged)
+assert(friendly_target_ignored_logged)
+
+-- UE4SS can return another Lua wrapper for the same native actor.  Recall
+-- must cancel the authoritative runtime record, not depend on actor-wrapper
+-- identity; an already queued follow callback must become inert.
+local wrapper_handle = provider.deploy(
+    "pwft.faction.free_pal_alliance",
+    "leader-guard-002",
+    {
+        location = { X = 100, Y = 200, Z = 5 },
+        rotation = { Pitch = 0, Yaw = 180, Roll = 0 },
+        followTarget = local_player,
+    }
+)
+local wrapper_record = adapter.records[wrapper_handle.runtimeId]
+local wrapper_controller = wrapper_record.controller
+local wrapper_move_count = wrapper_controller.moveCount
+assert(#delayed_callbacks == 1)
+wrapper_handle.actor = valid_object("BP_NPC_Believer_C WrapperAlias")
+assert(provider.recall(wrapper_handle, "wrapper-recall"))
+assert(adapter.records[wrapper_handle.runtimeId] == nil)
+run_next_guard_pulse()
+assert(wrapper_controller.moveCount == wrapper_move_count)
+assert(#delayed_callbacks == 0)
 
 local generated_blueprint = valid_object("Blueprint BP_NPC_Male_Trader01_v04")
 generated_blueprint.GeneratedClass = merchant_class

@@ -381,7 +381,31 @@ function PalReconciliation.create(contract, progression, options)
     }, { __index = PalReconciliation })
     ensure_state(instance)
     instance.recoveredInterruptedSessionCount = recover_interrupted_sessions(instance)
+    if type(progression.register_restore_listener) == "function" then
+        local registered = progression:register_restore_listener(
+            "pwft.pal-reconciliation.v1",
+            function(context)
+                return instance:rebind_progression_state(context)
+            end
+        )
+        assert(registered.ok, registered.reason)
+    end
     return instance
+end
+
+function PalReconciliation:rebind_progression_state(context)
+    local previous_state = self.state
+    ensure_state(self)
+    local recovered = 0
+    if context == nil or context.phase ~= "rollback" then
+        recovered = recover_interrupted_sessions(self)
+        self.recoveredInterruptedSessionCount =
+            (self.recoveredInterruptedSessionCount or 0) + recovered
+    end
+    return result(true, "progression-state-rebound", {
+        stateChanged = previous_state ~= self.state,
+        recoveredInterruptedSessionCount = recovered,
+    })
 end
 
 function PalReconciliation:register_content(faction_id, content)
@@ -911,6 +935,37 @@ function PalReconciliation:token_status(faction_id, token_instance_id)
         return nil
     end
     return copy(record.tokens[token_instance_id])
+end
+
+-- Return only tokens that can start a discourse session right now.  The
+-- virtual ledger remains authoritative; callers cannot mutate the copied
+-- entries, and the normal preview gate (all Human Lords, no active session,
+-- quest complete, faction not reconciled/locked) is applied to every token.
+function PalReconciliation:discourse_ready_tokens(faction_id)
+    local record = self.state.factions[faction_id]
+    if record == nil then
+        return {}
+    end
+    local token_ids = {}
+    for token_instance_id, token in pairs(record.tokens) do
+        if token.state == "quest-complete" then
+            token_ids[#token_ids + 1] = token_instance_id
+        end
+    end
+    table.sort(token_ids)
+    local ready = {}
+    for _, token_instance_id in ipairs(token_ids) do
+        local preview = self:preview_discourse(
+            faction_id,
+            token_instance_id
+        )
+        if preview.ok then
+            local token = copy(record.tokens[token_instance_id])
+            token.preview = copy(preview)
+            ready[#ready + 1] = token
+        end
+    end
+    return ready
 end
 
 function PalReconciliation:export_snapshot()

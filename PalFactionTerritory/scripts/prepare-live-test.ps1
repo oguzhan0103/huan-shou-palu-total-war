@@ -6,9 +6,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ExpectedBuildId = "24467282"
-$ExpectedExeSha256 = "8b5286b96550e83fb79a2ec7ede7bf881ec86f52f017e8276ceb1dc1b39d52f0"
-$ExpectedMainPakSha256 = "a82fee669e60558db5adc409c8607bb6c06b8a4d4c984317f9a37415461e7119"
+$ExpectedBuildId = "24575825"
+$ExpectedExeSha256 = "fe3c15064524bae1947852467c4f92bc22469acc033a3d3c8031eab4324e41e8"
+$ExpectedMainPakSha256 = "c0a7d3a756ec57d3ca38d81b252d8645532bfae300c26d18426515c670531bdf"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $WorkspaceRoot = Split-Path -Parent $ProjectRoot
 $SteamAppsRoot = Split-Path -Parent (Split-Path -Parent $GameRoot)
@@ -22,7 +22,7 @@ $MainPak = Join-Path $PaksRoot "Pal-Windows.pak"
 $AssetModsRoot = Join-Path $PaksRoot "~mods"
 $LogicModsRoot = Join-Path $PaksRoot "LogicMods"
 $Timestamp = Get-Date -Format "yyyyMMdd-HHmmssfff"
-$BackupRoot = Join-Path $WorkspaceRoot "outputs\live-test-preflight\build24467282-$Timestamp"
+$BackupRoot = Join-Path $WorkspaceRoot "outputs\live-test-preflight\build24575825-$Timestamp"
 $SnapshotRoot = Join-Path $BackupRoot "snapshot"
 $EvidencePath = Join-Path $BackupRoot "preflight-manifest.json"
 

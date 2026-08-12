@@ -68,6 +68,10 @@ local presenter = FactionUiPresenter.create(
     {
         enabled = true,
         key = "F5",
+        panelPosition = { X = 435.0, Y = 35.0 },
+        panelSize = { X = 1050.0, Y = 985.0 },
+        minTextWidth = 1010.0,
+        targetFontSize = 17,
     },
     backend
 )
@@ -146,7 +150,7 @@ assert(string.find(
     1,
     true
 ))
-assert(string.find(backend.text, "护卫待接入", 1, true))
+assert(string.find(backend.text, "护卫未配置", 1, true))
 assert(string.find(
     backend.text,
     "[红]帕鲁保护团体 | 好感 0 | 未达到加入条件",

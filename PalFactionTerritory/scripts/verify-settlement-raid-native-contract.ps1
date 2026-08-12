@@ -96,6 +96,15 @@ $DumpRequirements = @(
     "/Script/Pal.PalUtility:GetInvaderManager",
     "/Script/Pal.PalInvaderManager:StartInvaderMarchForBaseCamp",
     "/Script/Pal.PalInvaderManager:StartInvaderMarchForBaseCamp:campID",
+    "/Script/Pal.PalInvaderManager:RequestIncidentInvaderEnemy",
+    "/Script/Pal.PalInvaderManager:RequestIncidentInvaderEnemy:Guid",
+    "/Script/Pal.PalInvaderManager:RequestIncidentInvaderEnemy:Observer",
+    "/Script/Pal.PalInvaderManager:RequestIncidentInvaderEnemy:ReturnValue",
+    "/Script/Pal.PalInvaderManager:RequestIncidentVisitorNPC",
+    "/Script/Pal.PalInvaderManager:RequestIncidentVisitorNPC:Guid",
+    "/Script/Pal.PalInvaderManager:RequestIncidentVisitorNPC:Observer",
+    "/Script/Pal.PalInvaderManager:RequestIncidentVisitorNPC:IgnoreDeclaration",
+    "/Script/Pal.PalInvaderManager:RequestIncidentVisitorNPC:ReturnValue",
     "/Script/Pal.PalInvaderIncidentBase:SelectInvaders:Grade",
     "/Script/Pal.PalInvaderIncidentBase:SelectInvaders:Biome",
     "/Script/Pal.PalInvaderIncidentBase:GetInvaderStartPoint",
@@ -115,6 +124,8 @@ foreach ($Pattern in $DumpRequirements) {
 foreach ($CurrentBinaryToken in @(
     "GetInvaderManager",
     "StartInvaderMarchForBaseCamp",
+    "RequestIncidentInvaderEnemy",
+    "RequestIncidentVisitorNPC",
     "SelectInvaders",
     "GetInvaderInfo"
 )) {
@@ -148,7 +159,13 @@ foreach ($RequiredSourceToken in @(
     "NATIVE_NEGOTIATOR_ACTIVE",
     "start-point-success-set-failed",
     "NATIVE_HOOK_REGISTRATION",
-    'attempt_native_hook_registration(instance, "pre-launch")'
+    'attempt_native_hook_registration(instance, "pre-launch")',
+    "RequestIncidentInvaderEnemy",
+    "RequestIncidentVisitorNPC",
+    "NATIVE_DIRECT_VISITOR_REQUESTED",
+    "NATIVE_DIRECT_VISITOR_CONFIRMED",
+    "NATIVE_DIRECT_ENEMY_REQUESTED",
+    "NATIVE_DIRECT_ENEMY_CONFIRMED"
 )) {
     if (-not $RaidText.Contains($RequiredSourceToken)) {
         throw "Settlement raid source is missing: $RequiredSourceToken"
@@ -156,7 +173,6 @@ foreach ($RequiredSourceToken in @(
 }
 foreach ($ForbiddenSourceToken in @(
     "RequestIncidentInvaderEnemy_BP",
-    "RequestIncidentInvaderEnemy(",
     "Debug_InvaderMarchForNearCamp",
     "InvaderMarchForNearestCamp",
     "StaticConstructObject",
@@ -182,7 +198,11 @@ New-Item -ItemType Directory -Path $EvidenceRoot -Force | Out-Null
         "manager-requested",
         "negotiator-created",
         "negotiator-active",
-        "assault"
+        "assault",
+        "direct-visitor-requested",
+        "direct-negotiation-confirmed",
+        "direct-enemy-requested",
+        "direct-assault-confirmed"
     )
     startPointOverride = @{
         vector = $true
@@ -224,9 +244,18 @@ New-Item -ItemType Directory -Path $EvidenceRoot -Force | Out-Null
         min = 61
         max = 80
     }
+    directIncidentFallback = @{
+        enabled = $true
+        reflectedCalls = @(
+            "PalInvaderManager.RequestIncidentVisitorNPC(Guid, Observer, true)",
+            "PalInvaderManager.RequestIncidentInvaderEnemy(Guid, Observer)"
+        )
+        activationPolicy = "after-native-negotiator-open-ground-confirmation-fails"
+        confirmationDelayMs = 15000
+        saveWrites = $false
+    }
     rejectedRoutes = @(
         "RequestIncidentInvaderEnemy_BP",
-        "RequestIncidentInvaderEnemy",
         "Debug_InvaderMarchForNearCamp",
         "InvaderMarchForNearestCamp",
         "PalCheatManager",

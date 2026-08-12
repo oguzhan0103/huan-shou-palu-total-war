@@ -2,10 +2,10 @@ use std::{collections::VecDeque, fmt, sync::Mutex, time::Duration};
 
 use async_trait::async_trait;
 use reqwest::{Client, StatusCode, Url};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crate::domain::ProviderPrompt;
+use crate::domain::{ModelReply, ProviderPrompt, MAX_DIALOGUE_CHARS};
 
 const MAX_PROVIDER_RESPONSE_BYTES: usize = 1024 * 1024;
 
@@ -37,6 +37,25 @@ pub struct ProviderConfig {
     pub model: String,
     pub timeout: Duration,
     pub api_key: Option<Secret>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderSummary {
+    pub provider: String,
+    pub base_url: String,
+    pub model: String,
+    pub timeout_seconds: u64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderCheckReport {
+    pub provider: String,
+    pub model: String,
+    pub dialogue_chars: usize,
+    pub strict_json: bool,
+    pub authority_fields: bool,
 }
 
 impl fmt::Debug for ProviderConfig {
@@ -115,6 +134,8 @@ pub enum ProviderError {
     MalformedResponse,
     #[error("provider response contains no dialogue payload")]
     MissingContent,
+    #[error("provider diagnostic reply violates the strict JSON boundary: {0}")]
+    DiagnosticReplyInvalid(String),
     #[error("mock provider has no queued reply")]
     MockExhausted,
 }
@@ -137,6 +158,54 @@ impl HttpProvider {
             .build()
             .map_err(ProviderError::Request)?;
         Ok(Self { config, client })
+    }
+
+    pub fn summary(&self) -> ProviderSummary {
+        ProviderSummary {
+            provider: self.label().into(),
+            base_url: self.config.base_url.as_str().into(),
+            model: self.config.model.clone(),
+            timeout_seconds: self.config.timeout.as_secs(),
+        }
+    }
+
+    /// Performs one explicit provider request without reading or claiming any
+    /// bridge file. This is a configuration diagnostic, not a foreground-gate
+    /// bypass for production dialogue processing.
+    pub async fn provider_check(&self) -> Result<ProviderCheckReport, ProviderError> {
+        let raw = self
+            .complete(&ProviderPrompt {
+                system: concat!(
+                    "This is a connectivity diagnostic. Return exactly one JSON object with ",
+                    "dialogue, proposedChoice, and resultTags. dialogue must be a short ",
+                    "non-empty acknowledgement. proposedChoice must be null and resultTags ",
+                    "must be an empty array. Do not return markdown or any other field."
+                )
+                .into(),
+                user: "Reply with the strict diagnostic JSON now.".into(),
+            })
+            .await?;
+        let reply: ModelReply = serde_json::from_str(raw.trim()).map_err(|_| {
+            ProviderError::DiagnosticReplyInvalid("response is not the whitelisted object".into())
+        })?;
+        let dialogue_chars = reply.dialogue.trim().chars().count();
+        if dialogue_chars == 0 || dialogue_chars > MAX_DIALOGUE_CHARS {
+            return Err(ProviderError::DiagnosticReplyInvalid(
+                "dialogue is empty or too long".into(),
+            ));
+        }
+        if reply.proposed_choice.is_some() || !reply.result_tags.is_empty() {
+            return Err(ProviderError::DiagnosticReplyInvalid(
+                "diagnostic reply proposed authority-bearing values".into(),
+            ));
+        }
+        Ok(ProviderCheckReport {
+            provider: self.label().into(),
+            model: self.config.model.clone(),
+            dialogue_chars,
+            strict_json: true,
+            authority_fields: false,
+        })
     }
 
     async fn checked_bytes(&self, response: reqwest::Response) -> Result<Vec<u8>, ProviderError> {
@@ -284,10 +353,12 @@ fn validate_base_url(value: &str) -> Result<Url, ProviderError> {
     if !matches!(url.scheme(), "http" | "https")
         || !url.username().is_empty()
         || url.password().is_some()
+        || url.query().is_some()
         || url.fragment().is_some()
     {
         return Err(ProviderError::InvalidConfig(
-            "base URL must be HTTP(S) and cannot contain credentials or fragments".into(),
+            "base URL must be HTTP(S) and cannot contain credentials, query parameters, or fragments"
+                .into(),
         ));
     }
     let loopback = url
@@ -344,6 +415,11 @@ mod tests {
     #[test]
     fn rejects_credentials_in_base_url() {
         assert!(validate_base_url("https://user:secret@example.invalid/v1").is_err());
+    }
+
+    #[test]
+    fn rejects_query_parameters_that_might_disclose_secrets() {
+        assert!(validate_base_url("https://example.invalid/v1?api_key=secret").is_err());
     }
 
     #[test]

@@ -67,6 +67,24 @@
           <div id="human-factions" class="faction-grid"></div>
         </section>
 
+        <section class="panel agent-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">LOCAL OLLAMA DIALOGUE</p>
+              <h2>与当前帕鲁代表论道</h2>
+            </div>
+            <span id="agent-status" class="legend">等待游戏内开启论道</span>
+          </div>
+          <p class="agent-help">先在游戏中靠近已注册的帕鲁代表并开启论道，再在这里输入自由文本。模型只能生成对白和建议一个已有选项；好感度与任务仍由游戏规则结算，建议选项必须回到游戏按 F3 确认。</p>
+          <form id="agent-form" class="agent-form">
+            <textarea id="agent-text" maxlength="8000" rows="4" placeholder="输入你想对当前帕鲁代表说的话……" disabled></textarea>
+            <div class="agent-actions">
+              <small id="agent-detail">本地 Ollama 未连接或当前没有活动论道。</small>
+              <button id="agent-submit" type="submit" disabled>发送给本地模型</button>
+            </div>
+          </form>
+        </section>
+
         <section class="panel">
           <div class="panel-heading">
             <div>

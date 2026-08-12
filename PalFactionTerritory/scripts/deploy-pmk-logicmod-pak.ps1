@@ -5,7 +5,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ExpectedBuildId = "24467282"
+$ExpectedBuildId = "24575825"
 
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $EvidenceRoot = Join-Path $ProjectRoot "evidence\deployments"

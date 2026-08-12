@@ -140,9 +140,11 @@ assert(guard:deploy(rayne, "guard-request-001").reason
 
 local deployed = false
 local recalled = false
+local guard_provider_context = nil
 assert(guard:register_provider(rayne, {
-    deploy = function(_, request_id)
+    deploy = function(_, request_id, context)
         deployed = request_id == "guard-request-002"
+        guard_provider_context = context
         return "native-guard-handle-001"
     end,
     recall = function(handle)
@@ -153,6 +155,12 @@ assert(guard:register_provider(rayne, {
 assert(guard:deploy(rayne, "guard-request-002").ok)
 assert(deployed)
 assert(guard:status().activeGuardCount == 1)
+assert(type(guard_provider_context.onTerminated) == "function")
+guard_provider_context.onTerminated({ reason = "guard-downed" })
+assert(guard:status().activeGuardCount == 0)
+assert(guard:recall(rayne).reason == "no-active-guard")
+assert(not recalled)
+assert(guard:deploy(rayne, "guard-request-003").ok)
 assert(guard:recall(rayne).ok)
 assert(recalled)
 

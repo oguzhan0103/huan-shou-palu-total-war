@@ -107,6 +107,7 @@ end
 
 local function atomic_write(instance, path, value)
     local temporary_path = path .. ".tmp"
+    local backup_path = path .. ".bak"
     local encoded = Json.encode(value)
     local write_ok, write_error = safe_call(
         instance.filesystem.write,
@@ -116,14 +117,38 @@ local function atomic_write(instance, path, value)
     if not write_ok then
         return false, "temporary-write-failed:" .. write_error
     end
-    if instance.filesystem.exists(path) then
+    if not instance.filesystem.exists(path)
+        and instance.filesystem.exists(backup_path) then
+        local recover_ok, recover_error = safe_call(
+            instance.filesystem.rename,
+            backup_path,
+            path
+        )
+        if not recover_ok then
+            pcall(instance.filesystem.remove, temporary_path)
+            return false, "previous-recovery-failed:" .. recover_error
+        end
+    end
+    local had_previous = instance.filesystem.exists(path)
+    if had_previous and instance.filesystem.exists(backup_path) then
         local remove_ok, remove_error = safe_call(
             instance.filesystem.remove,
-            path
+            backup_path
         )
         if not remove_ok then
             pcall(instance.filesystem.remove, temporary_path)
-            return false, "previous-remove-failed:" .. remove_error
+            return false, "stale-backup-remove-failed:" .. remove_error
+        end
+    end
+    if had_previous then
+        local rotate_ok, rotate_error = safe_call(
+            instance.filesystem.rename,
+            path,
+            backup_path
+        )
+        if not rotate_ok then
+            pcall(instance.filesystem.remove, temporary_path)
+            return false, "previous-rotate-failed:" .. rotate_error
         end
     end
     local rename_ok, rename_error = safe_call(
@@ -132,6 +157,19 @@ local function atomic_write(instance, path, value)
         path
     )
     if not rename_ok then
+        pcall(instance.filesystem.remove, temporary_path)
+        if had_previous then
+            local restore_ok, restore_error = safe_call(
+                instance.filesystem.rename,
+                backup_path,
+                path
+            )
+            if not restore_ok then
+                return false,
+                    "temporary-promote-failed:" .. rename_error
+                        .. ";previous-restore-failed:" .. restore_error
+            end
+        end
         return false, "temporary-promote-failed:" .. rename_error
     end
     return true
@@ -219,11 +257,11 @@ function CompanionLedger:record(event)
         return false, "profile-not-active"
     end
     assert(type(event) == "table", "companion event must be a table")
-    self.sequence = self.sequence + 1
+    local next_sequence = self.sequence + 1
     local envelope = copy(event)
     envelope.schemaVersion = SCHEMA_VERSION
     envelope.profileKey = self.identity.profileKey
-    envelope.sequence = self.sequence
+    envelope.sequence = next_sequence
     envelope.epoch = self.now()
     local ok, append_error = safe_call(
         self.filesystem.append,
@@ -234,6 +272,8 @@ function CompanionLedger:record(event)
         self.lastError = "event-append-failed:" .. append_error
         return false, self.lastError
     end
+    self.sequence = next_sequence
+    self.lastError = nil
     return true, envelope
 end
 
@@ -257,6 +297,7 @@ function CompanionLedger:publish(payload)
         self.lastError = "state-publish-failed:" .. write_error
         return false, self.lastError
     end
+    self.lastError = nil
     return true, "published"
 end
 

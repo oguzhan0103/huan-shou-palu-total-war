@@ -5,16 +5,16 @@ param(
 
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
-$ExpectedBuildId = "24467282"
+$ExpectedBuildId = "24575825"
 $ExpectedArchiveSha256 = "5e0c3e29f276eac7ecb3887561083acdd1027fb088b9c2b66417cf3488469035"
 $Win64Root = Join-Path $GameRoot "Pal\Binaries\Win64"
 $DestinationDwmapi = Join-Path $Win64Root "dwmapi.dll"
 $DestinationUE4SS = Join-Path $Win64Root "ue4ss"
 $DestinationMod = Join-Path $DestinationUE4SS "Mods\PalFactionTerritory0"
 $SteamManifest = "E:\SteamLibrary\steamapps\appmanifest_1623730.acf"
-$StageRoot = Join-Path $ProjectRoot "artifacts\deploy-staging\ue4ss-palworld-build24467282"
+$StageRoot = Join-Path $ProjectRoot "artifacts\deploy-staging\ue4ss-palworld-build24575825"
 $EvidenceRoot = Join-Path $ProjectRoot "evidence\deployments"
-$EvidencePath = Join-Path $EvidenceRoot "mod0-dev-build24467282.json"
+$EvidencePath = Join-Path $EvidenceRoot "mod0-dev-build24575825.json"
 
 & (Join-Path $PSScriptRoot "verify-mod0.ps1")
 if ($LASTEXITCODE -ne 0) {

@@ -40,12 +40,17 @@
   },
   "raidResultAdapterPolicy": {
     "normalizedAdapterEnabled": true,
-    "nativeBindingEnabled": false,
+    "nativeBindingEnabled": true,
     "leaderDesignation": "first-spawn-of-final-wave",
     "eventAuthority": "pal-invader-incident-group-guid-v1",
     "spawnAuthority": "pal-invader-on-character-spawned-v1",
     "deathAuthority": "pal-damage-reaction-dead-info-v1",
     "outcomeAuthority": "pal-invader-end-wave-clear-v1",
+    "attendanceBindingEnabled": true,
+    "attendanceEventAuthority": "pwft-attendance-event-v1",
+    "attendanceSpawnAuthority": "pwft-npc-manager-spawn-v1",
+    "attendanceDeathAuthority": "pal-character-on-dead-character-v1",
+    "attendanceOutcomeAuthority": "pwft-attendance-all-members-dead-v1",
     "acceptedLeaderKillAttribution": [
       "direct-local-player",
       "local-player-owned-pal"
@@ -86,7 +91,7 @@
   },
   "offlineDialogueTreePolicy": {
     "runtimeEnabled": true,
-    "nativePresenterEnabled": false,
+    "nativePresenterEnabled": true,
     "representativeRegistrationRequired": true,
     "explicitIrreversibleConfirmationRequired": true,
     "baseStoryContentIncluded": false,
@@ -119,11 +124,11 @@
   },
   "runtimeActivation": {
     "coreEnabled": true,
-    "nativeRaidResultBindingEnabled": false,
+    "nativeRaidResultBindingEnabled": true,
     "dialoguePresenterRouterEnabled": true,
     "representativeInteractionRouterEnabled": true,
     "representativeInteractionDistance": 500,
-    "nativeDialoguePresenterEnabled": false,
+    "nativeDialoguePresenterEnabled": true,
     "agentAdapterEnabled": true,
     "persistenceFollowsFactionProgressionSidecar": true
   }

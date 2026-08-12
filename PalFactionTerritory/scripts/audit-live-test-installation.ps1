@@ -6,7 +6,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ExpectedBuildId = "24467282"
+$ExpectedBuildId = "24575825"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $WorkspaceRoot = Split-Path -Parent $ProjectRoot
 $AppManifest = "E:\SteamLibrary\steamapps\appmanifest_1623730.acf"
@@ -26,7 +26,7 @@ $LogicModsRoot = Join-Path $PaksRoot "LogicMods"
 $FactionProject = $ProjectRoot
 $EconomyShopContract = Join-Path $FactionProject "contracts\faction_economy_shops.v1.json"
 $EvidenceRoot = Join-Path $ProjectRoot "evidence\preflight"
-$EvidencePath = Join-Path $EvidenceRoot "install-audit-build24467282.json"
+$EvidencePath = Join-Path $EvidenceRoot "install-audit-build24575825.json"
 
 $BlockingProcesses = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
     $_.ProcessName -in @("Palworld-Win64-Shipping", "Palworld", "UnrealEditor", "UnrealEditor-Cmd", "UAssetGUI", "FModel")
@@ -154,13 +154,15 @@ $ExpectedQaHotkeySetting = if ($AllowQaHotkey) {
     "qaHotkeyEnabled = false"
 }
 foreach ($RequiredConfig in @(
-    'expectedSteamBuildId = "24467282"',
+    'expectedSteamBuildId = "24575825"',
     "enableSaveWrites = false",
     $ExpectedQaHotkeySetting,
     "nativeFactionMerchantSpawnEnabled = false",
     "demoNativeRaidSafeMode = true",
-    "nativeRaidResultBindingEnabled = false",
-    "nativeDialoguePresenterEnabled = false"
+    "nativeRaidResultBindingEnabled = true",
+    "nativeRaidLiveTest = {",
+    "enabled = false",
+    "nativeDialoguePresenterEnabled = true"
 )) {
     if (-not $InstalledConfigText.Contains($RequiredConfig)) {
         throw "Required safe config is missing: $RequiredConfig"
@@ -170,18 +172,13 @@ foreach ($RequiredConfig in @(
 $EconomyShopContractObject = Get-Content -LiteralPath $EconomyShopContract -Raw -Encoding utf8 |
     ConvertFrom-Json
 $RuntimeActivation = $EconomyShopContractObject.runtimeActivation
-$ExpectedMerchantActivation = if ($AllowMerchantCandidate) {
-    @{
-        customProductRowsEnabled = $true
-        nativeMerchantSpawnEnabled = $true
-        nativeShopBindingEnabled = $true
-    }
-} else {
-    @{
-        customProductRowsEnabled = $false
-        nativeMerchantSpawnEnabled = $false
-        nativeShopBindingEnabled = $false
-    }
+# Merchant Guild activation is now part of the accepted formal baseline. Keep
+# the legacy switch for command-line compatibility, but do not downgrade an
+# installed release to the pre-acceptance disabled contract.
+$ExpectedMerchantActivation = @{
+    customProductRowsEnabled = $true
+    nativeMerchantSpawnEnabled = $true
+    nativeShopBindingEnabled = $true
 }
 foreach ($Entry in $ExpectedMerchantActivation.GetEnumerator()) {
     if ([bool]$RuntimeActivation.($Entry.Key) -ne [bool]$Entry.Value) {
@@ -190,12 +187,14 @@ foreach ($Entry in $ExpectedMerchantActivation.GetEnumerator()) {
 }
 foreach ($DisabledActivationFlag in @(
     "dynamicRestockEnabled",
-    "procurementMoneyBonusEnabled",
-    "procurementCommerceReputationEnabled"
+    "procurementMoneyBonusEnabled"
 )) {
     if ($RuntimeActivation.$DisabledActivationFlag -ne $false) {
         throw "Economy shop activation must remain disabled before live testing: $DisabledActivationFlag"
     }
+}
+if ($RuntimeActivation.procurementCommerceReputationEnabled -ne $true) {
+    throw "Confirmed native sale reputation settlement must stay enabled after live acceptance"
 }
 
 $QaHarnesses = @(
@@ -217,7 +216,7 @@ foreach ($QaName in $QaHarnesses) {
 
 New-Item -ItemType Directory -Path $EvidenceRoot -Force | Out-Null
 [ordered]@{
-    schemaVersion = "1.0.0"
+    schemaVersion = "1.1.0"
     auditedAt = (Get-Date).ToString("o")
     result = "PASS"
     gameBuild = $ExpectedBuildId
@@ -249,7 +248,7 @@ New-Item -ItemType Directory -Path $EvidenceRoot -Force | Out-Null
         nativeShopBindingEnabled = [bool]$RuntimeActivation.nativeShopBindingEnabled
         dynamicRestockEnabled = $false
         procurementMoneyBonusEnabled = $false
-        procurementCommerceReputationEnabled = $false
+        procurementCommerceReputationEnabled = [bool]$RuntimeActivation.procurementCommerceReputationEnabled
     }
     originalGamePakChanged = $false
     saveFilesChanged = $false

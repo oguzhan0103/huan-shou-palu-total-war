@@ -19,9 +19,19 @@
     "sourceContract": "faction_commerce.v1.json",
     "placementId": "pwft.commerce.faction_market_island",
     "referenceFastTravelPointId": "FTPoint90",
-    "rootLocation": null,
-    "rootRotation": null,
-    "liveGroundValidationRequired": true
+    "rootLocation": {
+      "X": -492507.908,
+      "Y": -42766.375,
+      "Z": -1992.57
+    },
+    "rootRotation": {
+      "Pitch": 0,
+      "Yaw": 235.46,
+      "Roll": 0
+    },
+    "liveGroundValidationRequired": false,
+    "liveGroundValidationEvidence":
+      "docs/43_FTPoint90商人商会正式落位_2026-08-11.md"
   },
   "nativeItemShopAssets": {
     "createData": {
@@ -140,9 +150,9 @@
     "playerMayUseNativeSellUIForOtherItems": true,
     "unrequestedItemCommerceReputation": 0,
     "targetPriceSettlementMode": "native_sale_plus_mod_bonus_after_confirmed_server_success",
-    "serverSuccessSignalStatus": "replication_probe_ready_settlement_disabled_live_acceptance_pending",
+    "serverSuccessSignalStatus": "native_server_request_plus_inventory_replication_confirmation_enabled",
     "moneyBonusMutationEnabled": false,
-    "commerceReputationSettlementEnabled": false
+    "commerceReputationSettlementEnabled": true
   },
   "generatedArtifacts": {
     "catalog": "generated/faction-economy-shops/catalog.v1.json",
@@ -160,7 +170,7 @@
     "nativeShopBindingEnabled": true,
     "dynamicRestockEnabled": false,
     "procurementMoneyBonusEnabled": false,
-    "procurementCommerceReputationEnabled": false,
-    "reason": "merchant_island_ground_refresh_and_server_sale_success_live_validation_pending"
+    "procurementCommerceReputationEnabled": true,
+    "reason": "native_server_request_and_inventory_replication_confirmation_gate_enabled"
   }
 }

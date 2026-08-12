@@ -15,6 +15,8 @@ return {
         "pwft.world.unique-pals",
         "pwft.world.city-states",
         "pwft.world.endings",
+        "pwft.reward.policies",
+        "pwft.npc.leader-guards",
     },
     localizationKeys = Localization.catalog,
 }

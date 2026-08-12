@@ -1,7 +1,15 @@
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
-$Version = "1.0.0"
+$CargoManifest = Get-Content -LiteralPath (Join-Path $ProjectRoot "Cargo.toml") -Raw
+$VersionMatch = [regex]::Match(
+    $CargoManifest,
+    '(?ms)^\[package\]\s*.*?^version\s*=\s*"(?<version>\d+\.\d+\.\d+)"'
+)
+if (-not $VersionMatch.Success) {
+    throw "Unable to read package version from Cargo.toml"
+}
+$Version = $VersionMatch.Groups["version"].Value
 $PackageName = "PalAgentDialogue-Experimental-v$Version-windows-x64"
 $ReleaseRoot = Join-Path $ProjectRoot "release"
 $StageRoot = Join-Path $ReleaseRoot $PackageName
@@ -40,6 +48,23 @@ try {
     foreach ($File in @("README.md", "PRIVACY.md", "SECURITY.md", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md", "LICENSE", ".env.example")) {
         Copy-Item -LiteralPath (Join-Path $ProjectRoot $File) -Destination $ResolvedStageRoot
     }
+
+    $PackageManifest = [ordered]@{
+        schemaVersion = "1.0.0"
+        component = "PalAgentDialogue"
+        componentVersion = $Version
+        packageType = "local-windows-binary-development"
+        platform = "windows-x64"
+        targetSteamBuildId = "24575825"
+        publicGitHubRelease = $false
+        sourceOnly = $false
+        authority = "dialogue-and-whitelisted-proposals-only"
+        directGameStateMutation = $false
+        dependencyLicenseReview = "required-before-redistribution"
+    }
+    $PackageManifest | ConvertTo-Json -Depth 4 | Set-Content `
+        -LiteralPath (Join-Path $ResolvedStageRoot "PACKAGE-MANIFEST.json") `
+        -Encoding UTF8
 
     Compress-Archive -Path (Join-Path $ResolvedStageRoot "*") -DestinationPath $ArchivePath -CompressionLevel Optimal -Force
     $ArchiveHash = Get-FileHash -Algorithm SHA256 -LiteralPath $ArchivePath

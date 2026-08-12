@@ -512,12 +512,15 @@ def main() -> int:
         "nativeMerchantSpawnEnabled",
         "customProductRowsEnabled",
         "dynamicPriceRuntimeEnabled",
-        "requestedSaleReputationSettlementEnabled",
     ):
         check.require(
             activation[key] is False,
             f"economy runtime feature must remain disabled before validation: {key}",
         )
+    check.require(
+        activation["requestedSaleReputationSettlementEnabled"] is True,
+        "requested-sale reputation must use the confirmed native-sale gate",
+    )
 
     print(
         "PASS faction economy contract "

@@ -90,7 +90,7 @@ local function validate_contract(contract)
     local membership = contract.membershipPolicy
     assert(type(membership) == "table", "membership policy is required")
     assert(
-        membership.joinDiplomacyEffectsStatus == "runtime_overlay_and_content_adapter_ready_native_presenter_pending",
+        membership.joinDiplomacyEffectsStatus == "runtime_overlay_content_adapter_and_native_presenter_ready",
         "human faction relation matrix must be ingested before runtime diplomacy work"
     )
     local diplomacy = membership.joinDiplomacyEffects
@@ -514,6 +514,8 @@ function Progression.create(contract, snapshot)
         factionKinds = faction_kinds,
         rankIndexes = {},
         humanRelationMatrix = {},
+        restoreListeners = {},
+        restoreListenerOrder = {},
     }
     for index, rank in ipairs(contract.rankPolicy.ranks) do
         instance.rankIndexes[rank.id] = index
@@ -1186,14 +1188,85 @@ function Progression:export_snapshot()
     return copy(self.state)
 end
 
+function Progression:register_restore_listener(listener_id, listener)
+    require_non_empty_string(listener_id, "restore listener ID")
+    assert(type(listener) == "function", "restore listener must be a function")
+    if self.restoreListeners[listener_id] ~= nil then
+        return result(false, "restore-listener-id-conflict", {
+            listenerId = listener_id,
+        })
+    end
+    self.restoreListeners[listener_id] = listener
+    self.restoreListenerOrder[#self.restoreListenerOrder + 1] = listener_id
+    return result(true, "restore-listener-registered", {
+        listenerId = listener_id,
+    })
+end
+
+function Progression:restore_listener_status()
+    return {
+        count = #self.restoreListenerOrder,
+        listenerIds = copy(self.restoreListenerOrder),
+    }
+end
+
 function Progression:restore_snapshot(snapshot)
     validate_snapshot(snapshot, self.factionKinds)
+    local previous_state = self.state
     self.state = copy(snapshot)
-    refresh_all(self)
+    local refresh_ok, refresh_error = pcall(refresh_all, self)
+    if not refresh_ok then
+        self.state = previous_state
+        refresh_all(self)
+        error("snapshot refresh failed: " .. tostring(refresh_error))
+    end
+
+    local listener_failure = nil
+    for _, listener_id in ipairs(self.restoreListenerOrder) do
+        local listener = self.restoreListeners[listener_id]
+        local called, response, response_reason = pcall(
+            listener,
+            {
+                phase = "apply",
+                listenerId = listener_id,
+            }
+        )
+        if not called then
+            listener_failure = listener_id .. ":" .. tostring(response)
+            break
+        end
+        if response == false
+            or (type(response) == "table" and response.ok == false) then
+            local reason = response_reason
+            if type(response) == "table" then
+                reason = response.reason
+            end
+            listener_failure = listener_id .. ":"
+                .. tostring(reason or "listener-rejected-restore")
+            break
+        end
+    end
+    if listener_failure ~= nil then
+        local rejected_state = self.state
+        self.state = previous_state
+        refresh_all(self)
+        for _, listener_id in ipairs(self.restoreListenerOrder) do
+            pcall(
+                self.restoreListeners[listener_id],
+                {
+                    phase = "rollback",
+                    listenerId = listener_id,
+                    rejectedState = rejected_state,
+                }
+            )
+        end
+        error("snapshot restore listener failed: " .. listener_failure)
+    end
     return {
         ok = true,
         reason = "snapshot-restored",
         revision = self.state.revision,
+        reboundListenerCount = #self.restoreListenerOrder,
     }
 end
 

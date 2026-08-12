@@ -9,20 +9,31 @@ param(
 $ErrorActionPreference = "Stop"
 $CompanionRoot = $PSScriptRoot
 $ActiveFileName = "pwft-companion-active-v1.json"
+$AgentOperatorStatusFileName = "pwft-agent-operator-status-v1.json"
+$AgentOperatorInputFileName = "pwft-agent-operator-input-v1.json"
+$OperatorTokenBytes = [byte[]]::new(32)
+$OperatorTokenRng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+try { $OperatorTokenRng.GetBytes($OperatorTokenBytes) }
+finally { $OperatorTokenRng.Dispose() }
+$OperatorToken = ([BitConverter]::ToString($OperatorTokenBytes)).Replace("-", "").ToLowerInvariant()
+$AgentRuntimeProcess = $null
 
 function Resolve-StateDirectory {
     param([string]$Requested)
 
-    $Candidates = [System.Collections.Generic.List[string]]::new()
     if (-not [string]::IsNullOrWhiteSpace($Requested)) {
-        $Candidates.Add($Requested)
+        $Explicit = [System.IO.Path]::GetFullPath($Requested)
+        if (-not (Test-Path -LiteralPath $Explicit -PathType Container)) {
+            throw "Explicit PalFactionTerritory0/State directory was not found: $Explicit"
+        }
+        return $Explicit
     }
+    $Candidates = [System.Collections.Generic.List[string]]::new()
     if (-not [string]::IsNullOrWhiteSpace($env:PWFT_STATE_DIR)) {
         $Candidates.Add($env:PWFT_STATE_DIR)
     }
     $Candidates.Add((Join-Path $CompanionRoot "..\Mods\PalFactionTerritory0\State"))
     $Candidates.Add((Join-Path $CompanionRoot "..\mod0\ue4ss\PalFactionTerritory0\State"))
-    $Candidates.Add("E:\SteamLibrary\steamapps\common\Palworld\Pal\Binaries\Win64\ue4ss\Mods\PalFactionTerritory0\State")
     $Candidates.Add("C:\Program Files (x86)\Steam\steamapps\common\Palworld\Pal\Binaries\Win64\ue4ss\Mods\PalFactionTerritory0\State")
 
     $Existing = @()
@@ -138,6 +149,200 @@ function Read-TransactionEvents {
     return [ordered]@{ ok = $true; events = $Events }
 }
 
+function Read-AgentOperatorStatus {
+    param([string]$Root)
+    $StatusPath = Join-Path $Root $AgentOperatorStatusFileName
+    if (-not (Test-Path -LiteralPath $StatusPath -PathType Leaf)) {
+        return [ordered]@{
+            ok = $false
+            reason = "waiting-for-agent-operator"
+            canSubmit = $false
+        }
+    }
+    try {
+        $Info = Get-Item -LiteralPath $StatusPath
+        if ($Info.Length -gt 65536) {
+            throw "agent operator status exceeds 64 KiB"
+        }
+        $Status = Get-Content -LiteralPath $StatusPath -Raw -Encoding utf8 |
+            ConvertFrom-Json
+        return [ordered]@{
+            ok = $true
+            status = $Status
+        }
+    }
+    catch {
+        return [ordered]@{
+            ok = $false
+            reason = "agent-operator-status-read-failed"
+            detail = $_.Exception.Message
+            canSubmit = $false
+        }
+    }
+}
+
+function Write-AgentOperatorCommand {
+    param(
+        [System.Net.HttpListenerContext]$Context,
+        [string]$Root
+    )
+    $AllowedOrigin = "http://127.0.0.1:$Port"
+    if ($Context.Request.RemoteEndPoint -eq $null -or
+        -not [System.Net.IPAddress]::IsLoopback($Context.Request.RemoteEndPoint.Address)) {
+        return [ordered]@{ StatusCode = 403; Payload = @{ ok = $false; reason = "loopback-only" } }
+    }
+    if ($Context.Request.Headers["Origin"] -ne $AllowedOrigin -or
+        $Context.Request.Headers["X-PWFT-Operator-Token"] -ne $OperatorToken) {
+        return [ordered]@{ StatusCode = 403; Payload = @{ ok = $false; reason = "operator-origin-or-token-invalid" } }
+    }
+    if ($Context.Request.ContentType -notlike "application/json*") {
+        return [ordered]@{ StatusCode = 415; Payload = @{ ok = $false; reason = "json-required" } }
+    }
+    if ($Context.Request.ContentLength64 -gt 32768) {
+        return [ordered]@{ StatusCode = 413; Payload = @{ ok = $false; reason = "request-too-large" } }
+    }
+    try {
+        $Reader = [System.IO.StreamReader]::new(
+            $Context.Request.InputStream,
+            [System.Text.UTF8Encoding]::new($false, $true),
+            $true,
+            4096,
+            $false
+        )
+        try { $BodyText = $Reader.ReadToEnd() } finally { $Reader.Dispose() }
+        if ([System.Text.Encoding]::UTF8.GetByteCount($BodyText) -gt 32768) {
+            throw "request body exceeds 32 KiB"
+        }
+        $Body = $BodyText | ConvertFrom-Json
+        $PlayerText = [string]$Body.playerText
+        $TextElements = [System.Globalization.StringInfo]::new($PlayerText).LengthInTextElements
+        if ([string]::IsNullOrWhiteSpace($PlayerText) -or $TextElements -gt 8000) {
+            return [ordered]@{ StatusCode = 400; Payload = @{ ok = $false; reason = "player-text-invalid" } }
+        }
+        $AgentStatus = Read-AgentOperatorStatus -Root $Root
+        if (-not $AgentStatus.ok -or -not [bool]$AgentStatus.status.canSubmit -or
+            [string]::IsNullOrWhiteSpace([string]$AgentStatus.status.activePresentationId)) {
+            return [ordered]@{ StatusCode = 409; Payload = @{ ok = $false; reason = "no-active-agent-dialogue" } }
+        }
+        $Command = [ordered]@{
+            schemaVersion = "1.0.0"
+            commandId = "operator-" + [Guid]::NewGuid().ToString("N")
+            createdAtEpoch = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+            action = "submit-agent-text"
+            presentationId = [string]$AgentStatus.status.activePresentationId
+            playerText = $PlayerText
+        }
+        $CommandJson = $Command | ConvertTo-Json -Depth 8 -Compress
+        $TargetPath = Join-Path $Root $AgentOperatorInputFileName
+        $TemporaryPath = "$TargetPath.tmp-$([Guid]::NewGuid().ToString('N'))"
+        $BackupPath = "$TargetPath.bak-$([Guid]::NewGuid().ToString('N'))"
+        [System.IO.File]::WriteAllText(
+            $TemporaryPath,
+            $CommandJson,
+            [System.Text.UTF8Encoding]::new($false)
+        )
+        try {
+            if (Test-Path -LiteralPath $TargetPath -PathType Leaf) {
+                [System.IO.File]::Replace(
+                    $TemporaryPath,
+                    $TargetPath,
+                    $BackupPath
+                )
+            }
+            else {
+                [System.IO.File]::Move($TemporaryPath, $TargetPath)
+            }
+        }
+        finally {
+            if (Test-Path -LiteralPath $TemporaryPath -PathType Leaf) {
+                Remove-Item -LiteralPath $TemporaryPath -Force
+            }
+            if (Test-Path -LiteralPath $BackupPath -PathType Leaf) {
+                Remove-Item -LiteralPath $BackupPath -Force
+            }
+        }
+        return [ordered]@{
+            StatusCode = 202
+            Payload = @{
+                ok = $true
+                reason = "agent-text-command-queued"
+                commandId = $Command.commandId
+                presentationId = $Command.presentationId
+                directStateMutation = $false
+            }
+        }
+    }
+    catch {
+        return [ordered]@{
+            StatusCode = 400
+            Payload = @{
+                ok = $false
+                reason = "agent-command-invalid"
+                detail = $_.Exception.Message
+            }
+        }
+    }
+}
+
+function Start-LocalAgentRuntime {
+    param([string]$StateRoot)
+    $RepositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $CompanionRoot "..\.."))
+    $AgentProjectRoot = Join-Path $RepositoryRoot "PalAgentDialogue"
+    $ExecutableCandidates = [System.Collections.Generic.List[string]]::new()
+    if (-not [string]::IsNullOrWhiteSpace($env:PAL_AGENT_EXECUTABLE)) {
+        $ExecutableCandidates.Add($env:PAL_AGENT_EXECUTABLE)
+    }
+    $ExecutableCandidates.Add((Join-Path $AgentProjectRoot "target\release\pal-agent-dialogue.exe"))
+    $ExecutableCandidates.Add((Join-Path $CompanionRoot "bin\pal-agent-dialogue.exe"))
+    $Executable = @(
+        $ExecutableCandidates |
+            ForEach-Object { [System.IO.Path]::GetFullPath($_) } |
+            Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
+    ) | Select-Object -First 1
+    $CharacterPackCandidates = [System.Collections.Generic.List[string]]::new()
+    if (-not [string]::IsNullOrWhiteSpace($env:PAL_AGENT_CHARACTER_PACK)) {
+        $CharacterPackCandidates.Add($env:PAL_AGENT_CHARACTER_PACK)
+    }
+    $CharacterPackCandidates.Add((Join-Path $AgentProjectRoot "character-packs\pwft-author-sdk-minimal.json"))
+    $CharacterPackCandidates.Add((Join-Path $CompanionRoot "character-packs\pwft-author-sdk-minimal.json"))
+    $CharacterPack = @(
+        $CharacterPackCandidates |
+            ForEach-Object { [System.IO.Path]::GetFullPath($_) } |
+            Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
+    ) | Select-Object -First 1
+    $BridgeRoot = Join-Path $StateRoot "AgentDialogue"
+    if ([string]::IsNullOrWhiteSpace($Executable) -or
+        [string]::IsNullOrWhiteSpace($CharacterPack)) {
+        Write-Warning "Local Agent runtime or paired character pack is unavailable. Build PalAgentDialogue with 'cargo build --release', or set PAL_AGENT_EXECUTABLE and PAL_AGENT_CHARACTER_PACK. The offline dialogue tree remains usable."
+        return $null
+    }
+    $Model = if ([string]::IsNullOrWhiteSpace($env:PAL_AGENT_MODEL)) { "gemma4:e4b" } else { $env:PAL_AGENT_MODEL }
+    $Environment = @{
+        PAL_AGENT_PROVIDER = "ollama"
+        PAL_AGENT_MODEL = $Model
+        PAL_AGENT_OLLAMA_BASE_URL = "http://127.0.0.1:11434"
+        PAL_AGENT_TIMEOUT_SECONDS = "120"
+    }
+    $StartInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $StartInfo.FileName = $Executable
+    $StartInfo.UseShellExecute = $false
+    $StartInfo.CreateNoWindow = $true
+    # The Agent also watches this companion PID. If the console is force-closed
+    # and PowerShell cannot run its finally block, the child still self-exits.
+    $StartInfo.Arguments = ('run-owned "{0}" "{1}" {2}' -f $CharacterPack, $BridgeRoot, $PID)
+    foreach ($Name in $Environment.Keys) {
+        $StartInfo.EnvironmentVariables[$Name] = $Environment[$Name]
+    }
+    $Process = [System.Diagnostics.Process]::new()
+    $Process.StartInfo = $StartInfo
+    if (-not $Process.Start()) {
+        throw "Local Agent runtime could not be started."
+    }
+    Write-Host "Agent: local Ollama ($Model), PID $($Process.Id)"
+    Write-Host "Bridge: $BridgeRoot"
+    return $Process
+}
+
 function Write-StaticResponse {
     param(
         [System.Net.HttpListenerContext]$Context,
@@ -166,6 +371,13 @@ $Listener = [System.Net.HttpListener]::new()
 $Listener.Prefixes.Add($Prefix)
 $Listener.Start()
 
+try {
+    $AgentRuntimeProcess = Start-LocalAgentRuntime -StateRoot $ResolvedStateDir
+}
+catch {
+    Write-Warning "Local Agent startup failed: $($_.Exception.Message)"
+}
+
 Write-Host "Palworld Total War - Faction Companion"
 Write-Host "URL: $Prefix"
 Write-Host "Ledger: $ResolvedStateDir"
@@ -179,10 +391,16 @@ try {
     while ($Listener.IsListening) {
         $Context = $Listener.GetContext()
         try {
+            if ($Context.Request.HttpMethod -eq "POST" -and
+                $Context.Request.Url.AbsolutePath -eq "/api/agent/submit") {
+                $Outcome = Write-AgentOperatorCommand -Context $Context -Root $ResolvedStateDir
+                Write-JsonResponse -Context $Context -StatusCode $Outcome.StatusCode -Payload $Outcome.Payload
+                continue
+            }
             if ($Context.Request.HttpMethod -ne "GET") {
                 Write-JsonResponse -Context $Context -StatusCode 405 -Payload @{
                     ok = $false
-                    reason = "read-only-console"
+                    reason = "method-not-allowed"
                 }
                 continue
             }
@@ -191,7 +409,11 @@ try {
                     Write-JsonResponse -Context $Context -StatusCode 200 -Payload @{
                         ok = $true
                         service = "pwft-companion"
-                        readOnly = $true
+                        readOnly = $false
+                        ledgerReadOnly = $true
+                        agentTextSubmission = $true
+                        directStateMutation = $false
+                        operatorToken = $OperatorToken
                         stateDirectory = $ResolvedStateDir
                     }
                 }
@@ -203,6 +425,11 @@ try {
                 "/api/events" {
                     Write-JsonResponse -Context $Context -StatusCode 200 -Payload (
                         Read-TransactionEvents -Root $ResolvedStateDir
+                    )
+                }
+                "/api/agent/status" {
+                    Write-JsonResponse -Context $Context -StatusCode 200 -Payload (
+                        Read-AgentOperatorStatus -Root $ResolvedStateDir
                     )
                 }
                 "/app.js" {
@@ -230,4 +457,11 @@ try {
 finally {
     $Listener.Stop()
     $Listener.Close()
+    if ($AgentRuntimeProcess -ne $null -and -not $AgentRuntimeProcess.HasExited) {
+        $AgentRuntimeProcess.Kill()
+        $AgentRuntimeProcess.WaitForExit(5000) | Out-Null
+    }
+    if ($AgentRuntimeProcess -ne $null) {
+        $AgentRuntimeProcess.Dispose()
+    }
 }

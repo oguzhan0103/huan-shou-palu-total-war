@@ -14,7 +14,7 @@ assert(initial.palReconciliationUnlocked == false)
 assert(initial.ending3Unlocked == false)
 
 local diplomacy = Registry.progression.membershipPolicy.joinDiplomacyEffects
-assert(Registry.progression.membershipPolicy.joinDiplomacyEffectsStatus == "runtime_overlay_and_content_adapter_ready_native_presenter_pending")
+assert(Registry.progression.membershipPolicy.joinDiplomacyEffectsStatus == "runtime_overlay_content_adapter_and_native_presenter_ready")
 assert(diplomacy.sourceThreadId == "019f7d91-89f6-7c33-809c-2bb61aedc2a6")
 assert(diplomacy.defaultUnspecifiedRelation == "Neutral")
 assert(diplomacy.reputationMutationOnJoin == false)

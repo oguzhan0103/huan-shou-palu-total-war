@@ -41,6 +41,11 @@ local function default_now_utc()
     return os.date("!%Y-%m-%dT%H:%M:%SZ")
 end
 
+local function default_request_run_id()
+    local address = tostring({}):match("0x(%x+)") or "lua"
+    return string.format("%08x-%s", os.time(), address)
+end
+
 local function default_bridge_resolver()
     return rawget(_G, "PAL_AGENT_DIALOGUE_BRIDGE_V1")
 end
@@ -78,14 +83,18 @@ function PalDialogueController.create(discourse, configuration, options)
     options = options or {}
     assert(options.resolveAgentBridge == nil or type(options.resolveAgentBridge) == "function", "Agent bridge resolver must be a function")
     assert(options.nowUtc == nil or type(options.nowUtc) == "function", "UTC clock must be a function")
+    assert(options.requestRunId == nil or safe_id(options.requestRunId), "Agent request run ID must be safe")
     return setmetatable({
         version = API_VERSION,
         discourse = discourse,
         enabled = configuration.agentAdapterEnabled,
+        nativePresenterEnabled =
+            configuration.nativeDialoguePresenterEnabled == true,
         defaultLocale = configuration.agentDefaultLocale or "zh-CN",
         resolveAgentBridge = options.resolveAgentBridge or default_bridge_resolver,
         nowUtc = options.nowUtc or default_now_utc,
         nextRequestOrdinal = 0,
+        requestRunId = options.requestRunId or default_request_run_id(),
         requests = {},
         activeByNode = {},
         submittedCount = 0,
@@ -100,7 +109,8 @@ function PalDialogueController.create(discourse, configuration, options)
             deterministicRuleEngineOwnsOutcome = true,
             directAgentStateMutation = false,
             PalworldSaveMutation = false,
-            nativePresenter = false,
+            nativePresenter =
+                configuration.nativeDialoguePresenterEnabled == true,
             authoredStoryContent = false,
         },
     }, { __index = PalDialogueController })
@@ -124,6 +134,7 @@ function PalDialogueController:_bridge()
     local resolved, bridge = pcall(self.resolveAgentBridge)
     if not resolved
         or type(bridge) ~= "table"
+        or bridge.ready == false
         or type(bridge.submit_request) ~= "function"
         or type(bridge.poll_response) ~= "function"
     then
@@ -187,8 +198,16 @@ function PalDialogueController:_make_request(session, player_text, context)
 
     self.nextRequestOrdinal = self.nextRequestOrdinal + 1
     local ordinal = self.nextRequestOrdinal
-    local request_id = string.format("pwft-agent-%08d", ordinal)
-    local external_session_id = string.format("pwft-session-%08d", ordinal)
+    local request_id = string.format(
+        "pwft-agent-%s-%08d",
+        self.requestRunId,
+        ordinal
+    )
+    local external_session_id = string.format(
+        "pwft-session-%s-%08d",
+        self.requestRunId,
+        ordinal
+    )
     return {
         payload = {
             schemaVersion = BRIDGE_SCHEMA_VERSION,
@@ -548,7 +567,7 @@ function PalDialogueController:status()
         proposalRequiresPlayerConfirmation = true,
         deterministicRuleEngineOwnsOutcome = true,
         directAgentStateMutation = false,
-        nativePresenterEnabled = false,
+        nativePresenterEnabled = self.nativePresenterEnabled,
         storyContentIncluded = false,
     }
 end

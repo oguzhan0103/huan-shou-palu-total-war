@@ -1,7 +1,7 @@
 return {
     schemaVersion = "1.0.0",
     releaseId = "PalFactionTerritory0-mod0",
-    expectedSteamBuildId = "24467282",
+    expectedSteamBuildId = "24575825",
     defaultMapMode = "Original",
 
     -- The progression core owns reputation, independent human memberships,
@@ -12,6 +12,34 @@ return {
     -- Palworld's own SaveGames payload.
     factionProgression = {
         enabled = true,
+        joinRepresentative = {
+            nativeJoinRepresentativeEnabled = true,
+            representativeInteractionDistance = 500,
+            confirmationKeys = "F1/F2",
+            storyContentIncluded = false,
+        },
+        playerGuard = {
+            nativePlayerGuardEnabled = true,
+            controllerClassPath =
+                "/Game/Pal/Blueprint/Controller/NPC/"
+                    .. "BP_NPCAIController_Visitor_Guardman."
+                    .. "BP_NPCAIController_Visitor_Guardman_C",
+            followIntervalMs = 1000,
+            acceptanceRadius = 350,
+            followFailureLimit = 8,
+            storyContentIncluded = false,
+            liveTest = {
+                enabled = false,
+                key = "F4",
+                factionId = "pwft.faction.rayne_syndicate",
+                characterId = "NPC_Hunter",
+                characterClassPath =
+                    "/Game/Pal/Blueprint/Character/NPC/Normal/"
+                        .. "BP_NPC_Hunter.BP_NPC_Hunter_C",
+                spawnBackDistance = 180,
+                spawnSideDistance = 160,
+            },
+        },
         persistence = {
             enabled = true,
             mode = "mod-sidecar-json",
@@ -35,15 +63,29 @@ return {
     -- Finite Pal reconciliation is implemented as a Mod-owned service inside
     -- the progression snapshot. Fan content packs register each tribe's
     -- token quota, quests, and discourse content through its public API.
-    -- Native raid-result and dialogue presentation stay disabled until their
-    -- authoritative callbacks have been accepted in-game. The optional Agent
+    -- Native raid results are observed through the manager-owned start/end
+    -- broadcasts and the enemy incident's spawn/death callbacks. Events stay
+    -- fail-closed until a content pack maps the native invader group to one
+    -- Pal faction. The native dialogue presenter uses
+    -- a Mod-owned text panel and only handles registered representative actors;
+    -- it never supplies story content or mutates deterministic outcomes. The optional Agent
     -- adapter is active as a presentation-only bridge: unavailable or invalid
     -- responses fall back to the deterministic offline tree, and a model can
     -- never directly mutate affinity, quests, inventory, saves, or world state.
     palReconciliation = {
         enabled = true,
         normalizedRaidAdapterEnabled = true,
-        nativeRaidResultBindingEnabled = false,
+        nativeRaidResultBindingEnabled = true,
+        attendanceRaidResultBindingEnabled = true,
+        nativeRaidLiveTest = {
+            enabled = false,
+            groupName = "Invader_Group_Monster_Grade5_Basic",
+            palFactionId = "pwft.faction.dark_nocturnal_pal_tribe",
+            contentPackId = "pwft.qa.native-raid",
+            contentVersion = "1.0.0",
+            tokenQuota = 3,
+            maximumAffinityPerDiscourse = 10,
+        },
         leaderDesignation = "first-spawn-of-final-wave",
         offlineDialogueTreeEnabled = true,
         -- The router is data/UI-backend agnostic and may run before a cooked
@@ -52,10 +94,50 @@ return {
         dialoguePresenterRouterEnabled = true,
         representativeInteractionRouterEnabled = true,
         representativeInteractionDistance = 500,
-        nativeDialoguePresenterEnabled = false,
+        nativeDialoguePresenterEnabled = true,
         agentAdapterEnabled = true,
         agentDefaultLocale = "zh-CN",
+        -- The Ollama process stays outside Palworld.  This Mod writes only a
+        -- strictly validated request into its own State directory and polls a
+        -- presentation-only response.  main.lua derives both paths from the
+        -- loaded Mod directory so Steam does not need environment variables.
+        agentBridge = {
+            enabled = true,
+            rootPath = nil,
+            operatorInputPath = nil,
+            operatorStatusPath = nil,
+            pollIntervalMs = 500,
+            requestTtlSeconds = 600,
+            operatorCommandTtlSeconds = 300,
+        },
         storyContentIncluded = false,
+    },
+
+    -- Content authors install Lua data modules inside this Mod's Scripts
+    -- search path and opt them in here. UE4SS isolates each Mod's Lua global
+    -- environment, so cross-Mod _G registration is intentionally unsupported.
+    -- The base ships with no enabled story pack: an empty list means the Core
+    -- remains a mechanics-only foundation.
+    contentModules = {
+        enabled = true,
+        modules = {},
+        fallbackLocale = "zh-CN",
+        storyContentIncludedByBase = false,
+    },
+
+    -- Native attitude and NPC-leader guard adapters are optional trusted
+    -- providers.  The empty whitelist is fail-closed: the mechanics APIs are
+    -- available, but no game object can be mutated until an installed content
+    -- module explicitly opts in a provider ID + authority pair.
+    factionNpcAttitudes = {
+        providerWhitelist = {},
+    },
+    npcLeaderGuards = {
+        providerWhitelist = {},
+        maxPerLeader = 2,
+        maxPerFaction = 6,
+        maxPerScene = 12,
+        maximumMembersPerFormation = 16,
     },
 
     -- Player-facing read-only faction panel. It uses a dedicated cooked
@@ -66,6 +148,12 @@ return {
         enabled = true,
         key = "F5",
         zOrder = 90,
+        -- 1080p-safe wide layout. The original 575x610 panel wrapped every
+        -- faction row and clipped the Pal section below the viewport.
+        panelPosition = { X = 435.0, Y = 35.0 },
+        panelSize = { X = 1050.0, Y = 985.0 },
+        minTextWidth = 1010.0,
+        targetFontSize = 17,
     },
 
     -- Seven-faction commerce is driven by the versioned commerce contract.
@@ -81,14 +169,14 @@ return {
         -- the economy contract settlement switch remains false.
         nativeSaleReplicationProbeEnabled = true,
         -- Merchant Guild economy counters use the generated PFT_Economy_*
-        -- ItemShop rows. Keep native spawning locked until the FTPoint90
-        -- island ground transform and the compiled rows pass live review.
-        nativeEconomyMerchantSpawnEnabled = false,
+        -- ItemShop rows. Their native spawn, interaction, seven-row binding,
+        -- ground placement and cleanup all passed live review at FTPoint90.
+        nativeEconomyMerchantSpawnEnabled = true,
         nativeEconomyMerchantSpawnReason =
-            "runtime-created-generic-spawner-replaced-by-native-merchant-reuse",
+            "ftpoint90-seven-counter-live-accepted-2026-08-11",
         nativeFactionMerchantSpawnEnabled = false,
         nativeFactionMerchantSpawnReason =
-            "ftpoint90-market-island-selected-live-ground-and-variant-review-pending",
+            "ftpoint90-market-island-live-ground-accepted-2026-08-11",
         nativeCharacterAdapter = {
             enabled = true,
             collisionHandlingOverride = 2,
@@ -117,6 +205,20 @@ return {
             key = "F9",
             factionId = "pwft.faction.rayne_syndicate",
             forwardDistance = 600,
+        },
+        -- Production lifecycle: load the accepted fixed market only while a
+        -- local player is near the island, then destroy all owned counters
+        -- after departure. The wider removal radius prevents border thrash.
+        economyMerchantPresence = {
+            enabled = true,
+            -- The accepted market is offset from FTPoint90 and the tower's
+            -- level-object origin is not its visible mesh pivot. UE units
+            -- are centimetres, so use a forgiving 180 m island-arrival
+            -- envelope with 240 m hysteresis.
+            activationRadius = 18000,
+            deactivationRadius = 24000,
+            pollIntervalMs = 2000,
+            initialDelayMs = 2500,
         },
     },
 
@@ -168,7 +270,7 @@ return {
     -- the existing FTPoint24 map-icon click handler after the map is open.
     -- This temporary route is used to reach Small Settlement for the
     -- authorised raid test and is reverted before release.
-    enableMapFastTravelSelectionProbe = true,
+    enableMapFastTravelSelectionProbe = false,
     mapFastTravelSelectionProbeTarget = "FTPoint24",
     -- Palworld queries this for every visible map point during refresh.  The
     -- gate may return false for hostile destinations, but must never create a
@@ -331,10 +433,12 @@ return {
     settlementRaid = {
         enabled = true,
         replaceNativePlayerBaseInvasion = true,
-        -- Each live-test round selects exactly one execution route. Keep the
-        -- production candidate on the native negotiator lifecycle. The other
-        -- routes cannot run accidentally in the same countdown.
-        executionMode = "native-negotiator",
+        -- The game-owned incident API reports success on build 24467282 but
+        -- creates no visitor or enemy incident at dense player bases. Use the
+        -- live-accepted NPC-manager wave as the production route; its result
+        -- bridge still requires an actual all-members-dead victory plus direct
+        -- player/owned-Pal credit for the designated leader.
+        executionMode = "attendance-simulation",
         -- Concentrated live-test switch only. Ctrl+F8 calls this module's
         -- existing force_start path with a five-second countdown; it does not
         -- own actor spawning, AI, targeting, cleanup, or save persistence.
@@ -344,8 +448,9 @@ return {
         -- the public PalTimeManager API, wait one second, then request the
         -- same manager-owned invasion lifecycle. The preflight snapshot is
         -- restored after testing.
-        qaForceNightHour = 22,
-        qaNightSettleDelayMs = 1000,
+        qaForceNightHour = 23,
+        qaAuthoritativeNightRpcEnabled = true,
+        qaNightSettleDelayMs = 3000,
         nearestPalFactionId = "pwft.faction.dark_nocturnal_pal_tribe",
         -- Reuse Palworld's own Grade 5 meadow Pal invasion. The native data
         -- table contains several 61-80 compositions under this group, and the
@@ -363,6 +468,16 @@ return {
         -- destination without manufacturing a second invasion.
         nativeIncidentConfirmationDelayMs = 30000,
         nativeNegotiatorTimeoutMs = 180000,
+        -- Dense player bases can make the manager's travel-stage open-ground
+        -- search reject every visitor route even though the target camp and
+        -- observer are valid.  After the normal request has had a full
+        -- confirmation window, ask the same world-owned manager for its native
+        -- visitor incident with declaration travel ignored.  If even that
+        -- accepted request creates no incident, make one final manager-owned
+        -- enemy-incident request for the same camp/observer.  Both routes keep
+        -- the game's incident, wave, death and settlement callbacks.
+        nativeDirectIncidentFallbackEnabled = true,
+        nativeDirectIncidentConfirmationDelayMs = 15000,
         -- Repeated random/all launches can overlap the visitor and enemy
         -- phases. Keep the legacy diagnostic delays but disable those launch
         -- retries; one manager-owned base-camp request is the only production
@@ -393,17 +508,18 @@ return {
         -- no actors are created or modified; only an in-memory/log settlement
         -- record is emitted for a future external backend adapter.
         attendanceSimulation = {
-            enabled = false,
-            qaOnly = true,
-            liveValidated = false,
+            enabled = true,
+            qaOnly = false,
+            liveValidated = true,
+            resultBindingEnabled = true,
             playerPresentRadius = 22000.0,
             aggroRadius = 65000.0,
             -- When the countdown completes with the player in town, request
             -- several native NPC-manager Pal actors immediately around the
             -- player.  This avoids depending on field-spawner streaming
             -- distance or on a Pal walking in from outside the settlement.
-            -- The parent attendance gate remains disabled in production
-            -- until this route has completed live acceptance.
+            -- This route is the live-accepted production event source for
+            -- Build 24467282; the separate QA hotkey remains disabled.
             nativeCountdownSpawn = {
                 enabled = true,
                 -- The accepted siege route must create its own attackers.
@@ -417,10 +533,10 @@ return {
                     "MysteryMask",
                 },
                 offsets = {
-                    { X = 1200.0, Y = 0.0, Z = 250.0 },
-                    { X = -1200.0, Y = 0.0, Z = 250.0 },
-                    { X = 0.0, Y = 1200.0, Z = 250.0 },
-                    { X = 0.0, Y = -1200.0, Z = 250.0 },
+                    { X = 450.0, Y = 450.0, Z = 100.0 },
+                    { X = -450.0, Y = 450.0, Z = 100.0 },
+                    { X = 450.0, Y = -450.0, Z = 100.0 },
+                    { X = -450.0, Y = -450.0, Z = 100.0 },
                 },
                 resolveIntervalMs = 250,
                 maxResolveAttempts = 40,

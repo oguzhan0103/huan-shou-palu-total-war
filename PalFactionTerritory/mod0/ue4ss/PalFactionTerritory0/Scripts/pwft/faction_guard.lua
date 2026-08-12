@@ -88,11 +88,25 @@ function FactionGuard:deploy(faction_id, request_id, context)
             slotCount = entitlement.slotCount,
         })
     end
+    local provider_context = {}
+    for key, value in pairs(context or {}) do
+        provider_context[key] = value
+    end
+    local consumer_on_terminated = provider_context.onTerminated
+    provider_context.onTerminated = function(detail)
+        local active = self.active[faction_id]
+        if active ~= nil and active.requestId == request_id then
+            self.active[faction_id] = nil
+        end
+        if type(consumer_on_terminated) == "function" then
+            pcall(consumer_on_terminated, detail)
+        end
+    end
     local provider_ok, handle_or_error = pcall(
         provider.deploy,
         faction_id,
         request_id,
-        context or {}
+        provider_context
     )
     if not provider_ok or handle_or_error == nil then
         return result(false, "guard-deploy-failed", {

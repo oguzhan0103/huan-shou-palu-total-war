@@ -33,6 +33,7 @@ local api = FactionApi.create(
 )
 local registered = {}
 local unregistered = {}
+local interaction_contexts = {}
 local bridge = {
     register_vendor_actor = function(
         _,
@@ -49,6 +50,16 @@ local bridge = {
     unregister_vendor_actor = function(_, actor)
         table.insert(unregistered, actor)
         return true, "unregistered"
+    end,
+    begin_vendor_interaction = function(_, faction_id, actor)
+        table.insert(interaction_contexts, {
+            factionId = faction_id,
+            actor = actor,
+        })
+        return true, "context-ready"
+    end,
+    clear_vendor_interaction = function()
+        return true
     end,
 }
 
@@ -89,19 +100,19 @@ assert(plans[1].productGroupRowName
 assert(plans[1].nativeSpawnerRequired == false)
 assert(plans[1].npcManagerServerSpawnRequired == false)
 assert(plans[1].provenNativeSpawnerRoute
-    == "DirectDarkTraderDeferredActor")
+    == "DirectItemTraderDeferredActor")
 assert(plans[1].merchantOrganisationId
     == "pwft.commerce.merchant_guild")
-assert(plans[1].characterId == "NPC_Male_DarkTrader")
+assert(plans[1].characterId == "NPC_Male_Trader01_v04")
 assert(string.find(
     plans[1].characterClassPath,
-    "BP_NPC_DarkTrader_C",
+    "BP_NPC_Male_Trader01_v04_C",
     1,
     true
 ) ~= nil)
 assert(string.find(
     plans[1].spawnerClassPath,
-    "BP_MonoNPCSpawnerBossBase_BOSS_DarkTrader_C",
+    "BP_MonoNPCSpawnerBossBase_Male_Trader01_C",
     1,
     true
 ) ~= nil)
@@ -110,7 +121,7 @@ for _, plan in ipairs(plans) do
     assert(unique_save_keys[plan.spawnerSaveKey] == nil)
     unique_save_keys[plan.spawnerSaveKey] = true
 end
-assert(math.floor(plans[2].location.X + 0.5) == 1600)
+assert(math.floor(plans[2].location.X + 0.5) == 1120)
 assert(math.floor(plans[2].location.Y + 0.5) == 2000)
 
 local active_contract = copy(Registry.economyShops)
@@ -353,7 +364,7 @@ local manager_outcome = manager_runtime:activate_faction(
 assert(manager_outcome.ok)
 assert(string.find(
     proven_spawner_route,
-    "BP_MonoNPCSpawnerBossBase_BOSS_DarkTrader_C",
+    "BP_MonoNPCSpawnerBossBase_Male_Trader01_C",
     1,
     true
 ) ~= nil)
@@ -361,6 +372,12 @@ assert(manager_runtime:status().activeCount == 1)
 
 local market_spawn_rows = {}
 local market_handle_despawns = 0
+local market_world_abandons = 0
+local bridge_world_clears = 0
+bridge.clear_world_vendor_state = function()
+    bridge_world_clears = bridge_world_clears + 1
+    return true, "world-vendor-state-cleared"
+end
 local market_adapter = {
     asyncMerchantSpawnerEnabled = true,
     spawn_merchant_async = function(_, plan, callbacks)
@@ -384,6 +401,10 @@ local market_adapter = {
         assert(handle.factionId ~= nil)
         market_handle_despawns = market_handle_despawns + 1
         return true
+    end,
+    abandon_world_records = function()
+        market_world_abandons = market_world_abandons + 1
+        return { ok = true, abandonedCount = 7 }
     end,
 }
 local market_runtime = FactionEconomyMerchantRuntime.create(
@@ -416,6 +437,20 @@ market_spawn_rows = {}
 local reentered_market = market_runtime:activate_market(root, rotation)
 assert(reentered_market.ok)
 assert(market_runtime:status().activeCount == 7)
+local world_reloaded = market_runtime:deactivate_market(
+    "merchant-presence-world-reload"
+)
+assert(world_reloaded.ok)
+assert(world_reloaded.reason == "economy-market-world-reload-abandoned")
+assert(#world_reloaded.removedFactionIds == 7)
+assert(market_runtime:status().activeCount == 0)
+assert(market_handle_despawns == 7)
+assert(market_world_abandons == 1)
+assert(bridge_world_clears == 1)
+market_spawn_rows = {}
+local after_world_reload = market_runtime:activate_market(root, rotation)
+assert(after_world_reload.ok)
+assert(market_runtime:status().activeCount == 7)
 
 local routed_player = {
     K2_GetActorLocation = function()
@@ -423,7 +458,22 @@ local routed_player = {
     end,
 }
 local routed_calls = 0
-local routed_shop = {}
+local routed_shop = {
+    IsValid = function()
+        return true
+    end,
+    GetFullName = function()
+        return "PalItemShop routed-shop"
+    end,
+}
+local routed_pal_shop = {
+    IsValid = function()
+        return true
+    end,
+    GetFullName = function()
+        return "PalShop unrelated-pal-shop"
+    end,
+}
 local routed_parameter = nil
 local routed_parameter_spawns = 0
 local routed_hud_pushes = 0
@@ -504,14 +554,22 @@ local near_merchant = {
     end,
 }
 near_merchant.BP_NPCInteractionComponent = {
-    OnTriggerInteract = function(_, other, indicator_type)
-        assert(other == routed_player)
-        assert(indicator_type == 39)
+    OnTriggerInteract = function()
         routed_calls = routed_calls + 1
     end,
 }
 near_merchant.BP_PalShopVenderDataComponent = {
     MyItemShop = routed_shop,
+    MyPalShop = routed_pal_shop,
+    itemShopSimpleLotteryTableName = {
+        Key = "PFT_Economy_Rayne",
+    },
+    palShopSimpleLotteryTableName = {
+        Key = "PalLottery_DarkTrader",
+    },
+    TryGetItemShop = function()
+        return true, routed_shop
+    end,
 }
 local far_merchant = {
     K2_GetActorLocation = function()
@@ -537,14 +595,24 @@ local routed = market_runtime:interact_nearest(routed_player, 350)
 assert(routed.ok)
 assert(routed.reason == "merchant-native-item-shop-dispatched")
 assert(routed.factionId == "pwft.faction.rayne_syndicate")
+assert(#interaction_contexts == 1)
+assert(interaction_contexts[1].factionId
+    == "pwft.faction.rayne_syndicate")
+assert(interaction_contexts[1].actor == near_merchant)
 assert(
     routed.route
-        == "PalNPCInteractionComponent.OnTriggerInteract -> "
+        == "refresh_merchant_shop -> "
             .. "PalHUDService.Push(WBP_ItemShop_C,native-parameter)"
 )
-assert(routed.indicatorType == 39)
 assert(math.abs(routed.distance - 30) < 0.001)
-assert(routed_calls == 1)
+assert(routed_calls == 0)
+assert(routed.shopSource == "TryGetItemShop:out")
+assert(string.find(
+    routed.detail,
+    "itemRow=PFT_Economy_Rayne",
+    1,
+    true
+) ~= nil)
 assert(routed_parameter_spawns == 1)
 assert(routed_hud_pushes == 1)
 assert(routed.dispatchParameter == routed_parameter)

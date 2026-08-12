@@ -1,8 +1,11 @@
 # Third-party notices
 
-PalAgentDialogue source is MIT licensed. `Cargo.lock` pins Rust dependency
-versions and checksums. Release automation should additionally generate an SBOM
-and dependency-license report from the locked graph.
+PalAgentDialogue first-party source is MIT licensed. `Cargo.lock` pins Rust
+dependency versions and checksums; those dependencies remain under their own
+licenses. Before distributing a compiled sidecar, the distributor must generate
+and review an SBOM plus a dependency-license report from the exact locked graph.
+The public GitHub package is source-only and does not bundle the compiled Rust
+binary or vendored dependency source.
 
 The architecture was generalized from the project's own MIT-licensed external
 NPC runtime work. No character-specific story, generated output, game asset,
