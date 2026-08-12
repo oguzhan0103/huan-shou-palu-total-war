@@ -29,6 +29,8 @@ const RELATIONS = {
 
 const $ = (id) => document.getElementById(id);
 let eventCache = [];
+let operatorToken = "";
+let agentCanSubmit = false;
 
 function nameOf(id) {
   return FACTIONS[id]?.[0] ?? id.replace("pwft.faction.", "");
@@ -123,6 +125,45 @@ function setConnected(ok, detail) {
   $("profile-text").textContent = detail;
 }
 
+function renderAgentStatus(payload) {
+  const status = payload?.ok ? payload.status : null;
+  agentCanSubmit = Boolean(status?.canSubmit);
+  $("agent-text").disabled = !agentCanSubmit;
+  $("agent-submit").disabled = !agentCanSubmit;
+  const state = status?.requestState ?? "idle";
+  const labels = {
+    idle: agentCanSubmit ? "可以发送" : "等待游戏内开启论道",
+    pending: "本地模型生成中",
+  };
+  $("agent-status").textContent = labels[state] ?? (status?.reason ?? payload?.reason ?? "等待 Agent");
+  $("agent-detail").textContent = status?.reason === "agent-response-ready"
+    ? "回复已显示在游戏面板；若模型建议了选项，请回到游戏按 F3 确认。"
+    : status?.error
+      ? `最近错误：${status.error}；离线选项仍可使用。`
+      : agentCanSubmit
+        ? "文本只会进入当前活动论道，不具备修改游戏状态的权限。"
+        : "先在游戏中与已注册代表开始一轮论道。";
+}
+
+async function refreshAgent() {
+  try {
+    const response = await fetch("/api/agent/status", { cache: "no-store" });
+    renderAgentStatus(await response.json());
+  } catch (error) {
+    renderAgentStatus({ ok: false, reason: `Agent 状态读取失败：${error.message}` });
+  }
+}
+
+async function initializeOperator() {
+  try {
+    const response = await fetch("/api/health", { cache: "no-store" });
+    const payload = await response.json();
+    operatorToken = payload.operatorToken ?? "";
+  } catch (_) {
+    operatorToken = "";
+  }
+}
+
 async function refresh() {
   try {
     const [stateResponse, eventResponse] = await Promise.all([
@@ -161,5 +202,32 @@ async function refresh() {
 }
 
 $("refresh-button").addEventListener("click", refresh);
+$("agent-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const playerText = $("agent-text").value.trim();
+  if (!agentCanSubmit || !playerText || !operatorToken) return;
+  $("agent-submit").disabled = true;
+  $("agent-detail").textContent = "正在把文本交给游戏内的受限 Agent 桥……";
+  try {
+    const response = await fetch("/api/agent/submit", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-PWFT-Operator-Token": operatorToken,
+      },
+      body: JSON.stringify({ playerText }),
+    });
+    const payload = await response.json();
+    if (!payload.ok) throw new Error(payload.reason ?? "提交失败");
+    $("agent-text").value = "";
+    $("agent-detail").textContent = "已提交；等待本地 Ollama 生成回复。";
+  } catch (error) {
+    $("agent-detail").textContent = `提交失败：${error.message}；你仍可使用游戏内离线选项。`;
+  }
+  await refreshAgent();
+});
+initializeOperator();
 refresh();
+refreshAgent();
 setInterval(refresh, 2000);
+setInterval(refreshAgent, 750);

@@ -114,6 +114,19 @@ try {
         throw "Lua optional Agent Pal dialogue controller test failed"
     }
 
+    foreach ($AgentTest in @(
+        "mod0/tests/agent_dialogue_file_bridge_spec.lua",
+        "mod0/tests/agent_dialogue_operator_spec.lua"
+    )) {
+        $AgentOutput = & npx.cmd --offline --yes --package=fengari-node-cli@0.1.0 fengari $AgentTest 2>&1
+        $AgentExitCode = $LASTEXITCODE
+        $AgentOutput | Write-Output
+        $AgentText = $AgentOutput -join "`n"
+        if ($AgentExitCode -ne 0 -or $AgentText -match "(?im)assertion failed|stack traceback:") {
+            throw "Lua local Ollama Agent bridge test failed: $AgentTest"
+        }
+    }
+
     $PalDialoguePresenterOutput = & npx.cmd --offline --yes --package=fengari-node-cli@0.1.0 fengari "mod0/tests/pal_dialogue_presenter_spec.lua" 2>&1
     $PalDialoguePresenterExitCode = $LASTEXITCODE
     $PalDialoguePresenterOutput | Write-Output

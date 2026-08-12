@@ -40,6 +40,14 @@ Config.worldBalance.palFactionRage.enabled = true
 Config.worldBalance.loadedActorReconcile.enabled = true
 Config.factionProgression.persistence.rootPath =
     "mod0/ue4ss/PalFactionTerritory0/State"
+Config.palReconciliation.agentBridge.rootPath =
+    "C:/pwft-test/AgentDialogue"
+Config.palReconciliation.agentBridge.operatorInputPath =
+    "C:/pwft-test/pwft-agent-operator-input-v1.json"
+Config.palReconciliation.agentBridge.operatorStatusPath =
+    "C:/pwft-test/pwft-agent-operator-status-v1.json"
+-- Runtime smoke has no sidecar directory or scheduler. Inject a filesystem
+-- after construction through the public operator/bridge tests instead.
 local state = Runtime.start(Config, Registry, Policy)
 
 assert(state.mapMode == "Original")
@@ -55,6 +63,7 @@ assert(commands["pwft.region"] ~= nil)
 assert(commands["pwft.place"] ~= nil)
 assert(commands["pwft.danger"] ~= nil)
 assert(commands["pwft.raid"] ~= nil)
+assert(commands["pwft.dialogue"] ~= nil)
 assert(hooks["/Script/Pal.PalUIWorldMap:CreateWorldMapData"] ~= nil)
 assert(hooks["/Game/Pal/Blueprint/UI/UserInterface/InGame/PlaceName/WBP_IngamePlaceName.WBP_IngamePlaceName_C:Display Region"] ~= nil)
 assert(hooks["/Game/Pal/Blueprint/UI/UserInterface/Map/WBP_Map_IconFTTower.WBP_Map_IconFTTower_C:ClickEvent"] ~= nil)
@@ -74,6 +83,9 @@ assert(state.palDiscourseRuntime ~= nil)
 assert(state.palDialogueController ~= nil)
 assert(state.palDialoguePresenter ~= nil)
 assert(state.palRepresentativeInteraction ~= nil)
+assert(state.agentDialogueFileBridge ~= nil)
+assert(state.agentDialogueOperator ~= nil)
+assert(state.palDialogueController:status().bridgeAvailable == true)
 assert(state.factionApi ~= nil)
 assert(state.factionCommerce ~= nil)
 assert(state.factionEconomy ~= nil)
@@ -114,6 +126,8 @@ assert(state.factionEconomyShops.version == "1.0.0")
 assert(_G.PWFT_FACTION_API_V1 == state.factionApi)
 assert(_G.PWFT_COMPANION_LEDGER_V1 == state.companionLedger)
 assert(_G.PWFT_PAL_RECONCILIATION_API_V1 == state.palReconciliation)
+assert(_G.PWFT_AGENT_DIALOGUE_BRIDGE_V1 == state.agentDialogueFileBridge)
+assert(_G.PWFT_AGENT_DIALOGUE_OPERATOR_V1 == state.agentDialogueOperator)
 assert(
     _G.PWFT_PAL_RAID_RESULT_ADAPTER_V1
         == state.palRaidResultAdapter

@@ -81,6 +81,8 @@ try {
     $RequiredEntries = @(
         "Mods/PalFactionTerritory0/enabled.txt",
         "Mods/PalFactionTerritory0/Scripts/main.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/agent_dialogue_file_bridge.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/agent_dialogue_operator.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/commerce_bridge.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/config.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/content_pack_registry.lua",

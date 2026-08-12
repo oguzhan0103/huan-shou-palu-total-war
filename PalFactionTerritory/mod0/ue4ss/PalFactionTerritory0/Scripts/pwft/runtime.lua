@@ -1,5 +1,9 @@
 local Runtime = {}
 local CompanionLedger = require("pwft.companion_ledger")
+local AgentDialogueFileBridge =
+    require("pwft.agent_dialogue_file_bridge")
+local AgentDialogueOperator =
+    require("pwft.agent_dialogue_operator")
 local CommerceBridge = require("pwft.commerce_bridge")
 local ContentPackRegistry = require("pwft.content_pack_registry")
 local ContentRuntime = require("pwft.content_runtime")
@@ -2942,6 +2946,95 @@ local function register_guard_console_command(state)
     )
 end
 
+local function register_agent_dialogue_runtime(config, state)
+    local operator = state.agentDialogueOperator
+    if operator == nil then
+        log("AGENT_DIALOGUE_RUNTIME_UNAVAILABLE operator=nil")
+        return
+    end
+
+    if type(RegisterConsoleCommandGlobalHandler) == "function" then
+        RegisterConsoleCommandGlobalHandler(
+            "pwft.dialogue",
+            function(_, parts, ar)
+                local operation = parts[2] or "status"
+                if operation == "status" then
+                    local status = operator:status()
+                    log_to_console(ar, string.format(
+                        "AGENT_DIALOGUE status=%s presentation=%s request=%s state=%s bridge=%s mutation=false",
+                        tostring(status.reason),
+                        tostring(status.activePresentationId),
+                        tostring(status.requestId),
+                        tostring(status.requestState),
+                        tostring(state.agentDialogueFileBridge
+                            and state.agentDialogueFileBridge:status().ready)
+                    ))
+                    return true
+                end
+                if operation == "ask" then
+                    local player_text = table.concat(parts, " ", 3)
+                    local submitted = operator:submit_text(player_text)
+                    log_to_console(ar, string.format(
+                        "AGENT_DIALOGUE_SUBMIT ok=%s reason=%s request=%s mutation=false",
+                        tostring(submitted.ok),
+                        tostring(submitted.reason),
+                        tostring(submitted.requestId or "none")
+                    ))
+                    return true
+                end
+                log_to_console(ar, "USAGE pwft.dialogue status|ask <player text>")
+                return true
+            end
+        )
+    end
+
+    local poll_interval = config.palReconciliation.agentBridge.pollIntervalMs
+    local use_loop_async = type(LoopAsync) == "function"
+    if (not use_loop_async and type(ExecuteWithDelay) ~= "function")
+        or type(ExecuteInGameThread) ~= "function" then
+        log("AGENT_DIALOGUE_POLL_UNAVAILABLE scheduler-api")
+        operator:publish_status("scheduler-unavailable")
+        return
+    end
+    local function schedule()
+        local callback
+        callback = function()
+            ExecuteInGameThread(function()
+                local ok, outcome = pcall(function()
+                    return operator:tick()
+                end)
+                if not ok then
+                    log("AGENT_DIALOGUE_POLL_ERROR error=" .. tostring(outcome))
+                elseif outcome.reason ~= "operator-idle"
+                    and outcome.reason ~= "agent-response-pending" then
+                    log(string.format(
+                        "AGENT_DIALOGUE_POLL ok=%s reason=%s request=%s mutation=false",
+                        tostring(outcome.ok),
+                        tostring(outcome.reason),
+                        tostring(outcome.requestId or "none")
+                    ))
+                end
+                if not use_loop_async then
+                    schedule()
+                end
+            end)
+            return false
+        end
+        state.callbacks.agentDialoguePoll = callback
+        if use_loop_async then
+            LoopAsync(poll_interval, callback)
+        else
+            ExecuteWithDelay(poll_interval, callback)
+        end
+    end
+    operator:on_world_loaded()
+    schedule()
+    log(string.format(
+        "AGENT_DIALOGUE_RUNTIME_READY bridge=true operator=true pollMs=%d command=pwft.dialogue externalInput=true playerConfirmation=F3 mutation=false",
+        poll_interval
+    ))
+end
+
 local function register_guard_live_test(config, state)
     local qa = config.factionProgression.playerGuard.liveTest
     if qa.enabled ~= true then
@@ -4092,9 +4185,13 @@ local function register_runtime_probes(config, registry, policy, state)
         and config.palReconciliation ~= nil
         and config.palReconciliation
             .nativeRaidResultBindingEnabled == true
-    if config.factionCommerce.economyMerchantPresence.enabled == true
+    if (config.factionCommerce.economyMerchantPresence.enabled == true
+        or config.palReconciliation.agentBridge.enabled == true)
         and type(RegisterLoadMapPreHook) == "function" then
         local load_map_pre_callback = function()
+            if state.agentDialogueOperator ~= nil then
+                state.agentDialogueOperator:on_world_unloading()
+            end
             local presence = state.factionEconomyMerchantPresence
             if presence == nil then
                 return
@@ -4119,9 +4216,13 @@ local function register_runtime_probes(config, registry, policy, state)
         or identity_probe_enabled
         or native_raid_hook_retry_enabled
         or (config.factionCommerce.economyMerchantPresence
-            .enabled == true))
+            .enabled == true)
+        or config.palReconciliation.agentBridge.enabled == true)
         and type(RegisterLoadMapPostHook) == "function" then
         local load_map_post_callback = function()
+            if state.agentDialogueOperator ~= nil then
+                state.agentDialogueOperator:on_world_loaded()
+            end
             if state.settlementRaid ~= nil then
                 state.settlementRaid:on_world_loaded("load-map-post")
             end
@@ -4200,6 +4301,12 @@ function Runtime.start(config, registry, policy)
     assert(type(config.palReconciliation.representativeInteractionDistance) == "number", "Pal representative interaction distance is required")
     assert(config.palReconciliation.nativeDialoguePresenterEnabled == true, "Pal dialogue presenter must be enabled")
     assert(config.palReconciliation.agentAdapterEnabled == true, "presentation-only Pal Agent adapter must be enabled")
+    assert(type(config.palReconciliation.agentBridge) == "table", "Pal Agent file bridge configuration is required")
+    assert(config.palReconciliation.agentBridge.enabled == true, "Pal Agent file bridge must be enabled")
+    assert(type(config.palReconciliation.agentBridge.rootPath) == "string" and config.palReconciliation.agentBridge.rootPath ~= "", "Pal Agent bridge root is required")
+    assert(type(config.palReconciliation.agentBridge.operatorInputPath) == "string" and config.palReconciliation.agentBridge.operatorInputPath ~= "", "Pal Agent operator input path is required")
+    assert(type(config.palReconciliation.agentBridge.operatorStatusPath) == "string" and config.palReconciliation.agentBridge.operatorStatusPath ~= "", "Pal Agent operator status path is required")
+    assert(type(config.palReconciliation.agentBridge.pollIntervalMs) == "number" and config.palReconciliation.agentBridge.pollIntervalMs >= 250, "Pal Agent poll interval must be at least 250ms")
     assert(config.palReconciliation.storyContentIncluded == false, "base Mod cannot include authored Pal reconciliation stories")
     assert(type(config.factionUi) == "table", "faction UI must be explicitly configured")
     assert(type(config.factionUi.enabled) == "boolean", "faction UI enabled flag is required")
@@ -4375,10 +4482,21 @@ function Runtime.start(config, registry, policy)
         )
     _G.PWFT_PAL_DISCOURSE_API_V1 =
         state.palDiscourseRuntime
+    state.agentDialogueFileBridge =
+        AgentDialogueFileBridge.create(
+            config.palReconciliation.agentBridge
+        )
+    _G.PWFT_AGENT_DIALOGUE_BRIDGE_V1 =
+        state.agentDialogueFileBridge
     state.palDialogueController =
         PalDialogueController.create(
             state.palDiscourseRuntime,
-            config.palReconciliation
+            config.palReconciliation,
+            {
+                resolveAgentBridge = function()
+                    return state.agentDialogueFileBridge
+                end,
+            }
         )
     _G.PWFT_PAL_DIALOGUE_CONTROLLER_V1 =
         state.palDialogueController
@@ -4415,6 +4533,19 @@ function Runtime.start(config, registry, policy)
             state.palRepresentativeNativeRouter:start()
     _G.PWFT_PAL_REPRESENTATIVE_NATIVE_ROUTER_V1 =
         state.palRepresentativeNativeRouter
+    state.agentDialogueOperator =
+        AgentDialogueOperator.create(
+            state.palDialoguePresenter,
+            state.palRepresentativeNativeRouter,
+            config.palReconciliation.agentBridge,
+            {
+                identityResolver = function()
+                    return state.progressionIdentity.value
+                end,
+            }
+        )
+    _G.PWFT_AGENT_DIALOGUE_OPERATOR_V1 =
+        state.agentDialogueOperator
     state.contentPackRegistry = ContentPackRegistry.create({
         coreVersion = config.schemaVersion,
     })
@@ -5183,6 +5314,7 @@ function Runtime.start(config, registry, policy)
     state.enableNativeTerritoryMaterialOverlay = config.enableNativeTerritoryMaterialOverlay == true
     register_console_commands(config, registry, policy, state)
     register_guard_console_command(state)
+    register_agent_dialogue_runtime(config, state)
     register_guard_live_test(config, state)
     register_economy_merchant_interaction_router(state)
     register_economy_merchant_live_test(config, state)

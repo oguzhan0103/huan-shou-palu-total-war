@@ -70,6 +70,33 @@ fn foreground_executable() -> Result<Option<String>, ForegroundError> {
     }
 }
 
+#[cfg(target_os = "windows")]
+pub fn process_is_running(process_id: u32) -> Result<bool, ForegroundError> {
+    use windows_sys::Win32::{
+        Foundation::{CloseHandle, WAIT_OBJECT_0, WAIT_TIMEOUT},
+        System::Threading::{OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE},
+    };
+
+    unsafe {
+        let process = OpenProcess(PROCESS_SYNCHRONIZE, 0, process_id);
+        if process.is_null() {
+            return Ok(false);
+        }
+        let wait = WaitForSingleObject(process, 0);
+        CloseHandle(process);
+        match wait {
+            WAIT_TIMEOUT => Ok(true),
+            WAIT_OBJECT_0 => Ok(false),
+            _ => Err(ForegroundError::QueryFailed),
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn process_is_running(_process_id: u32) -> Result<bool, ForegroundError> {
+    Err(ForegroundError::UnsupportedPlatform)
+}
+
 #[cfg(not(target_os = "windows"))]
 fn foreground_executable() -> Result<Option<String>, ForegroundError> {
     Err(ForegroundError::UnsupportedPlatform)
@@ -78,6 +105,12 @@ fn foreground_executable() -> Result<Option<String>, ForegroundError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn observes_the_current_process_as_running() {
+        assert!(process_is_running(std::process::id()).expect("observe current process"));
+    }
 
     #[test]
     fn matches_only_the_exact_palworld_shipping_executable() {

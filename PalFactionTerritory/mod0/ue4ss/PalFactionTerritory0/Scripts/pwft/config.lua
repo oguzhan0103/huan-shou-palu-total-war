@@ -97,6 +97,19 @@ return {
         nativeDialoguePresenterEnabled = true,
         agentAdapterEnabled = true,
         agentDefaultLocale = "zh-CN",
+        -- The Ollama process stays outside Palworld.  This Mod writes only a
+        -- strictly validated request into its own State directory and polls a
+        -- presentation-only response.  main.lua derives both paths from the
+        -- loaded Mod directory so Steam does not need environment variables.
+        agentBridge = {
+            enabled = true,
+            rootPath = nil,
+            operatorInputPath = nil,
+            operatorStatusPath = nil,
+            pollIntervalMs = 500,
+            requestTtlSeconds = 600,
+            operatorCommandTtlSeconds = 300,
+        },
         storyContentIncluded = false,
     },
 

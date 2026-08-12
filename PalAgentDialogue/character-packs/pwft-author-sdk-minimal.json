@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0.0",
+  "packId": "example.minimal.foundation.agent",
+  "version": "1.0.0",
+  "contentLicense": "CC0-1.0",
+  "characters": [
+    {
+      "characterId": "example.minimal.pal.representative.primary",
+      "displayNameKey": "example.minimal.loc.pal.representative.name",
+      "personaKey": "example.minimal.loc.pal.representative.persona",
+      "contentOrigin": "localization_keys_only",
+      "knowledgeKeys": [
+        "example.minimal.loc.pal.node.opening",
+        "pwft.faction.desert_pal_tribe"
+      ],
+      "allowedResultTags": [],
+      "defaultChoices": [
+        {
+          "choiceId": "example.minimal.pal.choice.complete",
+          "textKey": "example.minimal.loc.pal.choice.complete"
+        },
+        {
+          "choiceId": "example.minimal.pal.choice.abort",
+          "textKey": "example.minimal.loc.pal.choice.abort"
+        }
+      ]
+    }
+  ]
+}

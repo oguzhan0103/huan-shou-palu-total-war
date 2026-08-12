@@ -39,8 +39,12 @@ must use either:
 - `contentOrigin: "user_authored"` with text the pack author has the right to
   distribute.
 
-The included pack is deliberately fictional and contains keys only:
-[`character-packs/example-minimal.json`](character-packs/example-minimal.json).
+The included packs are deliberately fictional. The generic fixture is
+[`character-packs/example-minimal.json`](character-packs/example-minimal.json),
+and [`character-packs/pwft-author-sdk-minimal.json`](character-packs/pwft-author-sdk-minimal.json)
+is paired with `PalFactionTerritory/examples/minimal-content-pack` so the same
+representative, context keys, and deterministic choice IDs are used on both
+sides of the bridge.
 The runtime does not ship official character biographies or story text.
 
 Validate a pack:
@@ -96,6 +100,9 @@ cargo run --release -- run `
   .\bridge-data
 ```
 
+The PWFT companion uses `run-owned ... <owner-pid>` so the Agent also exits if
+the companion console is force-closed and cannot execute normal cleanup.
+
 Process at most one request:
 
 ```powershell
@@ -107,10 +114,46 @@ cargo run -- process-once `
 `process-once` still enforces the real foreground-process gate. Mock tests inject
 a test gate; the production CLI has no bypass flag.
 
+Diagnose the content pack, provider configuration, bridge directories, and the
+real foreground-gate observation without sending a model request:
+
+```powershell
+cargo run -- doctor `
+  .\character-packs\example-minimal.json `
+  .\bridge-data
+```
+
+Make one explicit Ollama/OpenAI-compatible request and require a strict,
+authority-free JSON response:
+
+```powershell
+cargo run -- provider-check
+```
+
+`provider-check` never reads, claims, or writes a game bridge request. It is an
+operator-invoked connectivity diagnostic and therefore does not weaken or
+bypass the foreground gate used by `run` and `process-once`.
+
 The wire contract is documented in [contracts/PROTOCOL.md](contracts/PROTOCOL.md)
 and machine-readable JSON Schemas live beside it.
 
-### Minimal UE4SS adapter
+### PalFactionTerritory integration (recommended)
+
+The current `PalFactionTerritory0` Core embeds the bridge in its own UE4SS Lua
+environment. Start `PalFactionTerritory/companion/start-companion.cmd`; the
+companion starts this release binary against the installed Mod `State` folder,
+uses local Ollama model `gemma4:e4b` by default, and exposes the loopback-only
+free-text panel. Set `PAL_AGENT_MODEL` before starting it to choose another
+installed model.
+
+The companion writes only an operator command file. The in-Mod operator binds
+that text to the currently active, exact registered representative, submits the
+strict request, polls the outbox automatically, and refreshes the already
+accepted cooked/native dialogue panel. Any proposed deterministic choice stays
+pending until the player confirms it with `F3`; offline authored choices remain
+available if Ollama is absent or rejects the request.
+
+### Standalone minimal UE4SS adapter
 
 The public adapter is packaged at:
 
@@ -123,7 +166,8 @@ ue4ss/PalAgentDialogueBridge0/
 ```
 
 Set `PAL_AGENT_BRIDGE_ROOT` to the same bridge root used by the Rust runtime,
-then install `PalAgentDialogueBridge0` as a normal UE4SS Mod. It exports
+then install `PalAgentDialogueBridge0` as a normal UE4SS Mod for a different
+Core. It exports
 `_G.PAL_AGENT_DIALOGUE_BRIDGE_V1` with only three methods:
 
 - `submit_request(request)` atomically writes a schema-checked inbox request;
@@ -171,12 +215,16 @@ trip, including rejection of authority fields and unauthorized proposals.
 
 ## Integration status
 
-The external runtime, file protocol, and minimal UE4SS adapter are implemented
-and testable with a mock provider. `PalFactionTerritory0` now contains a Core
-controller that submits and polls this adapter, independently revalidates the
-response, falls back to the authored offline tree, and requires player
-confirmation before a proposed choice reaches deterministic state. It also
-contains a backend-neutral presentation and representative-proximity router.
-The cooked/native dialogue Widget and NPC interaction delegate are still not
-connected or accepted in game. Offline tests do not claim live UI or game
-integration acceptance.
+The external runtime, strict file protocol, paired author-SDK pack, embedded
+`PalFactionTerritory0` bridge/operator, loopback companion input, automatic
+polling, offline fallback, and player-confirmation boundary are implemented.
+The cooked/native dialogue Widget and exact representative interaction delegate
+were already accepted in game for the deterministic dialogue tree. The new
+Ollama path has passed the real `gemma4:e4b` provider diagnostic, Rust/Lua file
+round trips, companion HTTP submission, and full source/deployment regression.
+
+One evidence boundary remains: a player-visible Ollama reply in game requires
+an enabled fan content pack and its representative Actor. The mechanics-only
+base intentionally ships with `contentModules.modules = {}` and therefore does
+not manufacture a story NPC merely for this test. That content-dependent live
+visual check is not claimed by the source tests above.
