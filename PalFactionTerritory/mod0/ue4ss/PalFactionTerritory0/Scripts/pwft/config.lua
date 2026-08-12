@@ -125,6 +125,21 @@ return {
         storyContentIncludedByBase = false,
     },
 
+    -- Native attitude and NPC-leader guard adapters are optional trusted
+    -- providers.  The empty whitelist is fail-closed: the mechanics APIs are
+    -- available, but no game object can be mutated until an installed content
+    -- module explicitly opts in a provider ID + authority pair.
+    factionNpcAttitudes = {
+        providerWhitelist = {},
+    },
+    npcLeaderGuards = {
+        providerWhitelist = {},
+        maxPerLeader = 2,
+        maxPerFaction = 6,
+        maxPerScene = 12,
+        maximumMembersPerFormation = 16,
+    },
+
     -- Player-facing read-only faction panel. It uses a dedicated cooked
     -- WBP_PFT_FactionStatus asset with no map controls or map dependencies,
     -- is never created on the title screen, and appears only after the player

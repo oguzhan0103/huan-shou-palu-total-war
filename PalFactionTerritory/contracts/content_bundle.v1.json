@@ -10,6 +10,9 @@
     "questTemplates",
     "strategicWorld",
     "endingRoutes",
+    "contentActions",
+    "leaderGuards",
+    "rewardPolicies",
     "palDiscourse",
     "localization"
   ],
@@ -21,6 +24,9 @@
     "dependenciesAndConflictsResolvedBeforeCommit": true,
     "deterministicCommitAfterSuccessfulStaging": true,
     "palDiscourseValidatedBeforeCommit": true,
+    "contentActionsValidatedBeforeCommit": true,
+    "leaderGuardsValidatedBeforeCommit": true,
+    "rewardPoliciesValidatedBeforeCommit": true,
     "localizationOwnershipValidatedBeforeCommit": true,
     "crossModGlobalsRequired": false,
     "configuredInternalModuleLoading": true

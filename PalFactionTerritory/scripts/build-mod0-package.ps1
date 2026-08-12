@@ -13,14 +13,21 @@ if ($LASTEXITCODE -ne 0) {
     throw "Mod 0 verification failed; package was not created."
 }
 
-$ReleaseName = "PalFactionTerritory0-v1.0.2-build24575825"
+$ReleaseName = "PalFactionTerritory0-v1.0.3-build24575825"
+$OutputRoot = [System.IO.Path]::GetFullPath($OutputRoot)
+New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
 $StageRoot = Join-Path $OutputRoot "$ReleaseName-staging"
 $ZipPath = Join-Path $OutputRoot "$ReleaseName.zip"
 $HashPath = "$ZipPath.sha256.json"
 
 foreach ($Path in @($StageRoot, $ZipPath, $HashPath)) {
+    $ResolvedPath = [System.IO.Path]::GetFullPath($Path)
+    $ExpectedPrefix = $OutputRoot.TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+    if (-not $ResolvedPath.StartsWith($ExpectedPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to clean candidate output outside the selected release directory: $ResolvedPath"
+    }
     if (Test-Path -LiteralPath $Path) {
-        throw "Refusing to overwrite existing artifact: $Path"
+        Remove-Item -LiteralPath $ResolvedPath -Recurse -Force
     }
 }
 
@@ -37,6 +44,9 @@ Copy-Item -LiteralPath (Join-Path $ProjectRoot "scripts\validate-content-pack.ps
     -Destination (Join-Path $StagedAuthorSdkRoot "validate-content-pack.ps1")
 Copy-Item -LiteralPath (Join-Path $ProjectRoot "tools\validate_content_pack.lua") `
     -Destination (Join-Path $StagedAuthorSdkRoot "validate_content_pack.lua")
+$StagedCompanion = Join-Path $StageRoot "Companion"
+Copy-Item -LiteralPath (Join-Path $ProjectRoot "companion") `
+    -Destination $StagedCompanion -Recurse
 $StagedContracts = Join-Path $StageRoot "AuthorSDK\contracts"
 New-Item -ItemType Directory -Path $StagedContracts -Force | Out-Null
 foreach ($ContractName in @(
@@ -47,6 +57,11 @@ foreach ($ContractName in @(
     "ending_routes.v1.json"
 )) {
     Copy-Item -LiteralPath (Join-Path $ProjectRoot "contracts\$ContractName") -Destination $StagedContracts
+}
+
+& (Join-Path $StagedAuthorSdkRoot "validate-content-pack.ps1") -PackPath $StagedAuthorSdk
+if ($LASTEXITCODE -ne 0) {
+    throw "Staged Author SDK validation failed; package was not created."
 }
 
 $ManifestFiles = @(
@@ -63,8 +78,8 @@ $ManifestFiles = @(
 
 $Manifest = [ordered]@{
     schemaVersion = "1.0.0"
-    releaseId = "PalFactionTerritory0-v1.0.2"
-    releaseVersion = "1.0.2"
+    releaseId = "PalFactionTerritory0-v1.0.3"
+    releaseVersion = "1.0.3"
     expectedSteamBuildId = "24575825"
     installRelativeRoot = "Pal/Binaries/Win64/ue4ss"
     safetyMode = "mod-owned-state-no-palworld-save-write"
@@ -83,40 +98,55 @@ try {
         "Mods/PalFactionTerritory0/Scripts/main.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/agent_dialogue_file_bridge.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/agent_dialogue_operator.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/attendance_raid_result_bridge.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/background_raid_recorder.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/commerce_bridge.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/companion_ledger.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/config.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/content_action_runtime.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/content_pack_registry.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/content_runtime.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/content_module_loader.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/localization_runtime.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/ending_runtime.lua",
-        "Mods/PalFactionTerritory0/Scripts/pwft/content_pack_registry.lua",
-        "Mods/PalFactionTerritory0/Scripts/pwft/content_runtime.lua",
-        "Mods/PalFactionTerritory0/Scripts/pwft/ending_runtime.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/ending_effect_provider_bus.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_api.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_commerce.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_defense.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_economy.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/faction_economy_war.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_economy_merchant_runtime.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_economy_shop_catalog.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_guard.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_join.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/faction_join_native_presenter.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/faction_join_native_router.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/faction_npc_attitude_bus.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_merchant_runtime.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_progression.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/faction_resource_ledger.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_ui_model.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_ui_presenter.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/json.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/human_defense_result_bridge.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/native_character_adapter.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/npc_leader_guard_orchestrator.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/pal_discourse_runtime.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/pal_raid_result_adapter.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/pal_raid_native_binding.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/pal_reconciliation.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/pal_representative_interaction.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/pal_representative_native_router.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/policy.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/progression_store.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/quest_runtime.lua",
-        "Mods/PalFactionTerritory0/Scripts/pwft/quest_runtime.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/quest_objective_schema.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/quest_objective_router.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/registry.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/reward_policy.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/runtime.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/settlement_raid.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/strategic_world_native_bus.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/strategic_world.lua",
         "AuthorSDK/contracts/content_pack.v1.json",
         "AuthorSDK/contracts/content_bundle.v1.json",
@@ -136,6 +166,11 @@ try {
         "AuthorSDK/minimal-content-pack/localization_catalogs.lua",
         "AuthorSDK/minimal-content-pack/bundle.lua",
         "AuthorSDK/minimal-content-pack/content_module.lua",
+        "Companion/start-companion.cmd",
+        "Companion/pwft-companion.ps1",
+        "Companion/public/index.html",
+        "Companion/public/app.js",
+        "Companion/public/styles.css",
         "package-manifest.json"
     )
     foreach ($RequiredEntry in $RequiredEntries) {

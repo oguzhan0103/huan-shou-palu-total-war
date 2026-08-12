@@ -190,7 +190,7 @@ function PalDiscourseRuntime.create(reconciliation, config)
     assert(type(reconciliation.begin_discourse) == "function", "Pal reconciliation begin API is required")
     assert(type(reconciliation.resolve_discourse) == "function", "Pal reconciliation resolution API is required")
     local policy = validate_policy(reconciliation.contract, config)
-    return setmetatable({
+    local instance = setmetatable({
         version = API_VERSION,
         reconciliation = reconciliation,
         config = copy(config),
@@ -216,6 +216,48 @@ function PalDiscourseRuntime.create(reconciliation, config)
             PalworldSaveMutation = false,
         },
     }, { __index = PalDiscourseRuntime })
+    local progression = reconciliation.progression
+    if type(progression) == "table"
+        and type(progression.register_restore_listener) == "function" then
+        local registered = progression:register_restore_listener(
+            "pwft.pal-discourse-runtime.v1",
+            function()
+                return instance:rebind_reconciliation_state()
+            end
+        )
+        assert(registered.ok, registered.reason)
+    end
+    return instance
+end
+
+function PalDiscourseRuntime:rebind_reconciliation_state()
+    local rebound = 0
+    for _, faction in pairs(self.factions) do
+        local registration = self.reconciliation:register_content(
+            faction.factionId,
+            {
+                contentPackId = faction.contentPackId,
+                contentVersion = faction.contentVersion,
+                tokenQuota = faction.tokenQuota,
+                maximumAffinityPerDiscourse =
+                    faction.maximumAffinityPerDiscourse,
+            }
+        )
+        if not registration.ok then
+            return result(
+                false,
+                "pal-reconciliation-content-rebind-failed",
+                {
+                    factionId = faction.factionId,
+                    registration = copy(registration),
+                }
+            )
+        end
+        rebound = rebound + 1
+    end
+    return result(true, "pal-reconciliation-content-rebound", {
+        factionCount = rebound,
+    })
 end
 
 function PalDiscourseRuntime:register_pack(pack)

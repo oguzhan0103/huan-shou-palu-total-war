@@ -10,7 +10,7 @@ return {
             speciesId = "ExampleMinimalPalSpecies",
             displayNameKey = Keys.uniquePalName,
             initialOwner = { kind = "wild" },
-            tags = { "example.minimal.tag.placeholder" },
+            tags = { "example.minimal.tag.author-sdk" },
         },
     },
     cities = {
@@ -21,7 +21,7 @@ return {
             requiredUniquePalId = "example.minimal.unique.keystone",
             initialOwnerFactionId = "pwft.faction.rayne_syndicate",
             restorable = true,
-            tags = { "example.minimal.tag.placeholder" },
+            tags = { "example.minimal.tag.author-sdk" },
         },
     },
 }

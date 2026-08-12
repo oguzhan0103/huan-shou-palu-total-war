@@ -588,7 +588,7 @@ local function format_human_row(row)
         )
     end
     if row.guard ~= nil and row.guard.eligible then
-        local guard_state = "护卫待接入"
+        local guard_state = "护卫未配置"
         if row.guard.active then
             guard_state = "护卫已出战"
         elseif row.guard.providerReady then
@@ -601,7 +601,7 @@ end
 
 local function format_pal_row(row)
     local reconciliation = row.reconciliation or {}
-    local reconciliation_text = "论道机制待接入"
+    local reconciliation_text = "论道服务未启用"
     if reconciliation.serviceReady then
         if reconciliation.reconciled then
             reconciliation_text = "已和解"

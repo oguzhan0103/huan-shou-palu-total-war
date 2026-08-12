@@ -34,7 +34,6 @@ function Resolve-StateDirectory {
     }
     $Candidates.Add((Join-Path $CompanionRoot "..\Mods\PalFactionTerritory0\State"))
     $Candidates.Add((Join-Path $CompanionRoot "..\mod0\ue4ss\PalFactionTerritory0\State"))
-    $Candidates.Add("E:\SteamLibrary\steamapps\common\Palworld\Pal\Binaries\Win64\ue4ss\Mods\PalFactionTerritory0\State")
     $Candidates.Add("C:\Program Files (x86)\Steam\steamapps\common\Palworld\Pal\Binaries\Win64\ue4ss\Mods\PalFactionTerritory0\State")
 
     $Existing = @()
@@ -288,12 +287,33 @@ function Write-AgentOperatorCommand {
 function Start-LocalAgentRuntime {
     param([string]$StateRoot)
     $RepositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $CompanionRoot "..\.."))
-    $Executable = Join-Path $RepositoryRoot "PalAgentDialogue\target\release\pal-agent-dialogue.exe"
-    $CharacterPack = Join-Path $RepositoryRoot "PalAgentDialogue\character-packs\pwft-author-sdk-minimal.json"
+    $AgentProjectRoot = Join-Path $RepositoryRoot "PalAgentDialogue"
+    $ExecutableCandidates = [System.Collections.Generic.List[string]]::new()
+    if (-not [string]::IsNullOrWhiteSpace($env:PAL_AGENT_EXECUTABLE)) {
+        $ExecutableCandidates.Add($env:PAL_AGENT_EXECUTABLE)
+    }
+    $ExecutableCandidates.Add((Join-Path $AgentProjectRoot "target\release\pal-agent-dialogue.exe"))
+    $ExecutableCandidates.Add((Join-Path $CompanionRoot "bin\pal-agent-dialogue.exe"))
+    $Executable = @(
+        $ExecutableCandidates |
+            ForEach-Object { [System.IO.Path]::GetFullPath($_) } |
+            Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
+    ) | Select-Object -First 1
+    $CharacterPackCandidates = [System.Collections.Generic.List[string]]::new()
+    if (-not [string]::IsNullOrWhiteSpace($env:PAL_AGENT_CHARACTER_PACK)) {
+        $CharacterPackCandidates.Add($env:PAL_AGENT_CHARACTER_PACK)
+    }
+    $CharacterPackCandidates.Add((Join-Path $AgentProjectRoot "character-packs\pwft-author-sdk-minimal.json"))
+    $CharacterPackCandidates.Add((Join-Path $CompanionRoot "character-packs\pwft-author-sdk-minimal.json"))
+    $CharacterPack = @(
+        $CharacterPackCandidates |
+            ForEach-Object { [System.IO.Path]::GetFullPath($_) } |
+            Where-Object { Test-Path -LiteralPath $_ -PathType Leaf }
+    ) | Select-Object -First 1
     $BridgeRoot = Join-Path $StateRoot "AgentDialogue"
-    if (-not (Test-Path -LiteralPath $Executable -PathType Leaf) -or
-        -not (Test-Path -LiteralPath $CharacterPack -PathType Leaf)) {
-        Write-Warning "Local Agent runtime or paired character pack is unavailable; the offline dialogue tree remains usable."
+    if ([string]::IsNullOrWhiteSpace($Executable) -or
+        [string]::IsNullOrWhiteSpace($CharacterPack)) {
+        Write-Warning "Local Agent runtime or paired character pack is unavailable. Build PalAgentDialogue with 'cargo build --release', or set PAL_AGENT_EXECUTABLE and PAL_AGENT_CHARACTER_PACK. The offline dialogue tree remains usable."
         return $null
     }
     $Model = if ([string]::IsNullOrWhiteSpace($env:PAL_AGENT_MODEL)) { "gemma4:e4b" } else { $env:PAL_AGENT_MODEL }

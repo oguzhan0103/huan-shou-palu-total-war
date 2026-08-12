@@ -21,8 +21,8 @@ from pathlib import Path, PurePosixPath
 from typing import Iterable
 
 
-VERSION = "1.0.2"
-TARGET_STEAM_BUILD_ID = "24467282"
+VERSION = "1.0.3"
+TARGET_STEAM_BUILD_ID = "24575825"
 FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT = ROOT / "release" / f"v{VERSION}"
@@ -66,9 +66,17 @@ FORBIDDEN_TEXT = {
     "幻兽帕鲁_mod项目交付与接手说明": "private handoff title",
     "幻兽帕鲁全面战争_mod目标清单": "private planning title",
 }
+FORBIDDEN_SECRET_PATTERNS = {
+    r"\bsk-[A-Za-z0-9_-]{20,}\b": "OpenAI-style API key",
+    r"\bghp_[A-Za-z0-9]{30,}\b": "GitHub personal access token",
+    r"\bgithub_pat_[A-Za-z0-9_]{30,}\b": "GitHub fine-grained token",
+    r"\bAKIA[0-9A-Z]{16}\b": "AWS access key ID",
+}
 
 COMMON_FILES = (
     "LICENSE",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
     "SECURITY.md",
     "THIRD_PARTY_NOTICES.md",
     "幻兽帕鲁全面战争_已完成内容.md",
@@ -93,42 +101,50 @@ CORE_CONTRACTS = (
 )
 
 
-CORE_README = """# 幻兽帕鲁全面战争 Core Foundation v1.0.2
+CORE_README = f"""# 幻兽帕鲁全面战争 Core Foundation v{VERSION}
 
-这是《幻兽帕鲁全面战争》的 source-only 机制底座，目标 Steam Build 为 24467282。
+这是《幻兽帕鲁全面战争》的 source-only 机制底座，当前兼容目标为 Steam Build
+{TARGET_STEAM_BUILD_ID}。
 
 包含势力进度、商业与商会、任务状态机、护卫与保卫战、帕鲁有限和解、
 战略世界/结局接口、内容包契约和作者示例。它不包含正式剧情文本、游戏资产、
 存档、日志、安装产物或玄绒龙美术资源。
 
-状态：小型聚落攻城与商人商会七柜台已在 Build 24467282 实机通过；其他规则层
-通过离线回归。NPC/帕鲁的 Core 对话控制器、通用呈现路由和代表距离门闩已经
-离线完成；原生聊天 Widget/Delegate、真实交易好感度闭环和最终场景落位未完成。
+状态：商人商会正式落位、生产驻场、原生 ItemShop、单次需求品出售好感度、
+F5 面板、原生代表对话和玩家护卫完整生命周期已在 Build 24575825 验证。四成员
+攻城的完整结算与有限信物证据来自 Build 24467282；旧证据不冒充新 Build 的自然
+incident 证明。本地 Ollama、Core 文件桥和操作台链路已验证，正式剧情代表仍由
+内容包提供。
 
 本包不含地图、UMG 或商店 DataTable 的 Cooked PAK，因此是开发者基座，不是
 一键安装的完整玩家版。UE4SS 源码位于
 `PalFactionTerritory/mod0/ue4ss/PalFactionTerritory0/`。
+
+内容作者可运行：
+
+`powershell -ExecutionPolicy Bypass -File PalFactionTerritory/scripts/validate-content-pack.ps1 -PackPath PalFactionTerritory/examples/minimal-content-pack`
 """
 
-ADDONS_README = """# 幻兽帕鲁全面战争 Official Add-ons v1.0.2
+ADDONS_README = f"""# 幻兽帕鲁全面战争 Official Add-ons v{VERSION}
 
 本 source-only 包包含官方多帕鲁协同作战扩展 PalMultiOtomo0。
 目标 Steam Build 为 24467282；不包含游戏资产、存档、日志或已部署文件。
 
-状态：源码、Lua 语法和离线烟测已通过；当前 Build 的重新实机确认仍待完成。
+状态：源码、Lua 语法和离线烟测已通过；主 Core 的当前目标已迁移到 Build
+24575825，但本扩展的当前 Build 重新实机确认仍待完成。
 将 `PalMultiOtomo0` 目录复制到 UE4SS 的 `Mods` 目录后，从 Steam 启动游戏验证。
 """
 
-AI_README = """# 幻兽帕鲁全面战争 AI Dialogue Experimental v1.0.2
+AI_README = f"""# 幻兽帕鲁全面战争 AI Dialogue Experimental v{VERSION}
 
 这是独立的 Rust 源码实验包，支持本地 Ollama 和 OpenAI-compatible 接口。
 模型只能提出对白、白名单选择和白名单标签；任务、好感、物品和世界状态仍由
 确定性的 Core 裁决。
 
-状态：Rust 外部运行时和 UE4SS 文件桥源码均已包含并通过离线测试。Mod Core
-已经具备提交、轮询、再次校验、离线回退和玩家确认控制器，以及后端无关的呈现
-与代表距离门闩。原生 NPC Delegate、玩家可见 Widget 与 Build 24467282 实机验收
-仍未完成，因此本包明确标记为 Experimental。
+状态：Rust sidecar、独立 UE4SS 文件桥、真实本地 Ollama provider-check、严格
+字段/选择/标签校验和进程所有权测试已通过。PalFactionTerritory Core 包另含同
+UE4SS 环境文件桥与操作器；正式内容包代表的最终剧情画面仍待作者集成，因此本包
+继续明确标记为 Experimental。
 """
 
 
@@ -138,8 +154,8 @@ class PackageSpec:
     archive_stem: str
     status: str
     live_validation_scope: str
+    target_steam_build_id: str
     readme: str
-    source_files: tuple[tuple[str, str], ...]
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -205,6 +221,9 @@ def validate_entries(package_key: str, entries: dict[str, bytes]) -> None:
             failures.append(f"{archive_path}: contains a Steam account ID")
         if re.search(r"[a-z]:\\(?:users|steamlibrary)\\", text, flags=re.IGNORECASE):
             failures.append(f"{archive_path}: contains a local Windows user/game path")
+        for pattern, label in FORBIDDEN_SECRET_PATTERNS.items():
+            if re.search(pattern, text, flags=re.IGNORECASE):
+                failures.append(f"{archive_path}: contains {label}")
 
     if failures:
         detail = "\n".join(f"  - {failure}" for failure in failures)
@@ -226,7 +245,7 @@ def payload_manifest(spec: PackageSpec, entries: dict[str, bytes]) -> dict[str, 
         "package": spec.key,
         "status": spec.status,
         "liveValidationScope": spec.live_validation_scope,
-        "targetSteamBuildId": TARGET_STEAM_BUILD_ID,
+        "targetSteamBuildId": spec.target_steam_build_id,
         "sourceOnly": True,
         "payloadFileCount": len(files),
         "payloadBytes": sum(item["bytes"] for item in files),
@@ -244,6 +263,24 @@ def write_deterministic_zip(path: Path, root_name: str, entries: dict[str, bytes
             info.external_attr = 0o100644 << 16
             info.flag_bits = 0x800
             archive.writestr(info, data, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+
+
+def verify_written_zip(path: Path, root_name: str, entries: dict[str, bytes]) -> None:
+    expected = {f"{root_name}/{relative}": data for relative, data in entries.items()}
+    with zipfile.ZipFile(path, "r") as archive:
+        names = archive.namelist()
+        if len(names) != len(set(names)):
+            raise RuntimeError(f"Archive contains duplicate entries: {path.name}")
+        if set(names) != set(expected):
+            missing = sorted(set(expected) - set(names))
+            unexpected = sorted(set(names) - set(expected))
+            raise RuntimeError(
+                f"Archive entry mismatch for {path.name}: "
+                f"missing={missing}, unexpected={unexpected}"
+            )
+        for name, payload in expected.items():
+            if archive.read(name) != payload:
+                raise RuntimeError(f"Archive payload mismatch: {path.name}:{name}")
 
 
 def core_entries() -> dict[str, bytes]:
@@ -265,11 +302,27 @@ def core_entries() -> dict[str, bytes]:
     add_tree(entries, "PalFactionTerritory/mod0/tests", "PalFactionTerritory/mod0/tests", {".lua"})
     add_tree(
         entries,
+        "PalFactionTerritory/companion",
+        "PalFactionTerritory/companion",
+        {".cmd", ".css", ".html", ".js", ".ps1"},
+    )
+    add_tree(
+        entries,
         "PalFactionTerritory/examples/minimal-content-pack",
         "PalFactionTerritory/examples/minimal-content-pack",
         {".lua", ".md"},
     )
     add_tree(entries, "PalFactionTerritory/src", "PalFactionTerritory/src", {".py"})
+    add_file(
+        entries,
+        "PalFactionTerritory/scripts/validate-content-pack.ps1",
+        "PalFactionTerritory/scripts/validate-content-pack.ps1",
+    )
+    add_file(
+        entries,
+        "PalFactionTerritory/tools/validate_content_pack.lua",
+        "PalFactionTerritory/tools/validate_content_pack.lua",
+    )
     return entries
 
 
@@ -320,25 +373,25 @@ def build_release(output: Path) -> dict[str, object]:
             "Core",
             f"PalworldTotalWar-v{VERSION}-Core-source",
             "mixed-live-accepted-and-offline-verified-source-only",
-            "Build 24467282: settlement raid and seven-counter merchant guild accepted; other modules offline or pending",
+            "Build 24575825: merchant production presence, trade settlement, native dialogue, faction panel, and guard lifecycle accepted; raid settlement evidence remains Build 24467282",
+            "24575825",
             CORE_README,
-            (),
         ),
         PackageSpec(
             "OfficialAddons",
             f"PalworldTotalWar-v{VERSION}-OfficialAddons-source",
             "offline-verified-current-build-live-recheck-pending",
-            "current Build live recheck pending",
+            "Build 24467282 live baseline; Build 24575825 recheck pending",
+            "24467282",
             ADDONS_README,
-            (),
         ),
         PackageSpec(
             "AIExperimental",
             f"PalworldTotalWar-v{VERSION}-AIExperimental-source",
-            "offline-tested-experimental-game-ui-integration-pending",
-            "no in-game dialogue UI acceptance",
+            "local-provider-and-bridge-verified-experimental-content-integration-pending",
+            "Build 24575825 Core bridge/operator and local Ollama verified; authored representative scene integration pending",
+            "24575825",
             AI_README,
-            (),
         ),
     )
     factories = {
@@ -374,12 +427,14 @@ def build_release(output: Path) -> dict[str, object]:
             manifest_path = temp_dir / manifest_name
             manifest_path.write_bytes(manifest_data)
             write_deterministic_zip(archive_path, spec.archive_stem, entries)
+            verify_written_zip(archive_path, spec.archive_stem, entries)
             checksum_targets.extend((archive_path, manifest_path))
             package_records.append(
                 {
                     "package": spec.key,
                     "status": spec.status,
                     "liveValidationScope": spec.live_validation_scope,
+                    "targetSteamBuildId": spec.target_steam_build_id,
                     "archive": archive_name,
                     "archiveBytes": archive_path.stat().st_size,
                     "archiveSha256": sha256_bytes(archive_path.read_bytes()),
@@ -395,7 +450,7 @@ def build_release(output: Path) -> dict[str, object]:
             "releaseVersion": VERSION,
             "targetSteamBuildId": TARGET_STEAM_BUILD_ID,
             "releaseType": "source-only",
-            "liveValidationScope": "partial; see each package record and completion document",
+            "liveValidationScope": "mixed; see each package record and completion document",
             "packages": package_records,
             "excluded": [
                 "PalBlackFurDragonRevival and all BlackFur art",

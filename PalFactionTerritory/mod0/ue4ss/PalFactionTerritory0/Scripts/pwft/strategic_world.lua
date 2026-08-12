@@ -241,7 +241,101 @@ function StrategicWorld.create(progression, options)
             storyContentIncluded = false,
         },
     }, { __index = StrategicWorld })
+    if type(progression.register_restore_listener) == "function" then
+        local registered = progression:register_restore_listener(
+            "pwft.strategic-world.v1",
+            function()
+                return instance:rebind_progression_state()
+            end
+        )
+        assert(registered.ok, registered.reason)
+    end
     return instance
+end
+
+local function reconcile_loaded_pack_state(instance)
+    local initialized = 0
+    for content_pack_id, normalized in pairs(instance.packDefinitions) do
+        local existing = instance.state.packs[content_pack_id]
+        if existing == nil then
+            for _, definition in ipairs(normalized.uniquePals) do
+                assert(
+                    instance.state.uniquePals[definition.id] == nil,
+                    "restored strategic state has an unowned unique Pal record: "
+                        .. definition.id
+                )
+            end
+            for _, definition in ipairs(normalized.cities) do
+                assert(
+                    instance.state.cities[definition.id] == nil,
+                    "restored strategic state has an unowned city record: "
+                        .. definition.id
+                )
+            end
+            instance.state.packs[content_pack_id] = {
+                contentPackId = content_pack_id,
+                contentVersion = normalized.contentVersion,
+                definition = copy(normalized),
+            }
+            for _, definition in ipairs(normalized.uniquePals) do
+                instance.state.uniquePals[definition.id] = {
+                    id = definition.id,
+                    owner = copy(definition.initialOwner),
+                    transferCount = 0,
+                    lastTransferReason = "content-pack-initial-state",
+                }
+            end
+            for _, definition in ipairs(normalized.cities) do
+                instance.state.cities[definition.id] = {
+                    id = definition.id,
+                    status = "active",
+                    ownerFactionId = definition.initialOwnerFactionId,
+                    preservationCount = 0,
+                    occupationCount = 0,
+                    destroyedBy = nil,
+                }
+            end
+            initialized = initialized + 1
+        else
+            assert(
+                existing.contentVersion == normalized.contentVersion,
+                "restored strategic pack requires migration: "
+                    .. content_pack_id
+            )
+            if existing.definition ~= nil then
+                assert(
+                    deep_equal(existing.definition, normalized),
+                    "restored strategic pack definition mismatch: "
+                        .. content_pack_id
+                )
+            else
+                existing.definition = copy(normalized)
+            end
+            for _, definition in ipairs(normalized.uniquePals) do
+                assert(
+                    instance.state.uniquePals[definition.id] ~= nil,
+                    "restored state missing unique Pal: " .. definition.id
+                )
+            end
+            for _, definition in ipairs(normalized.cities) do
+                assert(
+                    instance.state.cities[definition.id] ~= nil,
+                    "restored state missing city: " .. definition.id
+                )
+            end
+        end
+    end
+    return initialized
+end
+
+function StrategicWorld:rebind_progression_state()
+    local previous_state = self.state
+    self.state = ensure_state(self.progression)
+    local initialized = reconcile_loaded_pack_state(self)
+    return result(true, "progression-state-rebound", {
+        stateChanged = previous_state ~= self.state,
+        initializedPackCount = initialized,
+    })
 end
 
 function StrategicWorld:register_pack(pack)

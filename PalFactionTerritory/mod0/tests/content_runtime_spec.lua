@@ -7,13 +7,16 @@ local Registry = require("pwft.registry")
 local Config = require("pwft.config")
 local Progression = require("pwft.faction_progression")
 local ContentPackRegistry = require("pwft.content_pack_registry")
+local ContentActionRuntime = require("pwft.content_action_runtime")
 local ContentRuntime = require("pwft.content_runtime")
+local FactionApi = require("pwft.faction_api")
 local QuestRuntime = require("pwft.quest_runtime")
 local StrategicWorld = require("pwft.strategic_world")
 local EndingRuntime = require("pwft.ending_runtime")
 local LocalizationRuntime = require("pwft.localization_runtime")
 local PalDiscourseRuntime = require("pwft.pal_discourse_runtime")
 local PalReconciliation = require("pwft.pal_reconciliation")
+local RewardPolicy = require("pwft.reward_policy")
 
 local progression = Progression.create(Registry.progression)
 local manifests = ContentPackRegistry.create()
@@ -23,9 +26,15 @@ local endings = EndingRuntime.create(progression, world, { contentPackRegistry =
 local reconciliation = PalReconciliation.create(Registry.palReconciliation, progression)
 local discourse = PalDiscourseRuntime.create(reconciliation, Config.palReconciliation)
 local localization = LocalizationRuntime.create(manifests, { fallbackLocale = "zh-CN" })
+local content_actions = ContentActionRuntime.create(
+    FactionApi.create(progression), world, endings, manifests
+)
+local rewards = RewardPolicy.create(progression)
 local runtime = ContentRuntime.create(progression, manifests, quests, world, endings, {
     palDiscourseRuntime = discourse,
     localizationRuntime = localization,
+    contentActionRuntime = content_actions,
+    rewardPolicy = rewards,
 })
 
 local manifest = {
@@ -211,6 +220,22 @@ local bundle = {
     endingRoutes = ending_pack,
     palDiscourse = pal_discourse,
     localization = localization_bundle,
+    rewardPolicies = {
+        schemaVersion = "pwft.reward-policy.pack.v1",
+        contentPackId = manifest.contentPackId,
+        policies = {{
+            id = "sample.bundle.reward.quest",
+            sourceKind = "quest",
+            difficultyBands = {
+                { minimumScore = 0, multiplierBps = 10000 },
+            },
+            rewards = {{
+                channelId = "sample.bundle.reward.channel.quest",
+                baseUnits = 1,
+                maximumUnits = 1,
+            }},
+        }},
+    },
 }
 assert(runtime:validate(bundle).reason == "content-bundle-staged")
 assert(manifests:status().registeredPackCount == 0)
@@ -219,12 +244,15 @@ assert(registered.ok and registered.reason == "content-bundle-registered")
 assert(registered.questTemplateCount == 1)
 assert(registered.strategicWorldRegistered and registered.endingRoutesRegistered)
 assert(registered.palDiscourseRegistered and registered.localizationRegistered)
+assert(registered.rewardPoliciesRegistered)
+assert(registered.rewardPolicyCount == 1)
 assert(registered.localizedMessageCount == 3)
 assert(runtime:register(bundle).reason == "content-bundle-already-registered")
 assert(runtime:status().registeredBundleCount == 1)
 assert(runtime:status().modelMayRegisterContent == false)
 assert(runtime:status().palDiscourseFactionCount == 1)
 assert(runtime:status().localizationPackCount == 1)
+assert(runtime:status().rewardPolicyCount == 1)
 assert(localization:resolve("zh-CN", "sample.bundle.l10n.quest.title") == "占位标题")
 
 assert(quests:start(

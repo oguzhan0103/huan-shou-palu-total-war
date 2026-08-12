@@ -7,12 +7,18 @@ local Json = require("pwft.json")
 local CompanionLedger = require("pwft.companion_ledger")
 
 local files = {}
+local fail_next_append = false
+local fail_next_promote_target = nil
 local filesystem = {
     write = function(path, content)
         files[path] = content
         return true
     end,
     append = function(path, content)
+        if fail_next_append then
+            fail_next_append = false
+            return false, "injected-append-failure"
+        end
         files[path] = (files[path] or "") .. content
         return true
     end,
@@ -22,6 +28,11 @@ local filesystem = {
     rename = function(source, target)
         if files[source] == nil then
             return false, "not-found"
+        end
+        if target == fail_next_promote_target
+            and source == target .. ".tmp" then
+            fail_next_promote_target = nil
+            return false, "injected-promote-failure"
         end
         files[target] = files[source]
         files[source] = nil
@@ -82,4 +93,38 @@ assert(state.eventSequence == 2)
 assert(string.find(files[status.eventsPath], "profile%-activated") ~= nil)
 assert(string.find(files[status.eventsPath], "commerce%-sale%-confirmed") ~= nil)
 
-print("PASS external companion ledger and transaction stream")
+local previous_state = files[status.statePath]
+fail_next_promote_target = status.statePath
+local failed_publish, failed_publish_reason = ledger:publish({
+    releaseId = "must-not-replace-previous-state",
+})
+assert(failed_publish == false)
+assert(string.find(
+    failed_publish_reason,
+    "temporary%-promote%-failed"
+) ~= nil)
+assert(files[status.statePath] == previous_state)
+assert(files[status.statePath .. ".tmp"] == nil)
+local recovered_publish = ledger:publish({
+    releaseId = "replacement-after-failure",
+})
+assert(recovered_publish == true)
+assert(
+    Json.decode(files[status.statePath]).releaseId
+        == "replacement-after-failure"
+)
+assert(files[status.statePath .. ".bak"] == previous_state)
+assert(ledger:status().lastError == nil)
+
+local sequence_before_failure = ledger:status().eventSequence
+fail_next_append = true
+local failed_record = ledger:record({ type = "must-not-advance" })
+assert(failed_record == false)
+assert(ledger:status().eventSequence == sequence_before_failure)
+local retried_record, retried_envelope = ledger:record({
+    type = "append-retried",
+})
+assert(retried_record == true)
+assert(retried_envelope.sequence == sequence_before_failure + 1)
+
+print("PASS external companion ledger transaction stream and failure-safe replacement")

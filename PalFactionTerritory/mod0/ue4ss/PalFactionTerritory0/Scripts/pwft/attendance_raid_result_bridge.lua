@@ -199,10 +199,34 @@ function AttendanceRaidResultBridge:begin(generation, actors)
         active.leaderActorKey,
         EVENT_AUTHORITY
     ))
+    local start_observer = self.dependencies.startObserver
+    if type(start_observer) == "function" then
+        local invoked, observer_ok, observer_reason = pcall(
+            start_observer,
+            {
+                schemaVersion = "1.0.0",
+                sourceAuthority = OUTCOME_AUTHORITY,
+                raidEventId = event_id,
+                settlementId = self.config.settlementId,
+            }
+        )
+        active.startObserverOk = invoked and observer_ok ~= false
+        if not active.startObserverOk then
+            active.startObserverError = tostring(
+                invoked and observer_reason or observer_ok
+            )
+            self.failures = self.failures + 1
+            self:cancel("attendance-start-observer-failed")
+            return result(false, "attendance-start-observer-failed", {
+                observerError = active.startObserverError,
+            })
+        end
+    end
     return result(true, "attendance-raid-result-started", {
         raidEventId = event_id,
         leaderActorKey = active.leaderActorKey,
         memberCount = active.memberCount,
+        startObserverOk = active.startObserverOk,
     })
 end
 
@@ -270,6 +294,35 @@ function AttendanceRaidResultBridge:record_death(victim, attacker)
     })
     local token_awarded = settled.settlement
         and settled.settlement.tokenAwarded == true
+    local result_observer = self.dependencies.resultObserver
+    if type(result_observer) == "function" then
+        local invoked, observer_ok, observer_reason = pcall(
+            result_observer,
+            {
+                schemaVersion = "1.0.0",
+                sourceAuthority = OUTCOME_AUTHORITY,
+                raidEventId = active.eventId,
+                settlementId = self.config.settlementId,
+                playerParticipated = settled.event
+                        and settled.event.leaderKillCredited == true
+                    or false,
+                playerSideWon = settled.event
+                        and settled.event.playerSideWon == true
+                    or false,
+                leaderKillCredited = settled.event
+                        and settled.event.leaderKillCredited == true
+                    or false,
+                palTokenAwarded = token_awarded == true,
+            }
+        )
+        settled.resultObserverOk = invoked and observer_ok ~= false
+        if not settled.resultObserverOk then
+            settled.resultObserverError = tostring(
+                invoked and observer_reason or observer_ok
+            )
+            self.failures = self.failures + 1
+        end
+    end
     self:_log(string.format(
         "ATTENDANCE_RAID_RESULT_SETTLED event=%s allMembersDead=true playerSideWon=true leader=%s leaderKillCredited=%s ok=%s reason=%s tokenAwarded=%s authority=%s",
         active.eventId,
@@ -299,6 +352,27 @@ function AttendanceRaidResultBridge:cancel(reason)
         outcomeAuthority = OUTCOME_AUTHORITY,
         reason = reason or "attendance-raid-result-cancelled",
     })
+    local cancel_observer = self.dependencies.cancelObserver
+    if type(cancel_observer) == "function" then
+        local invoked, observer_ok, observer_reason = pcall(
+            cancel_observer,
+            {
+                schemaVersion = "1.0.0",
+                sourceAuthority = OUTCOME_AUTHORITY,
+                raidEventId = active.eventId,
+                settlementId = self.config.settlementId,
+                cancellationReason = reason
+                    or "attendance-raid-result-cancelled",
+            }
+        )
+        cancelled.cancelObserverOk = invoked
+            and observer_ok ~= false
+        if not cancelled.cancelObserverOk then
+            cancelled.cancelObserverError = tostring(
+                invoked and observer_reason or observer_ok
+            )
+        end
+    end
     self:_log(string.format(
         "ATTENDANCE_RAID_RESULT_CANCELLED event=%s deaths=%d/%d ok=%s reason=%s timerSettlement=false authority=%s",
         active.eventId,

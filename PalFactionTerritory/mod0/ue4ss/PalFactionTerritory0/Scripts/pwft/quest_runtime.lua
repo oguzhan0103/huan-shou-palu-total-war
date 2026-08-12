@@ -1,4 +1,5 @@
 local QuestRuntime = {}
+local QuestObjectiveSchema = require("pwft.quest_objective_schema")
 
 local API_VERSION = "1.0.0"
 local TEMPLATE_SCHEMA_VERSION = "1.0.0"
@@ -147,6 +148,7 @@ local TEMPLATE_FIELDS = {
 local STAGE_FIELDS = {
     stageId = true,
     objectiveKey = true,
+    objectiveRules = true,
     nextStageIds = true,
     branches = true,
     completionAllowed = true,
@@ -166,6 +168,7 @@ local function public_stage(stage)
     return {
         stageId = stage.stageId,
         objectiveKey = stage.objectiveKey,
+        objectiveRules = copy(stage.objectiveRules),
         nextStageIds = copy(stage.nextStageIds),
         branches = copy(stage.branches),
         completionAllowed = stage.completionAllowed,
@@ -198,6 +201,8 @@ local function normalize_template(content_registry, template)
 
     local stages = {}
     local stage_order = {}
+    local objective_ids = {}
+    local objective_rule_count = 0
     assert(type(template.stages) == "table" and #template.stages > 0, "quest template stages are required")
     for _, stage in ipairs(template.stages) do
         assert_only_fields(stage, STAGE_FIELDS, "quest stage")
@@ -229,9 +234,28 @@ local function normalize_template(content_registry, template)
             branches[#branches + 1] = normalized_branch
             branch_by_id[branch_id] = normalized_branch
         end
+        local objective_rules = {}
+        assert(
+            stage.objectiveRules == nil or type(stage.objectiveRules) == "table",
+            "quest objectiveRules must be an array"
+        )
+        for _, objective_rule in ipairs(stage.objectiveRules or {}) do
+            local normalized_rule = QuestObjectiveSchema.normalize_rule(
+                objective_rule,
+                manifest.namespace
+            )
+            assert(
+                objective_ids[normalized_rule.objectiveId] == nil,
+                "duplicate quest objective ID: " .. normalized_rule.objectiveId
+            )
+            objective_ids[normalized_rule.objectiveId] = stage_id
+            objective_rules[#objective_rules + 1] = normalized_rule
+            objective_rule_count = objective_rule_count + 1
+        end
         stages[stage_id] = {
             stageId = stage_id,
             objectiveKey = localization_key(stage.objectiveKey, "quest objective key"),
+            objectiveRules = objective_rules,
             nextStageIds = next_stage_ids,
             nextStageSet = next_stage_set,
             branches = branches,
@@ -250,6 +274,9 @@ local function normalize_template(content_registry, template)
         end
         for _, branch in ipairs(stage.branches) do
             assert(stages[branch.nextStageId] ~= nil, "quest branch references an unknown next stage: " .. stage_id)
+        end
+        for _, objective_rule in ipairs(stage.objectiveRules) do
+            QuestObjectiveSchema.validate_action(objective_rule, stage)
         end
     end
 
@@ -306,6 +333,7 @@ local function normalize_template(content_registry, template)
         startStageId = start_stage_id,
         stages = stages,
         stageOrder = stage_order,
+        objectiveRuleCount = objective_rule_count,
     }
     normalized.fingerprint = stable_encode({
         schemaVersion = normalized.schemaVersion,
@@ -326,6 +354,20 @@ local function validate_saved_state(state)
     assert(type(state.instances) == "table", "quest runtime instances are required")
     assert(type(state.processedEventIds) == "table", "quest runtime processed events are required")
     assert(type(state.sequence) == "number" and state.sequence >= 0, "quest runtime sequence is invalid")
+end
+
+local function ensure_state(progression)
+    if progression.state.contentQuests == nil then
+        progression.state.contentQuests = {
+            schemaVersion = STATE_SCHEMA_VERSION,
+            sequence = 0,
+            instances = {},
+            processedEventIds = {},
+        }
+    else
+        validate_saved_state(progression.state.contentQuests)
+    end
+    return progression.state.contentQuests
 end
 
 local function touch_progression(instance, event)
@@ -353,22 +395,12 @@ function QuestRuntime.create(progression, content_pack_registry, options)
         "content-pack registry is required"
     )
     assert(options.onChange == nil or type(options.onChange) == "function", "quest onChange must be a function")
-    if progression.state.contentQuests == nil then
-        progression.state.contentQuests = {
-            schemaVersion = STATE_SCHEMA_VERSION,
-            sequence = 0,
-            instances = {},
-            processedEventIds = {},
-        }
-    else
-        validate_saved_state(progression.state.contentQuests)
-    end
-    return setmetatable({
+    local instance = setmetatable({
         version = API_VERSION,
         progression = progression,
         contentPackRegistry = content_pack_registry,
         templates = {},
-        state = progression.state.contentQuests,
+        state = ensure_state(progression),
         onChange = options.onChange,
         lastNotificationError = nil,
         capabilities = {
@@ -376,11 +408,30 @@ function QuestRuntime.create(progression, content_pack_registry, options)
             deterministicBranches = true,
             structuredResults = true,
             idempotentEvents = true,
+            objectiveRules = true,
             snapshotOwnedByProgression = true,
             authoredStoryContent = false,
             PalworldSaveMutation = false,
         },
     }, { __index = QuestRuntime })
+    if type(progression.register_restore_listener) == "function" then
+        local registered = progression:register_restore_listener(
+            "pwft.quest-runtime.v1",
+            function()
+                return instance:rebind_progression_state()
+            end
+        )
+        assert(registered.ok, registered.reason)
+    end
+    return instance
+end
+
+function QuestRuntime:rebind_progression_state()
+    local previous_state = self.state
+    self.state = ensure_state(self.progression)
+    return result(true, "progression-state-rebound", {
+        stateChanged = previous_state ~= self.state,
+    })
 end
 
 function QuestRuntime:register_template(template)
@@ -419,7 +470,37 @@ function QuestRuntime:register_template(template)
         contentPackId = normalized.contentPackId,
         contentVersion = normalized.contentVersion,
         stageCount = #normalized.stageOrder,
+        objectiveRuleCount = normalized.objectiveRuleCount,
     })
+end
+
+function QuestRuntime:active_objective_stages()
+    local active = {}
+    for _, quest in pairs(self.state.instances) do
+        if quest.state == "active" then
+            local template = self.templates[quest.templateId]
+            if template ~= nil
+                and template.contentVersion == quest.contentVersion then
+                local stage = template.stages[quest.currentStageId]
+                active[#active + 1] = {
+                    questInstanceId = quest.questInstanceId,
+                    templateId = quest.templateId,
+                    contentPackId = quest.contentPackId,
+                    contentVersion = quest.contentVersion,
+                    currentStageId = quest.currentStageId,
+                    sequence = quest.sequence,
+                    objectiveRules = copy(stage.objectiveRules),
+                }
+            end
+        end
+    end
+    table.sort(active, function(left, right)
+        if left.sequence == right.sequence then
+            return left.questInstanceId < right.questInstanceId
+        end
+        return left.sequence < right.sequence
+    end)
+    return active
 end
 
 function QuestRuntime:_replay(event_id, signature, replay_reason)
@@ -642,6 +723,7 @@ function QuestRuntime:template_status(template_id)
         summaryKey = template.summaryKey,
         startStageId = template.startStageId,
         stageCount = #template.stageOrder,
+        objectiveRuleCount = template.objectiveRuleCount,
     }
 end
 
@@ -668,6 +750,7 @@ function QuestRuntime:status()
         processedEventCount = #sorted_keys(self.state.processedEventIds),
         localizationKeysOnly = true,
         structuredResultsOnly = true,
+        objectiveRulesEnabled = true,
         snapshotOwnedByProgression = self.progression.state.contentQuests == self.state,
         authoredStoryContent = false,
         lastNotificationError = self.lastNotificationError,

@@ -15,7 +15,7 @@ return {
         ["territory_assignments.v1.json"] = "0b4542014338178ab311f73a876dea640a1d393e9cd68801b3c852e2849e0f7b",
         ["fast_travel_territories.v1.json"] = "a2945338ca661ef001b1603a077209f06efae5fad2b25a43d432acde9419dbf4",
         ["island_territories.v2.json"] = "2a24d45822234f9064cdaee26c56423ab59cf074a54e780ce7aa79be1eb39e27",
-        ["tower_territories.v1.json"] = "73c2145dd03ded7e65bc9d6fa54395070e6d0837c47f03415ae2b66dd6b8f428"
+        ["tower_territories.v1.json"] = "5b2dd4521fc602753ad729284660157742bb82162ed41488ebd812dbfe9e5478"
     },
     ["counts"] = {
         ["factions"] = 12,

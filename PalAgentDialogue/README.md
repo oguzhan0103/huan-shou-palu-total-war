@@ -1,5 +1,8 @@
 # PalAgentDialogue
 
+Component version: `1.0.1` release candidate. The repository-wide source-only
+bundle version is `v1.0.3`; these are separate version lines.
+
 PalAgentDialogue is an external, content-pack-driven multi-NPC Agent runtime for
 Palworld mods. It supports local Ollama servers and OpenAI-compatible chat
 endpoints without injecting a model into the game process or giving a model
@@ -205,6 +208,11 @@ cargo build --release
 & .\scripts\test-ue4ss-bridge.ps1
 & .\scripts\build-release.ps1
 ```
+
+`build-release.ps1` creates a local Windows binary package for development and
+the PalFactionTerritory companion. The public repository-wide GitHub Release is
+built separately by `tools/build-source-release.py` and remains source-only; it
+does not include this executable.
 
 Tests cover pack validation, exact process-name matching, API-key redaction,
 endpoint safety, strict model output, authority-field rejection, choice/tag

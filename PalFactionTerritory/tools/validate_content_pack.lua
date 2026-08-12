@@ -18,12 +18,17 @@ local ok, error_message = pcall(function()
     local Config = require("pwft.config")
     local Progression = require("pwft.faction_progression")
     local ContentPackRegistry = require("pwft.content_pack_registry")
+    local ContentActionRuntime = require("pwft.content_action_runtime")
     local ContentRuntime = require("pwft.content_runtime")
     local EndingRuntime = require("pwft.ending_runtime")
+    local FactionApi = require("pwft.faction_api")
     local LocalizationRuntime = require("pwft.localization_runtime")
+    local NpcLeaderGuardOrchestrator =
+        require("pwft.npc_leader_guard_orchestrator")
     local PalDiscourseRuntime = require("pwft.pal_discourse_runtime")
     local PalReconciliation = require("pwft.pal_reconciliation")
     local QuestRuntime = require("pwft.quest_runtime")
+    local RewardPolicy = require("pwft.reward_policy")
     local StrategicWorld = require("pwft.strategic_world")
 
     local bundle = require(module_name)
@@ -49,6 +54,12 @@ local ok, error_message = pcall(function()
     local localization = LocalizationRuntime.create(manifests, {
         fallbackLocale = Config.contentModules.fallbackLocale,
     })
+    local rewards = RewardPolicy.create(progression)
+    local faction_api = FactionApi.create(progression)
+    local leader_guards = NpcLeaderGuardOrchestrator.create(
+        faction_api,
+        { providerWhitelist = {} }
+    )
     local runtime = ContentRuntime.create(
         progression,
         manifests,
@@ -58,6 +69,14 @@ local ok, error_message = pcall(function()
         {
             palDiscourseRuntime = discourse,
             localizationRuntime = localization,
+            rewardPolicy = rewards,
+            contentActionRuntime = ContentActionRuntime.create(
+                faction_api,
+                world,
+                endings,
+                manifests
+            ),
+            npcLeaderGuardOrchestrator = leader_guards,
         }
     )
     local registered = runtime:register(bundle)
@@ -71,6 +90,12 @@ local ok, error_message = pcall(function()
     print("questTemplates=" .. tostring(registered.questTemplateCount))
     print("strategicWorld=" .. tostring(registered.strategicWorldRegistered))
     print("endingRoutes=" .. tostring(registered.endingRoutesRegistered))
+    print("contentActions=" .. tostring(registered.contentActionsRegistered))
+    print("contentActionCount=" .. tostring(registered.contentActionCount))
+    print("leaderGuards=" .. tostring(registered.leaderGuardsRegistered))
+    print("rewardPolicies=" .. tostring(registered.rewardPoliciesRegistered))
+    print("rewardPolicyCount=" .. tostring(registered.rewardPolicyCount))
+    print("leaderGuardLeaders=" .. tostring(registered.leaderGuardLeaderCount))
     print("palDiscourse=" .. tostring(registered.palDiscourseRegistered))
     print("localizedMessages=" .. tostring(registered.localizedMessageCount))
     print("registeredBundles=" .. tostring(status.registeredBundleCount))

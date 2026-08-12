@@ -7,13 +7,19 @@ package.path = table.concat({
 local Registry = require("pwft.registry")
 local Progression = require("pwft.faction_progression")
 local ContentPackRegistry = require("pwft.content_pack_registry")
+local ContentActionRuntime = require("pwft.content_action_runtime")
 local ContentRuntime = require("pwft.content_runtime")
+local FactionApi = require("pwft.faction_api")
 local QuestRuntime = require("pwft.quest_runtime")
+local RewardPolicy = require("pwft.reward_policy")
 local StrategicWorld = require("pwft.strategic_world")
 local EndingRuntime = require("pwft.ending_runtime")
 local PalReconciliation = require("pwft.pal_reconciliation")
 local PalDiscourseRuntime = require("pwft.pal_discourse_runtime")
 local LocalizationRuntime = require("pwft.localization_runtime")
+local NpcLeaderGuardOrchestrator =
+    require("pwft.npc_leader_guard_orchestrator")
+local RewardPolicy = require("pwft.reward_policy")
 local Example = require("minimal-content-pack.pack")
 
 local function copy(value)
@@ -124,6 +130,12 @@ local bundle_discourse = PalDiscourseRuntime.create(
 local bundle_localization = LocalizationRuntime.create(bundle_registry, {
     fallbackLocale = "zh-CN",
 })
+local bundle_faction_api = FactionApi.create(bundle_progression)
+local bundle_leader_guards = NpcLeaderGuardOrchestrator.create(
+    bundle_faction_api,
+    { providerWhitelist = {} }
+)
+local bundle_rewards = RewardPolicy.create(bundle_progression)
 local bundle_runtime = ContentRuntime.create(
     bundle_progression,
     bundle_registry,
@@ -133,14 +145,51 @@ local bundle_runtime = ContentRuntime.create(
     {
         palDiscourseRuntime = bundle_discourse,
         localizationRuntime = bundle_localization,
+        contentActionRuntime = ContentActionRuntime.create(
+            bundle_faction_api,
+            bundle_world,
+            bundle_endings,
+            bundle_registry
+        ),
+        npcLeaderGuardOrchestrator = bundle_leader_guards,
+        rewardPolicy = bundle_rewards,
     }
 )
+local invalid_leader_bundle = copy(Example.bundle)
+invalid_leader_bundle.leaderGuards.leaders[1].factionId =
+    "example.minimal.unknown-faction"
+local invalid_leader_result = bundle_runtime:register(
+    invalid_leader_bundle
+)
+assert(not invalid_leader_result.ok)
+assert(bundle_registry:status().registeredPackCount == 0)
+assert(bundle_quests:status().templateCount == 0)
+assert(bundle_world:status().contentPackCount == 0)
+assert(bundle_endings:status().contentPackCount == 0)
+assert(bundle_leader_guards:status().contentPackCount == 0)
 local atomic_bundle = bundle_runtime:register(Example.bundle)
-assert(atomic_bundle.ok and atomic_bundle.reason == "content-bundle-registered")
+assert(
+    atomic_bundle.ok and atomic_bundle.reason == "content-bundle-registered",
+    tostring(atomic_bundle.reason) .. ":"
+        .. tostring(atomic_bundle.validationError or "no-detail")
+)
 assert(atomic_bundle.questTemplateCount == 1)
 assert(atomic_bundle.palDiscourseRegistered)
 assert(atomic_bundle.localizationRegistered)
 assert(atomic_bundle.localizedMessageCount > 0)
+assert(atomic_bundle.contentActionsRegistered)
+assert(atomic_bundle.contentActionCount == 4)
+assert(atomic_bundle.leaderGuardsRegistered)
+assert(atomic_bundle.leaderGuardLeaderCount == 1)
+assert(atomic_bundle.rewardPoliciesRegistered)
+assert(atomic_bundle.rewardPolicyCount == 1)
+assert(bundle_rewards:status().policyCount == 1)
+assert(atomic_bundle.rewardPoliciesRegistered)
+assert(atomic_bundle.rewardPolicyCount == 1)
+assert(bundle_leader_guards:status().contentPackCount == 1)
+assert(bundle_leader_guards:status().leaderCount == 1)
+assert(type(bundle_progression:export_snapshot().npcLeaderGuards)
+    == "table")
 assert(bundle_localization:resolve(
     "zh-CN",
     Example.localization.byName.palRepresentativePrompt

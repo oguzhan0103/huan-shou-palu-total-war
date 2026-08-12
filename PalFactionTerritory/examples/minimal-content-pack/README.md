@@ -10,6 +10,8 @@
 - `quest_template.lua`：一个包含推进、选择和完成阶段的通用任务模板。
 - `strategic_world.lua`：一只唯一帕鲁和一座城邦的占位定义。
 - `ending_routes.lua`：保留、移交、移除三个纯规则路线槽。
+- `content_actions.lua`：任务/选择结果可触发的白名单机制动作；夺取唯一帕鲁、毁城和提交结局等不可逆动作必须声明玩家确认。
+- `leader_guards.lua`：NPC 领主/重要角色及护卫编组骨架；只声明稳定 ID、精确角色类、场景和上限，实际原生角色由白名单 provider 生成。
 - `pal_discourse.lua`：一个通用帕鲁代表和一棵可完成或放弃的有向无环论道树。
 - `bundle.lua`：可被 Core 原子校验和注册的 `pwft.content-bundle.v1` 整包。
 - `content_module.lua`：游戏内加载入口，只导出 `bundle`。
@@ -20,7 +22,7 @@
 1. 将 `example.minimal`、`example.minimal.foundation` 和版本号替换为作者自己的稳定命名空间、包 ID 与 SemVer。所有任务、城邦、唯一帕鲁、路线、代表、节点、选择、flag 和 result tag 都必须留在该命名空间内。
 2. 在 `localization_keys.lua` 中建立完整 key 目录，在 `localization_catalogs.lua` 中为这些 key 提供文本。不要把剧情、标题、描述或对话直接写入任务或机制表。
 3. 将 `speciesId`、人类/帕鲁 `factionId`、城邦归属、信物额度和好感度上限替换为目标内容。引用的核心 ID 必须存在于当前 PWFT registry。
-4. 按需要改写任务阶段图、三条路线的 `conditions`/`effects` 和论道树节点。任务的每个阶段必须可达且存在完成路径；论道树必须无环、全部可达、所有路径终止。
+4. 按需要改写任务阶段图、三条路线的 `conditions`/`effects`、`content_actions.lua`、`leader_guards.lua` 和论道树节点。任务的每个阶段必须可达且存在完成路径；论道树必须无环、全部可达、所有路径终止。
 5. 修改已发布定义时必须提升 `contentVersion` 并提供迁移；不得在相同版本下静默改动内容。
 
 ## 游戏内安装与加载
@@ -40,7 +42,7 @@ contentModules = {
 
 3. 启动后检查 UE4SS 日志：该包必须出现 `CONTENT_MODULE ... registered=true activated=true`，汇总必须为 `CONTENT_MODULE_LOADER_READY ... failed=0`。
 
-Core 会在同一个 Lua 环境中 `require` 配置的模块，先把 manifest、任务、战略世界、结局、帕鲁论道和本地化全部放入临时运行时校验，再进行确定性提交。任何一域失败时，整包不注册。不同 UE4SS Mod 的 `_G` 相互隔离，因此不支持另建一个 Mod 后通过 `_G.PWFT_*` 注入内容。
+Core 会在同一个 Lua 环境中 `require` 配置的模块，先把 manifest、任务、战略世界、结局、白名单机制动作、NPC 领主护卫、帕鲁论道和本地化全部放入临时运行时校验，再进行确定性提交。任何一域失败时，整包不注册。`activate(context)` 可取得 `factionNpcAttitudeBus` 与 `npcLeaderGuardOrchestrator`，但必须注册配置白名单中的原生 provider，并精确绑定当前世界 actor；世界卸载后绑定和部署全部丢弃、重新发现，不写入 sidecar。不同 UE4SS Mod 的 `_G` 相互隔离，因此不支持另建一个 Mod 后通过 `_G.PWFT_*` 注入内容。
 
 默认 `modules = {}`，所以机制基座本身仍然不携带剧情。
 
@@ -62,6 +64,6 @@ powershell -ExecutionPolicy Bypass -File AuthorSDK/validate-content-pack.ps1 -Pa
 
 ## 确定性 Core 结算
 
-作者内容只能给出 key、稳定 ID、条件和结构化结果。UI 或剧情层选择某个分支后，`QuestRuntime` 记录 branch ID 与结构化 result；受信任 Core 将白名单 result 映射到 `StrategicWorld` 的显式操作，再由 `EndingRuntime:evaluate` 检查路线条件，并最终调用 `commit`。每一步必须使用持久、唯一的 event/operation ID，重复事件只能重放同一结果，冲突事件必须失败关闭。
+作者内容只能给出 key、稳定 ID、条件和预登记的白名单动作。UI 或剧情层选择某个分支后，`QuestRuntime` 记录 branch ID 与结构化 result；`ContentActionRuntime` 只接受已随内容包原子注册的动作，并把它们映射到势力、`StrategicWorld` 或 `EndingRuntime` 的显式操作。加入、唯一帕鲁转移、占领/毁灭/恢复城市、最后通牒与提交结局必须收到明确玩家确认；商业与防守好感、帕鲁和解均不允许由该通用入口伪造。每一步必须使用持久、唯一的 event/operation ID，重复事件只能重放同一结果，冲突事件必须失败关闭。
 
 模型、对话文本、manifest 和内容包定义都无权直接改写世界或结局状态。端到端行为见 `mod0/tests/content_pack_author_sdk_e2e_spec.lua`。

@@ -7,6 +7,7 @@ package.path = table.concat({
 local commands = {}
 local hooks = {}
 local load_map_hook = nil
+local load_map_pre_hook = nil
 
 -- The blocker must not depend on scanning the global UObject list. The live
 -- build proved that scan cannot see the active map confirmation.
@@ -25,6 +26,10 @@ end
 
 function RegisterLoadMapPostHook(callback)
     load_map_hook = callback
+end
+
+function RegisterLoadMapPreHook(callback)
+    load_map_pre_hook = callback
 end
 
 local Config = require("pwft.config")
@@ -72,6 +77,8 @@ assert(hooks["/Script/Pal.PalLocationPoint:InvokeFastTravel"] ~= nil)
 assert(hooks["/Script/Pal.PalLocationPoint:IsEnableFastTravel"] ~= nil)
 assert(hooks["/Script/Pal.PalLocationPoint:IsEnableFastTravel"].postCallback ~= nil)
 assert(load_map_hook ~= nil)
+assert(load_map_pre_hook ~= nil)
+assert(state.callbacks.loadMapPre == load_map_pre_hook)
 assert(state.callbacks.loadMapPost == load_map_hook)
 assert(state.settlementRaid ~= nil)
 assert(state.worldBalance ~= nil)
@@ -87,10 +94,15 @@ assert(state.agentDialogueFileBridge ~= nil)
 assert(state.agentDialogueOperator ~= nil)
 assert(state.palDialogueController:status().bridgeAvailable == true)
 assert(state.factionApi ~= nil)
+assert(state.factionResourceLedger ~= nil)
+assert(state.factionEconomyWar ~= nil)
+assert(state.rewardPolicy ~= nil)
 assert(state.factionCommerce ~= nil)
 assert(state.factionEconomy ~= nil)
 assert(state.factionEconomyShops ~= nil)
 assert(state.commerceBridge ~= nil)
+assert(state.strategicWorldNativeBus ~= nil)
+assert(state.endingEffectProviderBus ~= nil)
 assert(state.factionDefense ~= nil)
 assert(state.factionGuard ~= nil)
 assert(state.factionJoin ~= nil)
@@ -109,6 +121,8 @@ assert(state.progressionStore:status().mode == "mod-sidecar-json")
 assert(state.companionLedger ~= nil)
 assert(state.companionLedger:status().enabled == true)
 assert(state.companionLedger:status().active == false)
+assert(state.backgroundRaidRecorder ~= nil)
+assert(state.backgroundRaidRecorder:status().pendingCount == 0)
 assert(state.progressionIdentity ~= nil)
 assert(state.progressionIdentity.status == "waiting-for-world")
 assert(state.progressionIdentity.readOnly == true)
@@ -125,6 +139,14 @@ assert(state.factionEconomy.version == "1.1.0")
 assert(state.factionEconomyShops.version == "1.0.0")
 assert(_G.PWFT_FACTION_API_V1 == state.factionApi)
 assert(_G.PWFT_COMPANION_LEDGER_V1 == state.companionLedger)
+assert(
+    _G.PWFT_BACKGROUND_RAID_RECORDER_V1
+        == state.backgroundRaidRecorder
+)
+assert(
+    state.settlementRaid.backgroundRaidRecorder
+        == state.backgroundRaidRecorder
+)
 assert(_G.PWFT_PAL_RECONCILIATION_API_V1 == state.palReconciliation)
 assert(_G.PWFT_AGENT_DIALOGUE_BRIDGE_V1 == state.agentDialogueFileBridge)
 assert(_G.PWFT_AGENT_DIALOGUE_OPERATOR_V1 == state.agentDialogueOperator)
@@ -141,11 +163,35 @@ assert(_G.PWFT_CONTENT_RUNTIME_API_V1 == state.contentRuntime)
 assert(_G.PWFT_QUEST_API_V1 == state.questRuntime)
 assert(_G.PWFT_STRATEGIC_WORLD_API_V1 == state.strategicWorld)
 assert(_G.PWFT_ENDING_API_V1 == state.endingRuntime)
+assert(_G.PWFT_STRATEGIC_WORLD_NATIVE_BUS_V1
+    == state.strategicWorldNativeBus)
+assert(_G.PWFT_ENDING_EFFECT_PROVIDER_BUS_V1
+    == state.endingEffectProviderBus)
+assert(_G.PWFT_FACTION_RESOURCE_LEDGER_V1
+    == state.factionResourceLedger)
+assert(_G.PWFT_FACTION_ECONOMY_WAR_V1 == state.factionEconomyWar)
+assert(_G.PWFT_REWARD_POLICY_V1 == state.rewardPolicy)
+assert(state.factionResourceLedger:status().factionCount == 7)
+assert(state.factionResourceLedger:status().resourceCount == 8)
+assert(state.factionEconomyWar:status().conflictCount == 0)
+assert(state.strategicWorldNativeBus:status().bindingCount == 0)
+assert(state.endingEffectProviderBus:status().modelCommitAuthority == false)
+assert(state.rewardPolicy:status().capabilities.modelAuthority == false)
+assert(type(state.factionProgression.state.factionResourceLedger) == "table")
+assert(type(state.factionProgression.state.factionEconomyWar) == "table")
+assert(type(state.factionProgression.state.strategicWorldNativeBus) == "table")
+assert(type(state.factionProgression.state.endingEffectProviderBus) == "table")
+assert(type(state.factionProgression.state.rewardPolicy) == "table")
+assert(_G.PWFT_FACTION_NPC_ATTITUDE_API_V1
+    == state.factionNpcAttitudeBus)
+assert(_G.PWFT_NPC_LEADER_GUARD_API_V1
+    == state.npcLeaderGuardOrchestrator)
 assert(state.strategicWorld:status().contentPackCount == 0)
 assert(state.endingRuntime:status().routeCount == 0)
 assert(state.contentPackRegistry:status().registeredPackCount == 0)
 assert(state.contentRuntime:status().registeredBundleCount == 0)
 assert(state.questRuntime:status().templateCount == 0)
+assert(state.contentRuntime:status().rewardPolicyAtomicRegistration == true)
 assert(_G.PWFT_JOIN_API_V1 == state.factionJoin)
 assert(
     _G.PWFT_FACTION_JOIN_NATIVE_ROUTER_V1
@@ -301,6 +347,16 @@ assert(hooks["/Script/Pal.PalUIItemShopBase:TrySell"] ~= nil)
 assert(hooks["/Script/Pal.PalUIItemShopBase:TrySell"].postCallback == nil)
 assert(state.factionProgression:status("pwft.faction.rayne_syndicate").relation == "Friendly")
 assert(state.factionProgression:status("pwft.faction.dark_nocturnal_pal_tribe").relation == "Hostile")
+
+-- A5-A8 world-scoped native handles are fenced on unload. A6 replays the
+-- committed ending through a stable generation ID and reports no-op when no
+-- ending has been committed; the bus never invents a successful provider.
+local generation_before = state.nativeWorldGeneration
+load_map_pre_hook()
+assert(state.nativeWorldGeneration == generation_before + 1)
+assert(state.strategicWorldNativeBus:status().bindingCount == 0)
+load_map_hook()
+assert(state.endingEffectProviderBus:status().replayCount == 0)
 assert(hooks["/Script/Pal.PalUIWorldMap:CreateWorldMapData"].callback == state.hooks["/Script/Pal.PalUIWorldMap:CreateWorldMapData"].callback)
 assert(hooks["/Game/Pal/Blueprint/UI/UserInterface/InGame/PlaceName/WBP_IngamePlaceName.WBP_IngamePlaceName_C:Display Region"].callback == state.hooks["/Game/Pal/Blueprint/UI/UserInterface/InGame/PlaceName/WBP_IngamePlaceName.WBP_IngamePlaceName_C:Display Region"].callback)
 assert(hooks["/Game/Pal/Blueprint/UI/UserInterface/Map/WBP_Map_IconFTTower.WBP_Map_IconFTTower_C:ClickEvent"].callback == state.hooks["/Game/Pal/Blueprint/UI/UserInterface/Map/WBP_Map_IconFTTower.WBP_Map_IconFTTower_C:ClickEvent"].callback)

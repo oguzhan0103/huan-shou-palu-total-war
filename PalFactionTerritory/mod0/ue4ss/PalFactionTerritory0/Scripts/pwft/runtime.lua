@@ -1,4 +1,5 @@
 local Runtime = {}
+local BackgroundRaidRecorder = require("pwft.background_raid_recorder")
 local CompanionLedger = require("pwft.companion_ledger")
 local AgentDialogueFileBridge =
     require("pwft.agent_dialogue_file_bridge")
@@ -6,13 +7,17 @@ local AgentDialogueOperator =
     require("pwft.agent_dialogue_operator")
 local CommerceBridge = require("pwft.commerce_bridge")
 local ContentPackRegistry = require("pwft.content_pack_registry")
+local ContentActionRuntime = require("pwft.content_action_runtime")
 local ContentRuntime = require("pwft.content_runtime")
 local ContentModuleLoader = require("pwft.content_module_loader")
+local EndingEffectProviderBus =
+    require("pwft.ending_effect_provider_bus")
 local EndingRuntime = require("pwft.ending_runtime")
 local FactionApi = require("pwft.faction_api")
 local FactionCommerce = require("pwft.faction_commerce")
 local FactionDefense = require("pwft.faction_defense")
 local FactionEconomy = require("pwft.faction_economy")
+local FactionEconomyWar = require("pwft.faction_economy_war")
 local FactionEconomyShopCatalog =
     require("pwft.faction_economy_shop_catalog")
 local FactionEconomyMerchantRuntime =
@@ -20,6 +25,10 @@ local FactionEconomyMerchantRuntime =
 local FactionEconomyMerchantPresence =
     require("pwft.faction_economy_merchant_presence")
 local FactionGuard = require("pwft.faction_guard")
+local FactionNpcAttitudeBus =
+    require("pwft.faction_npc_attitude_bus")
+local HumanDefenseResultBridge =
+    require("pwft.human_defense_result_bridge")
 local FactionJoin = require("pwft.faction_join")
 local FactionJoinNativePresenter =
     require("pwft.faction_join_native_presenter")
@@ -27,10 +36,13 @@ local FactionJoinNativeRouter =
     require("pwft.faction_join_native_router")
 local FactionMerchantRuntime = require("pwft.faction_merchant_runtime")
 local FactionProgression = require("pwft.faction_progression")
+local FactionResourceLedger = require("pwft.faction_resource_ledger")
 local FactionUiModel = require("pwft.faction_ui_model")
 local FactionUiPresenter = require("pwft.faction_ui_presenter")
 local NativeCharacterAdapter =
     require("pwft.native_character_adapter")
+local NpcLeaderGuardOrchestrator =
+    require("pwft.npc_leader_guard_orchestrator")
 local LocalizationRuntime = require("pwft.localization_runtime")
 local PalReconciliation = require("pwft.pal_reconciliation")
 local PalDiscourseRuntime =
@@ -52,9 +64,13 @@ local PalRaidNativeBinding =
 local ProgressionIdentity = require("pwft.progression_identity")
 local ProgressionStore = require("pwft.progression_store")
 local QuestRuntime = require("pwft.quest_runtime")
+local QuestObjectiveRouter = require("pwft.quest_objective_router")
 local RayneMerchant = require("pwft.rayne_merchant")
+local RewardPolicy = require("pwft.reward_policy")
 local SettlementRaid = require("pwft.settlement_raid")
 local StrategicWorld = require("pwft.strategic_world")
+local StrategicWorldNativeBus =
+    require("pwft.strategic_world_native_bus")
 local WorldBalance = require("pwft.world_balance")
 
 local PREFIX = "[PalFactionTerritory0]"
@@ -287,6 +303,7 @@ local function make_state(config, registry)
     end
     return {
         mapMode = config.defaultMapMode,
+        nativeWorldGeneration = 0,
         relationEvents = {},
         relations = {},
         dangerWarningCount = 0,
@@ -4186,11 +4203,24 @@ local function register_runtime_probes(config, registry, policy, state)
         and config.palReconciliation
             .nativeRaidResultBindingEnabled == true
     if (config.factionCommerce.economyMerchantPresence.enabled == true
-        or config.palReconciliation.agentBridge.enabled == true)
+        or config.palReconciliation.agentBridge.enabled == true
+        or config.factionNpcAttitudes ~= nil
+        or config.npcLeaderGuards ~= nil)
         and type(RegisterLoadMapPreHook) == "function" then
         local load_map_pre_callback = function()
+            state.nativeWorldGeneration =
+                (state.nativeWorldGeneration or 0) + 1
             if state.agentDialogueOperator ~= nil then
                 state.agentDialogueOperator:on_world_unloading()
+            end
+            if state.strategicWorldNativeBus ~= nil then
+                state.strategicWorldNativeBus:unbind_world()
+            end
+            if state.factionNpcAttitudeBus ~= nil then
+                state.factionNpcAttitudeBus:clear_world()
+            end
+            if state.npcLeaderGuardOrchestrator ~= nil then
+                state.npcLeaderGuardOrchestrator:clear_world()
             end
             local presence = state.factionEconomyMerchantPresence
             if presence == nil then
@@ -4217,11 +4247,30 @@ local function register_runtime_probes(config, registry, policy, state)
         or native_raid_hook_retry_enabled
         or (config.factionCommerce.economyMerchantPresence
             .enabled == true)
-        or config.palReconciliation.agentBridge.enabled == true)
+        or config.palReconciliation.agentBridge.enabled == true
+        or config.factionNpcAttitudes ~= nil
+        or config.npcLeaderGuards ~= nil)
         and type(RegisterLoadMapPostHook) == "function" then
         local load_map_post_callback = function()
+            if (state.nativeWorldGeneration or 0) == 0 then
+                state.nativeWorldGeneration = 1
+            end
             if state.agentDialogueOperator ~= nil then
                 state.agentDialogueOperator:on_world_loaded()
+            end
+            if state.endingEffectProviderBus ~= nil then
+                local replay = state.endingEffectProviderBus
+                    :replay_world_load(
+                        "pwft.world-load."
+                            .. tostring(state.nativeWorldGeneration)
+                    )
+                log(string.format(
+                    "ENDING_EFFECT_WORLD_REPLAY ok=%s reason=%s generation=%d pending=%d",
+                    tostring(replay.ok == true),
+                    tostring(replay.reason),
+                    state.nativeWorldGeneration,
+                    tonumber(replay.pendingCount) or 0
+                ))
             end
             if state.settlementRaid ~= nil then
                 state.settlementRaid:on_world_loaded("load-map-post")
@@ -4364,6 +4413,13 @@ function Runtime.start(config, registry, policy)
         rootPath = config.factionProgression.persistence.rootPath,
         reason = "native-world-player-identity-pending",
     })
+    state.backgroundRaidRecorder = BackgroundRaidRecorder.create(
+        state.companionLedger,
+        {
+            maxPending = config.settlementRaid
+                .attendanceSimulation.maxHistory,
+        }
+    )
     local restored_snapshot = nil
     local restore_source = "initial"
     if state.progressionStore.enabled then
@@ -4385,6 +4441,14 @@ function Runtime.start(config, registry, policy)
             or not state.companionLedger:status().active then
             return false, "companion-profile-not-active"
         end
+        local background_flush_ok, background_flush_reason =
+            state.backgroundRaidRecorder:flush()
+        if not background_flush_ok then
+            log(
+                "BACKGROUND_RAID_LEDGER_FLUSH_DEFERRED reason="
+                    .. tostring(background_flush_reason)
+            )
+        end
         return state.companionLedger:publish({
             releaseId = config.releaseId,
             expectedSteamBuildId = config.expectedSteamBuildId,
@@ -4398,6 +4462,22 @@ function Runtime.start(config, registry, policy)
             commerceBridge = state.commerceBridge
                     and state.commerceBridge:status()
                 or nil,
+            resourceLedger = state.factionResourceLedger
+                    and state.factionResourceLedger:status()
+                or nil,
+            economyWar = state.factionEconomyWar
+                    and state.factionEconomyWar:status()
+                or nil,
+            strategicWorldNativeBus = state.strategicWorldNativeBus
+                    and state.strategicWorldNativeBus:status()
+                or nil,
+            endingEffectProviderBus = state.endingEffectProviderBus
+                    and state.endingEffectProviderBus:status()
+                or nil,
+            rewardPolicy = state.rewardPolicy
+                    and state.rewardPolicy:status()
+                or nil,
+            backgroundRaids = state.backgroundRaidRecorder:status(),
         })
     end
     state.publishCompanionState = publish_companion_state
@@ -4443,12 +4523,64 @@ function Runtime.start(config, registry, policy)
             if state.factionUiPresenter ~= nil then
                 state.factionUiPresenter:refresh()
             end
+            if state.factionNpcAttitudeBus ~= nil
+                and type(faction_id) == "string"
+                and type(faction_status) == "table" then
+                local refresh_ids = { [faction_id] = true }
+                if type(outcome) == "table"
+                    and type(outcome.diplomacyChanges) == "table" then
+                    for _, change in ipairs(outcome.diplomacyChanges) do
+                        if type(change.factionId) == "string" then
+                            refresh_ids[change.factionId] = true
+                        end
+                    end
+                end
+                for refresh_faction_id in pairs(refresh_ids) do
+                    local refreshed = state.factionNpcAttitudeBus
+                        :refresh_faction(refresh_faction_id, {
+                            trigger = "relation-changed",
+                        })
+                    if not refreshed.ok then
+                        log(string.format(
+                            "FACTION_NPC_ATTITUDE_REFRESH_PARTIAL faction=%s failed=%d bindings=%d",
+                            tostring(refresh_faction_id),
+                            refreshed.failedCount or 0,
+                            refreshed.bindingCount or 0
+                        ))
+                    end
+                end
+            end
+            if state.factionNpcAttitudeBus ~= nil
+                and type(outcome) == "table"
+                and outcome.type == "ending-committed" then
+                state.factionNpcAttitudeBus:refresh_faction(nil, {
+                    trigger = "ending-changed",
+                })
+            end
     end
     state.factionApi = FactionApi.create(
         state.factionProgression,
         on_faction_state_changed
     )
     _G.PWFT_FACTION_API_V1 = state.factionApi
+    state.factionResourceLedger = FactionResourceLedger.create(
+        state.factionProgression,
+        registry.economy,
+        { onChange = on_faction_state_changed }
+    )
+    state.factionEconomyWar = FactionEconomyWar.create(
+        state.factionProgression,
+        state.factionResourceLedger,
+        { onChange = on_faction_state_changed }
+    )
+    state.rewardPolicy = RewardPolicy.create(
+        state.factionProgression,
+        {
+            authority = "pwft.authoritative-reward-outcome.v1",
+            nativeAdapterEnabled = false,
+            onChange = on_faction_state_changed,
+        }
+    )
     state.palReconciliation = PalReconciliation.create(
         registry.palReconciliation,
         state.factionProgression,
@@ -4569,6 +4701,10 @@ function Runtime.start(config, registry, policy)
             contentPackRegistry = state.contentPackRegistry,
         }
     )
+    state.strategicWorldNativeBus = StrategicWorldNativeBus.create(
+        state.strategicWorld,
+        { onChange = on_faction_state_changed }
+    )
     state.endingRuntime = EndingRuntime.create(
         state.factionProgression,
         state.strategicWorld,
@@ -4576,6 +4712,33 @@ function Runtime.start(config, registry, policy)
             onChange = on_faction_state_changed,
             contentPackRegistry = state.contentPackRegistry,
         }
+    )
+    state.factionNpcAttitudeBus = FactionNpcAttitudeBus.create(
+        state.factionApi,
+        state.endingRuntime,
+        config.factionNpcAttitudes
+    )
+    state.npcLeaderGuardOrchestrator =
+        NpcLeaderGuardOrchestrator.create(
+            state.factionApi,
+            config.npcLeaderGuards
+        )
+    state.questObjectiveRouter = QuestObjectiveRouter.create(
+        state.questRuntime,
+        state.factionProgression,
+        {
+            onChange = on_faction_state_changed,
+        }
+    )
+    state.endingEffectProviderBus = EndingEffectProviderBus.create(
+        state.endingRuntime,
+        { onChange = on_faction_state_changed }
+    )
+    state.contentActionRuntime = ContentActionRuntime.create(
+        state.factionApi,
+        state.strategicWorld,
+        state.endingRuntime,
+        state.contentPackRegistry
     )
     state.contentRuntime = ContentRuntime.create(
         state.factionProgression,
@@ -4586,13 +4749,31 @@ function Runtime.start(config, registry, policy)
         {
             palDiscourseRuntime = state.palDiscourseRuntime,
             localizationRuntime = state.localizationRuntime,
+            contentActionRuntime = state.contentActionRuntime,
+            rewardPolicy = state.rewardPolicy,
+            npcLeaderGuardOrchestrator =
+                state.npcLeaderGuardOrchestrator,
         }
     )
     _G.PWFT_CONTENT_PACK_API_V1 = state.contentPackRegistry
     _G.PWFT_CONTENT_RUNTIME_API_V1 = state.contentRuntime
     _G.PWFT_QUEST_API_V1 = state.questRuntime
+    _G.PWFT_QUEST_OBJECTIVE_API_V1 = state.questObjectiveRouter
     _G.PWFT_STRATEGIC_WORLD_API_V1 = state.strategicWorld
     _G.PWFT_ENDING_API_V1 = state.endingRuntime
+    _G.PWFT_STRATEGIC_WORLD_NATIVE_BUS_V1 =
+        state.strategicWorldNativeBus
+    _G.PWFT_ENDING_EFFECT_PROVIDER_BUS_V1 =
+        state.endingEffectProviderBus
+    _G.PWFT_FACTION_RESOURCE_LEDGER_V1 =
+        state.factionResourceLedger
+    _G.PWFT_FACTION_ECONOMY_WAR_V1 = state.factionEconomyWar
+    _G.PWFT_REWARD_POLICY_V1 = state.rewardPolicy
+    _G.PWFT_CONTENT_ACTION_API_V1 = state.contentActionRuntime
+    _G.PWFT_FACTION_NPC_ATTITUDE_API_V1 =
+        state.factionNpcAttitudeBus
+    _G.PWFT_NPC_LEADER_GUARD_API_V1 =
+        state.npcLeaderGuardOrchestrator
     _G.PWFT_LOCALIZATION_RESOLVER_V1 =
         state.localizationRuntime
     state.contentModuleLoader = ContentModuleLoader.create(
@@ -4605,6 +4786,15 @@ function Runtime.start(config, registry, policy)
             questRuntime = state.questRuntime,
             strategicWorld = state.strategicWorld,
             endingRuntime = state.endingRuntime,
+            contentActionRuntime = state.contentActionRuntime,
+            factionResourceLedger = state.factionResourceLedger,
+            factionEconomyWar = state.factionEconomyWar,
+            strategicWorldNativeBus = state.strategicWorldNativeBus,
+            endingEffectProviderBus = state.endingEffectProviderBus,
+            rewardPolicy = state.rewardPolicy,
+            factionNpcAttitudeBus = state.factionNpcAttitudeBus,
+            npcLeaderGuardOrchestrator =
+                state.npcLeaderGuardOrchestrator,
             palReconciliation = state.palReconciliation,
             palDiscourseRuntime = state.palDiscourseRuntime,
             palRepresentativeInteraction =
@@ -4787,6 +4977,13 @@ function Runtime.start(config, registry, policy)
         state.commerceBridge:start()
     end
     state.factionDefense = FactionDefense.create(state.factionApi)
+    state.humanDefenseResultBridge = HumanDefenseResultBridge.create(
+        state.factionDefense,
+        {
+            authoritySource = "pwft.attendance-human-defense.v1",
+            reputationAward = 50,
+        }
+    )
     state.factionGuard = FactionGuard.create(state.factionApi)
     state.nativeCharacterAdapter = nil
     if config.factionCommerce.nativeCharacterAdapter.enabled then
@@ -4951,6 +5148,14 @@ function Runtime.start(config, registry, policy)
         if not ledger_ok then
             return false, ledger_reason
         end
+        local background_flush_ok, background_flush_reason =
+            state.backgroundRaidRecorder:flush()
+        if not background_flush_ok then
+            log(
+                "BACKGROUND_RAID_LEDGER_FLUSH_DEFERRED reason="
+                    .. tostring(background_flush_reason)
+            )
+        end
         state.companionLedger:record({
             type = "progression-sidecar-ready",
             restoreSource = restore_source,
@@ -4971,6 +5176,8 @@ function Runtime.start(config, registry, policy)
         state.factionEconomyShops
     _G.PWFT_COMMERCE_BRIDGE_V1 = state.commerceBridge
     _G.PWFT_DEFENSE_API_V1 = state.factionDefense
+    _G.PWFT_HUMAN_DEFENSE_RESULT_BRIDGE_V1 =
+        state.humanDefenseResultBridge
     _G.PWFT_GUARD_API_V1 = state.factionGuard
     _G.PWFT_NATIVE_CHARACTER_ADAPTER_V1 =
         state.nativeCharacterAdapter
@@ -4982,6 +5189,8 @@ function Runtime.start(config, registry, policy)
     _G.PWFT_FACTION_UI_MODEL_V1 = state.factionUiModel
     _G.PWFT_FACTION_UI_V1 = state.factionUiPresenter
     _G.PWFT_COMPANION_LEDGER_V1 = state.companionLedger
+    _G.PWFT_BACKGROUND_RAID_RECORDER_V1 =
+        state.backgroundRaidRecorder
     log(string.format(
         "FACTION_PROGRESSION_READY api=%s factions=%d human=%d pal=%d persistence=%s restore=%s",
         state.factionApi.version,
@@ -5099,6 +5308,7 @@ function Runtime.start(config, registry, policy)
     local localization_status = state.localizationRuntime:status()
     local content_module_status = state.contentModuleLoader:status()
     local quest_status = state.questRuntime:status()
+    local quest_objective_status = state.questObjectiveRouter:status()
     log(string.format(
         "CONTENT_PACK_RUNTIME_READY api=%s core=%s packs=%d manifestsDataOnly=%s",
         content_pack_status.apiVersion,
@@ -5112,6 +5322,17 @@ function Runtime.start(config, registry, policy)
         content_runtime_status.registeredBundleCount,
         tostring(content_runtime_status.atomicCrossDomainValidation),
         tostring(content_runtime_status.modelMayRegisterContent)
+    ))
+    local content_action_status = state.contentActionRuntime:status()
+    log(string.format(
+        "CONTENT_ACTION_RUNTIME_READY api=%s packs=%d actions=%d dispatched=%d confirmation=%s modelDispatch=%s saveWrites=%s",
+        content_action_status.apiVersion,
+        content_action_status.packCount,
+        content_action_status.actionCount,
+        content_action_status.processedEventCount,
+        tostring(content_action_status.playerConfirmationForIrreversibleActions),
+        tostring(content_action_status.modelMayDispatch),
+        tostring(content_action_status.PalworldSaveMutation)
     ))
     log(string.format(
         "LOCALIZATION_RUNTIME_READY api=%s packs=%d locales=%d messages=%d fallback=%s story=false",
@@ -5164,6 +5385,39 @@ function Runtime.start(config, registry, policy)
         tostring(join_status.presenterReady),
         tostring(join_native_started == true),
         state.factionJoinNativeRouter:status().bindingCount
+    ))
+    local NPC_attitude_status = state.factionNpcAttitudeBus:status()
+    log(string.format(
+        "FACTION_NPC_ATTITUDE_READY api=%s providers=%d ready=%d bindings=%d progression=%s saveWrites=%s",
+        NPC_attitude_status.apiVersion,
+        NPC_attitude_status.providerCount,
+        NPC_attitude_status.readyProviderCount,
+        NPC_attitude_status.bindingCount,
+        tostring(NPC_attitude_status.progressionSidecarIdempotency),
+        tostring(NPC_attitude_status.PalworldSaveMutation)
+    ))
+    local NPC_guard_status = state.npcLeaderGuardOrchestrator:status()
+    log(string.format(
+        "NPC_LEADER_GUARD_READY api=%s packs=%d leaders=%d formations=%d providers=%d bindings=%d deployments=%d progression=%s story=false saveWrites=%s",
+        NPC_guard_status.apiVersion,
+        NPC_guard_status.contentPackCount,
+        NPC_guard_status.leaderCount,
+        NPC_guard_status.formationCount,
+        NPC_guard_status.providerCount,
+        NPC_guard_status.bindingCount,
+        NPC_guard_status.activeDeploymentCount,
+        tostring(NPC_guard_status.progressionSidecarIdempotency),
+        tostring(NPC_guard_status.PalworldSaveMutation)
+    ))
+    log(string.format(
+        "QUEST_OBJECTIVE_ROUTER_READY api=%s sources=%d kinds=%d events=%d tracked=%d modelDispatch=%s saveWrites=%s",
+        quest_objective_status.apiVersion,
+        quest_objective_status.supportedSources,
+        quest_objective_status.supportedEventKinds,
+        quest_objective_status.processedEventCount,
+        quest_objective_status.trackedQuestCount,
+        tostring(quest_objective_status.modelMayDispatch),
+        tostring(quest_objective_status.palworldSaveMutation)
     ))
     local commerce_status = state.factionCommerce:status()
     log(string.format(
@@ -5264,6 +5518,7 @@ function Runtime.start(config, registry, policy)
     state.settlementRaid = SettlementRaid.start(
         config.settlementRaid,
         {
+            backgroundRaidRecorder = state.backgroundRaidRecorder,
             palRaidResultAdapter = state.palRaidResultAdapter,
             attendanceAttributionResolver = function(attacker)
                 return state.palRaidNativeBinding
@@ -5274,6 +5529,93 @@ function Runtime.start(config, registry, policy)
                     state.nativeCharacterAdapter
                         :observe_character_death(victim)
                 end
+            end,
+            attendanceStartObserver = function(raid_start)
+                local territory = registry.islands[
+                    config.settlementRaid.settlement.islandId
+                ]
+                local faction_id = territory
+                    and territory.humanOwnerFactionId or nil
+                if type(faction_id) ~= "string" or faction_id == "" then
+                    return false, "settlement-human-faction-unresolved"
+                end
+                local opened = state.humanDefenseResultBridge:open({
+                    schemaVersion = "1.0.0",
+                    routeKind = "human-settlement-defense",
+                    authoritative = true,
+                    authoritySource = "pwft.attendance-human-defense.v1",
+                    eventId = raid_start.raidEventId,
+                    factionId = faction_id,
+                    settlementId = raid_start.settlementId,
+                    playerPresent = true,
+                })
+                return opened.ok, opened.reason
+            end,
+            attendanceCancelObserver = function(raid_cancel)
+                local territory = registry.islands[
+                    config.settlementRaid.settlement.islandId
+                ]
+                local faction_id = territory
+                    and territory.humanOwnerFactionId or nil
+                if type(faction_id) ~= "string" or faction_id == "" then
+                    return false, "settlement-human-faction-unresolved"
+                end
+                local settled = state.humanDefenseResultBridge:settle({
+                    schemaVersion = "1.0.0",
+                    routeKind = "human-settlement-defense",
+                    authoritative = true,
+                    authoritySource = "pwft.attendance-human-defense.v1",
+                    eventId = raid_cancel.raidEventId,
+                    resolutionId = raid_cancel.raidEventId
+                        .. ":human-defense-cancelled",
+                    factionId = faction_id,
+                    settlementId = raid_cancel.settlementId,
+                    playerParticipated = false,
+                    playerSideWon = false,
+                })
+                return settled.ok, settled.reason
+            end,
+            attendanceResultObserver = function(raid_result)
+                local territory = registry.islands[
+                    config.settlementRaid.settlement.islandId
+                ]
+                local faction_id = territory
+                    and territory.humanOwnerFactionId or nil
+                if type(faction_id) ~= "string" or faction_id == "" then
+                    return false, "settlement-human-faction-unresolved"
+                end
+                local settled = state.humanDefenseResultBridge:settle({
+                    schemaVersion = "1.0.0",
+                    routeKind = "human-settlement-defense",
+                    authoritative = true,
+                    authoritySource = "pwft.attendance-human-defense.v1",
+                    eventId = raid_result.raidEventId,
+                    resolutionId = raid_result.raidEventId
+                        .. ":human-defense",
+                    factionId = faction_id,
+                    settlementId = raid_result.settlementId,
+                    playerParticipated =
+                        raid_result.playerParticipated == true,
+                    playerSideWon = raid_result.playerSideWon == true,
+                })
+                if settled.ok then
+                    state.questObjectiveRouter:dispatch({
+                        schemaVersion = "pwft.quest-objective-event.v1",
+                        eventId = raid_result.raidEventId
+                            .. ":quest-defense",
+                        authority = "pwft.defense.v1",
+                        source = "defense",
+                        kind = "completed",
+                        factionId = faction_id,
+                        territoryId =
+                            config.settlementRaid.settlement.islandId,
+                        outcome = raid_result.playerSideWon
+                                and "victory" or "defeat",
+                        playerParticipated =
+                            raid_result.playerParticipated == true,
+                    })
+                end
+                return settled.ok, settled.reason
             end,
         }
     )

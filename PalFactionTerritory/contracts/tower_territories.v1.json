@@ -3,8 +3,7 @@
   "gameBuild": "Steam v1.0.1 / build 24181527",
   "runtimeEvidence": {
     "observedAt": "2026-07-21T18:52:42+08:00",
-    "sourceLog": "E:\\SteamLibrary\\steamapps\\common\\Palworld\\Pal\\Binaries\\Win64\\ue4ss\\UE4SS.log",
-    "sourceLogSha256": "c5eeeb0d5dd6ebfd1b202f76654ff7f5d284596a0923bed7c891319213d67b8f",
+    "sourceLog": "local-runtime-evidence-not-published",
     "observedTowerCount": 22,
     "note": "Runtime scan confirmed 22 unique watchtower FastTravelPointID values in MainWorld_5. WatchTower_14 and WatchTower_16 remain unobserved and must not be inferred from their editor IDs."
   },

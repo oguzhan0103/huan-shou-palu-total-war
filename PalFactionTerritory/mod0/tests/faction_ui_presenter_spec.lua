@@ -150,7 +150,7 @@ assert(string.find(
     1,
     true
 ))
-assert(string.find(backend.text, "护卫待接入", 1, true))
+assert(string.find(backend.text, "护卫未配置", 1, true))
 assert(string.find(
     backend.text,
     "[红]帕鲁保护团体 | 好感 0 | 未达到加入条件",

@@ -381,7 +381,31 @@ function PalReconciliation.create(contract, progression, options)
     }, { __index = PalReconciliation })
     ensure_state(instance)
     instance.recoveredInterruptedSessionCount = recover_interrupted_sessions(instance)
+    if type(progression.register_restore_listener) == "function" then
+        local registered = progression:register_restore_listener(
+            "pwft.pal-reconciliation.v1",
+            function(context)
+                return instance:rebind_progression_state(context)
+            end
+        )
+        assert(registered.ok, registered.reason)
+    end
     return instance
+end
+
+function PalReconciliation:rebind_progression_state(context)
+    local previous_state = self.state
+    ensure_state(self)
+    local recovered = 0
+    if context == nil or context.phase ~= "rollback" then
+        recovered = recover_interrupted_sessions(self)
+        self.recoveredInterruptedSessionCount =
+            (self.recoveredInterruptedSessionCount or 0) + recovered
+    end
+    return result(true, "progression-state-rebound", {
+        stateChanged = previous_state ~= self.state,
+        recoveredInterruptedSessionCount = recovered,
+    })
 end
 
 function PalReconciliation:register_content(faction_id, content)

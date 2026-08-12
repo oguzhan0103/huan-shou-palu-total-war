@@ -1,10 +1,15 @@
 local ContentPackRegistry = require("pwft.content_pack_registry")
+local ContentActionRuntime = require("pwft.content_action_runtime")
 local EndingRuntime = require("pwft.ending_runtime")
+local FactionApi = require("pwft.faction_api")
 local FactionProgression = require("pwft.faction_progression")
 local LocalizationRuntime = require("pwft.localization_runtime")
+local NpcLeaderGuardOrchestrator =
+    require("pwft.npc_leader_guard_orchestrator")
 local PalDiscourseRuntime = require("pwft.pal_discourse_runtime")
 local PalReconciliation = require("pwft.pal_reconciliation")
 local QuestRuntime = require("pwft.quest_runtime")
+local RewardPolicy = require("pwft.reward_policy")
 local StrategicWorld = require("pwft.strategic_world")
 
 local ContentRuntime = {}
@@ -64,6 +69,9 @@ local function assert_bundle_shape(bundle)
         endingRoutes = true,
         palDiscourse = true,
         localization = true,
+        contentActions = true,
+        leaderGuards = true,
+        rewardPolicies = true,
     }
     for key in pairs(bundle) do
         assert(allowed[key] == true, "content bundle contains unsupported field: " .. tostring(key))
@@ -79,6 +87,12 @@ local function assert_bundle_shape(bundle)
         "content bundle Pal discourse must be a table")
     assert(bundle.localization == nil or type(bundle.localization) == "table",
         "content bundle localization must be a table")
+    assert(bundle.contentActions == nil or type(bundle.contentActions) == "table",
+        "content bundle actions must be a table")
+    assert(bundle.leaderGuards == nil or type(bundle.leaderGuards) == "table",
+        "content bundle leader guards must be a table")
+    assert(bundle.rewardPolicies == nil or type(bundle.rewardPolicies) == "table",
+        "content bundle reward policies must be a table")
     return non_empty(bundle.manifest.contentPackId, "content bundle pack ID")
 end
 
@@ -125,6 +139,24 @@ local function stage_bundle(instance, bundle)
             "localization content version mismatch")
         assert(type(bundle.localization.catalogs) == "table", "localization catalogs are required")
     end
+    if bundle.contentActions ~= nil then
+        assert(bundle.contentActions.contentPackId == pack_id,
+            "content-action pack ID mismatch")
+        assert(bundle.contentActions.contentVersion
+            == bundle.manifest.contentVersion,
+            "content-action pack version mismatch")
+    end
+    if bundle.leaderGuards ~= nil then
+        assert(bundle.leaderGuards.contentPackId == pack_id,
+            "leader-guard pack ID mismatch")
+        assert(bundle.leaderGuards.contentVersion
+            == bundle.manifest.contentVersion,
+            "leader-guard pack version mismatch")
+    end
+    if bundle.rewardPolicies ~= nil then
+        assert(bundle.rewardPolicies.contentPackId == pack_id,
+            "reward-policy pack ID mismatch")
+    end
 
     local staged_registry = clone_registry(instance.contentPackRegistry)
     local manifest_result = staged_registry:register(bundle.manifest)
@@ -149,6 +181,62 @@ local function stage_bundle(instance, bundle)
     })
     staged_endings.packDefinitions = copy(instance.endingRuntime.packDefinitions)
     staged_endings.routeDefinitions = copy(instance.endingRuntime.routeDefinitions)
+
+    local staged_actions = nil
+    if instance.contentActionRuntime ~= nil then
+        local staged_faction_api = FactionApi.create(staged_progression)
+        staged_actions = ContentActionRuntime.create(
+            staged_faction_api,
+            staged_world,
+            staged_endings,
+            staged_registry
+        )
+        local existing_action_packs = instance.contentActionRuntime
+            :export_registered_packs()
+        for _, existing_pack_id in ipairs(sorted_keys(existing_action_packs)) do
+            local replayed = staged_actions:register_pack(
+                existing_action_packs[existing_pack_id]
+            )
+            assert(replayed.ok,
+                "installed content-action packs could not be cloned")
+        end
+    end
+
+    local staged_leader_guards = nil
+    if instance.npcLeaderGuardOrchestrator ~= nil then
+        local limits = instance.npcLeaderGuardOrchestrator.globalLimits
+        staged_leader_guards = NpcLeaderGuardOrchestrator.create(
+            FactionApi.create(staged_progression),
+            {
+                providerWhitelist = {},
+                maxPerLeader = limits.perLeader,
+                maxPerFaction = limits.perFaction,
+                maxPerScene = limits.perScene,
+                maximumMembersPerFormation = instance
+                    .npcLeaderGuardOrchestrator
+                    .maximumMembersPerFormation,
+            }
+        )
+        for _, existing_pack_id in ipairs(sorted_keys(
+            instance.npcLeaderGuardOrchestrator.packs
+        )) do
+            local replayed = staged_leader_guards
+                :register_content_pack(
+                    instance.npcLeaderGuardOrchestrator
+                        .packs[existing_pack_id]
+                )
+            assert(replayed.ok,
+                "installed leader-guard packs could not be cloned")
+        end
+    end
+
+    local staged_rewards = nil
+    if instance.rewardPolicy ~= nil then
+        staged_rewards = RewardPolicy.create(staged_progression, {
+            authority = instance.rewardPolicy.authority,
+            nativeAdapterEnabled = false,
+        })
+    end
 
     local staged_discourse = nil
     if instance.palDiscourseRuntime ~= nil then
@@ -191,6 +279,9 @@ local function stage_bundle(instance, bundle)
         endingRoutes = nil,
         palDiscourse = nil,
         localization = nil,
+        contentActions = nil,
+        leaderGuards = nil,
+        rewardPolicies = nil,
     }
     for _, template in ipairs(bundle.questTemplates or {}) do
         local registered = staged_quests:register_template(template)
@@ -218,6 +309,35 @@ local function stage_bundle(instance, bundle)
         )
         if not staged_results.localization.ok then return staged_results.localization end
     end
+    if bundle.contentActions ~= nil then
+        assert(staged_actions ~= nil,
+            "content-action runtime is not configured")
+        staged_results.contentActions = staged_actions:register_pack(
+            bundle.contentActions
+        )
+        if not staged_results.contentActions.ok then
+            return staged_results.contentActions
+        end
+    end
+    if bundle.leaderGuards ~= nil then
+        assert(staged_leader_guards ~= nil,
+            "NPC leader guard orchestrator is not configured")
+        staged_results.leaderGuards = staged_leader_guards
+            :register_content_pack(bundle.leaderGuards)
+        if not staged_results.leaderGuards.ok then
+            return staged_results.leaderGuards
+        end
+    end
+    if bundle.rewardPolicies ~= nil then
+        assert(staged_rewards ~= nil,
+            "reward-policy runtime is not configured")
+        staged_results.rewardPolicies = staged_rewards:register_pack(
+            bundle.rewardPolicies
+        )
+        if not staged_results.rewardPolicies.ok then
+            return staged_results.rewardPolicies
+        end
+    end
     return result(true, "content-bundle-staged", {
         contentPackId = pack_id,
         stagedResults = staged_results,
@@ -244,6 +364,12 @@ function ContentRuntime.create(
     assert(options.localizationRuntime == nil
         or type(options.localizationRuntime) == "table",
         "localization runtime must be a table")
+    assert(options.npcLeaderGuardOrchestrator == nil
+        or type(options.npcLeaderGuardOrchestrator) == "table",
+        "NPC leader guard orchestrator must be a table")
+    assert(options.rewardPolicy == nil
+        or type(options.rewardPolicy) == "table",
+        "reward-policy runtime must be a table")
     return setmetatable({
         version = API_VERSION,
         progression = progression,
@@ -253,6 +379,10 @@ function ContentRuntime.create(
         endingRuntime = ending_runtime,
         palDiscourseRuntime = options.palDiscourseRuntime,
         localizationRuntime = options.localizationRuntime,
+        contentActionRuntime = options.contentActionRuntime,
+        npcLeaderGuardOrchestrator =
+            options.npcLeaderGuardOrchestrator,
+        rewardPolicy = options.rewardPolicy,
         registeredBundles = {},
         bundleFingerprints = {},
         capabilities = {
@@ -263,6 +393,10 @@ function ContentRuntime.create(
             storyContentIncluded = false,
             palDiscourseAtomicRegistration = options.palDiscourseRuntime ~= nil,
             localizationAtomicRegistration = options.localizationRuntime ~= nil,
+            contentActionAtomicRegistration = options.contentActionRuntime ~= nil,
+            leaderGuardAtomicRegistration =
+                options.npcLeaderGuardOrchestrator ~= nil,
+            rewardPolicyAtomicRegistration = options.rewardPolicy ~= nil,
         },
     }, { __index = ContentRuntime })
 end
@@ -329,6 +463,29 @@ function ContentRuntime:register(bundle)
         assert(localization_result.ok,
             "staged localization pack failed during deterministic commit")
     end
+    local content_action_result = nil
+    if bundle.contentActions ~= nil then
+        content_action_result = self.contentActionRuntime:register_pack(
+            bundle.contentActions
+        )
+        assert(content_action_result.ok,
+            "staged content-action pack failed during deterministic commit")
+    end
+    local leader_guard_result = nil
+    if bundle.leaderGuards ~= nil then
+        leader_guard_result = self.npcLeaderGuardOrchestrator
+            :register_content_pack(bundle.leaderGuards)
+        assert(leader_guard_result.ok,
+            "staged leader-guard pack failed during deterministic commit")
+    end
+    local reward_policy_result = nil
+    if bundle.rewardPolicies ~= nil then
+        reward_policy_result = self.rewardPolicy:register_pack(
+            bundle.rewardPolicies
+        )
+        assert(reward_policy_result.ok,
+            "staged reward-policy pack failed during deterministic commit")
+    end
     local record = {
         contentPackId = pack_id,
         contentVersion = bundle.manifest.contentVersion,
@@ -339,6 +496,15 @@ function ContentRuntime:register(bundle)
         localizationRegistered = localization_result ~= nil,
         localizedMessageCount = localization_result
             and localization_result.messageCount or 0,
+        contentActionsRegistered = content_action_result ~= nil,
+        contentActionCount = content_action_result
+            and content_action_result.actionCount or 0,
+        leaderGuardsRegistered = leader_guard_result ~= nil,
+        leaderGuardLeaderCount = leader_guard_result
+            and leader_guard_result.leaderCount or 0,
+        rewardPoliciesRegistered = reward_policy_result ~= nil,
+        rewardPolicyCount = reward_policy_result
+            and reward_policy_result.registeredPolicyCount or 0,
     }
     self.registeredBundles[pack_id] = copy(record)
     self.bundleFingerprints[pack_id] = stable_encode(bundle)
@@ -361,6 +527,17 @@ function ContentRuntime:status()
             and self.localizationRuntime:status().registeredPackCount or 0,
         localizedMessageCount = self.localizationRuntime
             and self.localizationRuntime:status().messageCount or 0,
+        contentActionPackCount = self.contentActionRuntime
+            and self.contentActionRuntime:status().packCount or 0,
+        contentActionCount = self.contentActionRuntime
+            and self.contentActionRuntime:status().actionCount or 0,
+        leaderGuardPackCount = self.npcLeaderGuardOrchestrator
+            and self.npcLeaderGuardOrchestrator:status().contentPackCount or 0,
+        leaderGuardLeaderCount = self.npcLeaderGuardOrchestrator
+            and self.npcLeaderGuardOrchestrator:status().leaderCount or 0,
+        rewardPolicyCount = self.rewardPolicy
+            and self.rewardPolicy:status().policyCount or 0,
+        rewardPolicyAtomicRegistration = self.rewardPolicy ~= nil,
         atomicCrossDomainValidation = true,
         modelMayRegisterContent = false,
         storyContentIncluded = false,

@@ -38,6 +38,9 @@ local adapter = PalRaidResultAdapter.create(
     }
 )
 local logs = {}
+local observed_results = {}
+local observed_starts = {}
+local observed_cancellations = {}
 local bridge = AttendanceRaidResultBridge.create(
     adapter,
     {
@@ -76,6 +79,18 @@ local bridge = AttendanceRaidResultBridge.create(
         logger = function(message)
             table.insert(logs, message)
         end,
+        resultObserver = function(value)
+            observed_results[#observed_results + 1] = value
+            return true, "observed"
+        end,
+        startObserver = function(value)
+            observed_starts[#observed_starts + 1] = value
+            return true, "opened"
+        end,
+        cancelObserver = function(value)
+            observed_cancellations[#observed_cancellations + 1] = value
+            return true, "cancelled"
+        end,
     }
 )
 
@@ -89,6 +104,9 @@ local player = { key = "actor:local-player", kind = "player" }
 local npc = { key = "actor:resident", kind = "resident" }
 
 assert(bridge:begin(7, actors).ok)
+assert(#observed_starts == 1)
+assert(observed_starts[1].settlementId
+    == "pwft.settlement.small_settlement")
 local active = bridge:status()
 assert(active.active and active.memberCount == 4)
 assert(active.leaderActorKey == "attendance:leader")
@@ -108,6 +126,12 @@ assert(settled.event.leaderKillCredited == true)
 assert(settled.settlement.tokenAwarded == true)
 assert(reconciliation:status(faction_id).tokensAwarded == 1)
 assert(bridge:status().settlements == 1)
+assert(settled.resultObserverOk == true)
+assert(#observed_results == 1)
+assert(observed_results[1].raidEventId == settled.event.raidEventId)
+assert(observed_results[1].playerParticipated == true)
+assert(observed_results[1].playerSideWon == true)
+assert(observed_results[1].palTokenAwarded == true)
 
 -- A resident killing the leader still lets the town win, but yields no token.
 assert(bridge:begin(8, actors).ok)
@@ -120,6 +144,9 @@ assert(no_credit.settlement.tokenAwarded == false)
 assert(no_credit.settlement.reason
     == "raid-leader-kill-credit-required")
 assert(reconciliation:status(faction_id).tokensAwarded == 1)
+assert(#observed_results == 2)
+assert(observed_results[2].playerParticipated == false)
+assert(observed_results[2].palTokenAwarded == false)
 
 -- Timer/world cleanup cancels an incomplete event and can never settle it.
 assert(bridge:begin(9, actors).ok)
@@ -128,6 +155,8 @@ local cancelled = bridge:cancel("attendance-event-timeout")
 assert(cancelled.ok and cancelled.reason == "raid-event-cancelled")
 assert(cancelled.event.cancelled == true)
 assert(cancelled.event.resolved == false)
+assert(cancelled.cancelObserverOk == true)
+assert(#observed_cancellations == 1)
 assert(reconciliation:status(faction_id).tokensAwarded == 1)
 assert(bridge:status().timerCleanupMaySettleRaid == false)
 

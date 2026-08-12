@@ -1039,11 +1039,16 @@ local function record_background_raid(instance, source, player_distance)
     local recorder = instance.backgroundRaidRecorder
     if type(recorder) == "table"
         and type(recorder.record) == "function" then
-        local ok, result = pcall(function()
+        local ok, result, reason = pcall(function()
             return recorder:record(record)
         end)
-        recorder_status = ok and tostring(result)
-            or "provider-error:" .. tostring(result)
+        if ok then
+            recorder_status = result == true
+                    and tostring(reason or "persisted")
+                or "deferred:" .. tostring(reason or result)
+        else
+            recorder_status = "provider-error:" .. tostring(result)
+        end
     end
     log(string.format(
         "BACKGROUND_RAID_RESOLVED source=%s settlement=%s playerPresent=false playerDistance=%.1f actorSpawns=0 worldCombat=false recorder=%s count=%d saveWrites=0",
@@ -3975,6 +3980,12 @@ function SettlementRaid.start(config, options)
                     logger = log,
                     attributionResolver =
                         options.attendanceAttributionResolver,
+                    resultObserver =
+                        options.attendanceResultObserver,
+                    startObserver =
+                        options.attendanceStartObserver,
+                    cancelObserver =
+                        options.attendanceCancelObserver,
                 }
             )
     end

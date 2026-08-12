@@ -32,6 +32,9 @@ package.preload["test_content_modules.valid"] = function()
             activations[#activations + 1] = {
                 marker = context.marker,
                 contentPackId = registration.contentPackId,
+                factionNpcAttitudeBus = context.factionNpcAttitudeBus,
+                npcLeaderGuardOrchestrator =
+                    context.npcLeaderGuardOrchestrator,
             }
             return { ok = true, reason = "fixture-activated" }
         end,
@@ -53,6 +56,8 @@ local loader = ContentModuleLoader.create(runtime, {
     },
 }, {
     marker = "trusted-context",
+    factionNpcAttitudeBus = { api = "attitude" },
+    npcLeaderGuardOrchestrator = { api = "guards" },
 }, {
     logger = function(message) logs[#logs + 1] = message end,
 })
@@ -63,6 +68,8 @@ assert(#registrations == 2)
 assert(#activations == 1)
 assert(activations[1].marker == "trusted-context")
 assert(activations[1].contentPackId == "test.module.valid")
+assert(activations[1].factionNpcAttitudeBus.api == "attitude")
+assert(activations[1].npcLeaderGuardOrchestrator.api == "guards")
 assert(#logs == 2)
 local status = loader:status()
 assert(status.registeredCount == 2)
