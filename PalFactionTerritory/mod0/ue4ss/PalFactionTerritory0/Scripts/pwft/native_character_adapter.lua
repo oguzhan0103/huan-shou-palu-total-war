@@ -1015,6 +1015,13 @@ function NativeCharacterAdapter:_schedule_npc_manager_merchant_poll(record)
             self:_schedule_npc_manager_merchant_poll(record)
         end
         if type(self.executeInGameThread) == "function" then
+            -- ExecuteInGameThread registers the Lua function with UE4SS and
+            -- may run it on a later engine tick.  The outer delay callback is
+            -- retained in pollCallbacks, but that does not retain this inner
+            -- closure after the outer callback returns.  Keep it on the
+            -- lifecycle-scoped record so UE4SS never observes a collected
+            -- registry reference while resolving a merchant.
+            table.insert(record.gameThreadCallbacks, execute)
             self.executeInGameThread(execute)
         else
             execute()
@@ -1114,6 +1121,7 @@ function NativeCharacterAdapter:spawn_merchant_via_npc_manager(
         plan = plan,
         callbacks = callbacks,
         pollCallbacks = {},
+        gameThreadCallbacks = {},
     }
     -- NPCSpawnCallback__DelegateSignature returns an FPalInstanceID, not
     -- the PalIndividualCharacterHandle.  Keep this closure alive on the
@@ -1300,6 +1308,7 @@ function NativeCharacterAdapter:_schedule_async_merchant_poll(record)
             self:_schedule_async_merchant_poll(record)
         end
         if type(self.executeInGameThread) == "function" then
+            table.insert(record.gameThreadCallbacks, execute)
             self.executeInGameThread(execute)
         else
             execute()
@@ -1453,6 +1462,7 @@ function NativeCharacterAdapter:spawn_merchant_async(plan, callbacks)
         plan = plan,
         callbacks = callbacks,
         pollCallbacks = {},
+        gameThreadCallbacks = {},
     }
     self.records[runtime_id] = record
     self:_log(string.format(

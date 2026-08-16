@@ -12,6 +12,7 @@ local ContentRuntime = require("pwft.content_runtime")
 local FactionApi = require("pwft.faction_api")
 local QuestRuntime = require("pwft.quest_runtime")
 local RewardPolicy = require("pwft.reward_policy")
+local UniquePalCampaign = require("pwft.unique_pal_campaign")
 local StrategicWorld = require("pwft.strategic_world")
 local EndingRuntime = require("pwft.ending_runtime")
 local PalReconciliation = require("pwft.pal_reconciliation")
@@ -63,11 +64,20 @@ assert(manifest_result.ok and manifest_result.reason == "content-pack-registered
 assert(pack_registry:has_capability(Example.manifest.contentPackId, "pwft.quest.templates"))
 assert(pack_registry:has_capability(Example.manifest.contentPackId, "pwft.pal.discourse"))
 assert(pack_registry:has_capability(Example.manifest.contentPackId, "pwft.world.unique-pals"))
+assert(pack_registry:has_capability(
+    Example.manifest.contentPackId,
+    "pwft.world.unique-pal-campaign"
+))
 assert(pack_registry:has_capability(Example.manifest.contentPackId, "pwft.world.city-states"))
 assert(pack_registry:has_capability(Example.manifest.contentPackId, "pwft.world.endings"))
 
 assert_all_key_fields_declared(pack_registry, Example.manifest.contentPackId, Example.questTemplate)
 assert_all_key_fields_declared(pack_registry, Example.manifest.contentPackId, Example.strategicWorld)
+assert_all_key_fields_declared(
+    pack_registry,
+    Example.manifest.contentPackId,
+    Example.uniquePalCampaign
+)
 assert_all_key_fields_declared(pack_registry, Example.manifest.contentPackId, Example.endingRoutes)
 assert_all_key_fields_declared(pack_registry, Example.manifest.contentPackId, Example.palDiscourse)
 
@@ -136,6 +146,10 @@ local bundle_leader_guards = NpcLeaderGuardOrchestrator.create(
     { providerWhitelist = {} }
 )
 local bundle_rewards = RewardPolicy.create(bundle_progression)
+local bundle_unique_pal_campaign = UniquePalCampaign.create(
+    bundle_progression,
+    bundle_world
+)
 local bundle_runtime = ContentRuntime.create(
     bundle_progression,
     bundle_registry,
@@ -153,6 +167,7 @@ local bundle_runtime = ContentRuntime.create(
         ),
         npcLeaderGuardOrchestrator = bundle_leader_guards,
         rewardPolicy = bundle_rewards,
+        uniquePalCampaign = bundle_unique_pal_campaign,
     }
 )
 local invalid_leader_bundle = copy(Example.bundle)
@@ -183,6 +198,9 @@ assert(atomic_bundle.leaderGuardsRegistered)
 assert(atomic_bundle.leaderGuardLeaderCount == 1)
 assert(atomic_bundle.rewardPoliciesRegistered)
 assert(atomic_bundle.rewardPolicyCount == 1)
+assert(atomic_bundle.uniquePalCampaignRegistered)
+assert(atomic_bundle.uniquePalCampaignCount == 1)
+assert(bundle_unique_pal_campaign:status().uniquePalCount == 1)
 assert(bundle_rewards:status().policyCount == 1)
 assert(atomic_bundle.rewardPoliciesRegistered)
 assert(atomic_bundle.rewardPolicyCount == 1)

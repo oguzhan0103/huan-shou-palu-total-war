@@ -185,12 +185,11 @@ local function is_standalone_enemy_pal(component, individual)
         return false, "trainer-owned"
     end
 
-    -- Neutral, ResidentEnemy, and RaidBoss are world enemies. Undefined is
-    -- also accepted during the short spawn-initialization window, but only
-    -- after every ownership and work assignment check above has passed.
+    -- Neutral, ResidentEnemy, and RaidBoss are world enemies. Unknown or
+    -- Undefined group state fails closed: accepting it during initialization
+    -- can misclassify a story-friendly Pal whose group has not resolved yet.
     local group_type = parse_group_type(individual)
-    if group_type == nil or group_type == 0 or group_type == 1
-        or group_type == 5 or group_type == 6 then
+    if group_type == 1 or group_type == 5 or group_type == 6 then
         return true, "world-enemy"
     end
     return false, "non-world-group:" .. tostring(group_type)
@@ -216,6 +215,14 @@ local function apply_level(instance, actor, component, individual)
     if is_player_character(actor) then
         return false, "player-character"
     end
+    local is_pal = is_pal_actor(actor)
+    if is_pal then
+        local standalone, standalone_reason =
+            is_standalone_enemy_pal(component, individual)
+        if not standalone then
+            return false, standalone_reason
+        end
+    end
     if not is_valid_object(individual) then
         return false, "individual-unavailable"
     end
@@ -229,6 +236,16 @@ local function apply_level(instance, actor, component, individual)
     local ok = safe_call(individual, "SetOverrideLevel", instance.config.targetLevel)
     if ok then
         instance.levelAppliedCount = instance.levelAppliedCount + 1
+        if instance.levelDetailLogCount < instance.config.maxDetailLogCount then
+            instance.levelDetailLogCount = instance.levelDetailLogCount + 1
+            log(string.format(
+                "LEVEL_OVERRIDE_APPLIED actor=%s target=%d source=%s count=%d",
+                safe_full_name(actor),
+                instance.config.targetLevel,
+                tostring(instance.lastApplySource or "native-initialize"),
+                instance.levelAppliedCount
+            ))
+        end
         return true, "applied"
     end
     return false, "SetOverrideLevel-failed"
@@ -449,6 +466,7 @@ function WorldBalance.start(config)
         hookIds = {},
         rageActors = {},
         levelAppliedCount = 0,
+        levelDetailLogCount = 0,
         rageAppliedCount = 0,
         rageDetailLogCount = 0,
         lastApplySource = "startup",

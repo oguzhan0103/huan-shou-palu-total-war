@@ -737,6 +737,7 @@ while #delayed_callbacks > 0 do
     callback()
 end
 assert(pending.ready == true)
+assert(#pending.gameThreadCallbacks >= 1)
 assert(pending.spawnRequestRoute ==
     "SpawnRequest_ByOutside(true)")
 assert(last_spawner.outsideRequestCount == 1)

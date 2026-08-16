@@ -180,6 +180,7 @@ while #delayed > 0 do
     table.remove(delayed, 1)()
 end
 assert(record.ready == true)
+assert(#record.gameThreadCallbacks >= 2)
 assert(record.spawnId == "instance-id-1")
 assert(record.handle == handles[1])
 assert(ready_actor == handles[1].actor)

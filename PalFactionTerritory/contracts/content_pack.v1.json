@@ -35,6 +35,7 @@
     "pwft.faction.commerce",
     "pwft.faction.guards",
     "pwft.world.unique-pals",
+    "pwft.world.unique-pal-campaign",
     "pwft.world.city-states",
     "pwft.world.endings"
   ]

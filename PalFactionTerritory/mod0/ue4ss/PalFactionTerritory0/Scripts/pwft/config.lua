@@ -206,6 +206,29 @@ return {
             factionId = "pwft.faction.rayne_syndicate",
             forwardDistance = 600,
         },
+        -- Native transaction acceptance only. When temporarily enabled,
+        -- Ctrl+F12 advances the window ID consumed by subsequent real shop
+        -- confirmations. It never grants reputation itself, so three capped
+        -- hostile-recovery windows can be exercised without waiting three
+        -- UTC days. Production keeps this false.
+        commerceWindowLiveTest = {
+            enabled = false,
+            key = "F12",
+            windowPrefix = "qa-native-commerce",
+            windowCount = 3,
+        },
+        -- Hostile-commerce acceptance only. When temporarily enabled,
+        -- Ctrl+F2 joins the Free Pal Alliance through the normal faction API.
+        -- The authored relationship pair then makes Rayne hostile at zero
+        -- reputation. Recovery still requires 60 points from confirmed native
+        -- Merchant Guild transactions across the three QA windows above.
+        hostileCommerceLiveTest = {
+            enabled = false,
+            key = "F2",
+            joinFactionId = "pwft.faction.free_pal_alliance",
+            targetFactionId = "pwft.faction.rayne_syndicate",
+            contentId = "pwft.qa.hostile-commerce-live-test",
+        },
         -- Production lifecycle: load the accepted fixed market only while a
         -- local player is near the island, then destroy all owned counters
         -- after departure. The wider removal radius prevents border thrash.
@@ -347,6 +370,18 @@ return {
         restockMinutes = 1440,
         shopRegistrationRetryMs = 1000,
         shopRegistrationMaxAttempts = 12,
+        -- Temporary relation round-trip acceptance route. Production keeps
+        -- this disabled; when enabled, Ctrl+F11 toggles only the standalone
+        -- Rayne Pal merchant between Friendly and Hostile without save writes.
+        relationLiveTest = {
+            enabled = false,
+            key = "F11",
+        },
+        -- UE4SS 3.0.1 can crash in its TArray metamethod when Lua traverses
+        -- the 288 live Pal product wrappers after a world reload. Keep the
+        -- complete custom catalog enabled, but fail closed on this optional
+        -- cosmetic enhancement until it moves to a native provider.
+        enableRainbowPassives = false,
         rainbowChance = 0.70,
         rankFiveChance = 0.20,
         -- UE4SS 3.0.1 has an off-by-one resize bug after the first element of

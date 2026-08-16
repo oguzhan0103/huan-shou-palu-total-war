@@ -34,6 +34,22 @@ local wrapped_products = {
     wrapper(product_b),
 }
 local product_array = {
+    GetArrayNum = function()
+        return #wrapped_products
+    end,
+    ForEach = function(_, callback)
+        error("native ForEach must not be used when fixed-length indexing is available")
+    end,
+}
+setmetatable(product_array, {
+    __index = function(_, key)
+        if type(key) == "number" then
+            return wrapped_products[key]
+        end
+    end,
+})
+
+local foreach_only_array = {
     ForEach = function(_, callback)
         for index, element in ipairs(wrapped_products) do
             if callback(index, element) == true then
@@ -50,6 +66,12 @@ end))
 assert(#visited == 2)
 assert(visited[1] == product_a)
 assert(visited[2] == product_b)
+
+local foreach_only_visited = {}
+assert(test.for_each_array(foreach_only_array, function(_, element)
+    table.insert(foreach_only_visited, test.unwrap_remote_value(element))
+end))
+assert(#foreach_only_visited == 2)
 
 local passive_wrappers = {
     wrapper("OldPassiveA"),
@@ -142,4 +164,41 @@ assert(found_actor == nearby_actor)
 assert(found_distance == 10.0)
 assert(find_error == nil)
 
-print("PASS Rayne merchant wrapper traversal, mutation, and native actor fallback")
+local relation_interaction = {
+    IsValid = function() return true end,
+    bDisableTalk = false,
+    bDisableTalkWhenCaptured = false,
+    OnRep_DisableTalk = function(self)
+        self.replicationCount = (self.replicationCount or 0) + 1
+    end,
+}
+local relation_actor = {
+    IsValid = function() return true end,
+    GetFullName = function()
+        return "BP_NPC_DarkTrader_C /Game/Test.Relation"
+    end,
+    BP_NPCInteractionComponent = relation_interaction,
+    SetActive_Interact_ToAll = function(self, active)
+        self.interactActive = active
+        self.activationCount = (self.activationCount or 0) + 1
+    end,
+}
+local hostile_ok, hostile_reason =
+    test.apply_relation_interaction_policy(relation_actor, "Hostile")
+assert(hostile_ok)
+assert(hostile_reason == "hostile-interaction-disabled")
+assert(relation_interaction.bDisableTalk == true)
+assert(relation_interaction.bDisableTalkWhenCaptured == true)
+assert(relation_actor.interactActive == false)
+
+local friendly_ok, friendly_reason =
+    test.apply_relation_interaction_policy(relation_actor, "Friendly")
+assert(friendly_ok)
+assert(friendly_reason == "peaceful-interaction-enabled")
+assert(relation_interaction.bDisableTalk == false)
+assert(relation_interaction.bDisableTalkWhenCaptured == false)
+assert(relation_actor.interactActive == true)
+assert(relation_interaction.replicationCount == 2)
+assert(relation_actor.activationCount == 2)
+
+print("PASS Rayne merchant traversal, native fallback, and relation interaction policy")

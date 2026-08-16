@@ -101,6 +101,8 @@ assert(state.factionCommerce ~= nil)
 assert(state.factionEconomy ~= nil)
 assert(state.factionEconomyShops ~= nil)
 assert(state.commerceBridge ~= nil)
+assert(state.commerceWindowLiveTest == nil)
+assert(state.hostileCommerceLiveTest == nil)
 assert(state.strategicWorldNativeBus ~= nil)
 assert(state.endingEffectProviderBus ~= nil)
 assert(state.factionDefense ~= nil)
@@ -354,8 +356,19 @@ assert(state.factionProgression:status("pwft.faction.dark_nocturnal_pal_tribe").
 local generation_before = state.nativeWorldGeneration
 load_map_pre_hook()
 assert(state.nativeWorldGeneration == generation_before + 1)
+assert(state.inGameWorldReady == false)
 assert(state.strategicWorldNativeBus:status().bindingCount == 0)
+local presence_generation_after_unload =
+    state.factionEconomyMerchantPresence.generation
 load_map_hook()
+-- Splash/Login/Title generations must not start any UObject-polling merchant
+-- or tower callback. Only a successfully resolved in-game identity activates
+-- those services.
+assert(state.inGameWorldReady == false)
+assert(
+    state.factionEconomyMerchantPresence.generation
+        == presence_generation_after_unload
+)
 assert(state.endingEffectProviderBus:status().replayCount == 0)
 assert(hooks["/Script/Pal.PalUIWorldMap:CreateWorldMapData"].callback == state.hooks["/Script/Pal.PalUIWorldMap:CreateWorldMapData"].callback)
 assert(hooks["/Game/Pal/Blueprint/UI/UserInterface/InGame/PlaceName/WBP_IngamePlaceName.WBP_IngamePlaceName_C:Display Region"].callback == state.hooks["/Game/Pal/Blueprint/UI/UserInterface/InGame/PlaceName/WBP_IngamePlaceName.WBP_IngamePlaceName_C:Display Region"].callback)

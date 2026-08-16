@@ -219,6 +219,99 @@ local function extract_item_slots(raw_slots)
     return items
 end
 
+local function native_name(value)
+    if type(FName) == "function" then
+        local ok, converted = pcall(FName, value)
+        if ok and converted ~= nil then
+            return converted
+        end
+    end
+    if type(StaticFindObject) == "function" then
+        local ok, strings = pcall(
+            StaticFindObject,
+            "/Script/Engine.Default__KismetStringLibrary"
+        )
+        if ok and safe_unwrap(strings) ~= nil then
+            local converted_ok, converted = pcall(function()
+                return strings:Conv_StringToName(value)
+            end)
+            if converted_ok and converted ~= nil then
+                return converted
+            end
+        end
+    end
+    return nil
+end
+
+-- ItemShop may pass a transient presentation slot to TrySell. Its fields do
+-- not necessarily replicate when the authoritative inventory removes the
+-- whole stack. Capture a second, read-only baseline from the live player
+-- inventory so confirmation still depends on replicated inventory state.
+local function default_inventory_snapshot_resolver(item_id, sold_count)
+    if type(FindAllOf) ~= "function" then
+        return nil
+    end
+    local item_name = native_name(item_id)
+    if item_name == nil then
+        return nil
+    end
+    local ok, inventories = pcall(FindAllOf, "PalPlayerInventoryData")
+    if not ok or type(inventories) ~= "table" then
+        return nil
+    end
+    for _, inventory in pairs(inventories) do
+        inventory = safe_unwrap(inventory)
+        local inventory_key = object_key(inventory)
+        if inventory ~= nil
+            and string.find(inventory_key, "Default__", 1, true) == nil then
+            local counted, initial_count = pcall(function()
+                return inventory:CountItemNum(item_name)
+            end)
+            initial_count = integer_value(initial_count, nil)
+            if counted
+                and initial_count ~= nil
+                and initial_count >= integer_value(sold_count, 0) then
+                return {
+                    itemId = item_id,
+                    inventoryKey = inventory_key,
+                    initialCount = initial_count,
+                    soldCount = integer_value(sold_count, 0),
+                    readCurrentCount = function()
+                        return inventory:CountItemNum(item_name)
+                    end,
+                }
+            end
+        end
+    end
+    return nil
+end
+
+local function attach_inventory_snapshots(instance, items)
+    local totals = {}
+    for _, item in ipairs(items or {}) do
+        totals[item.itemId] = (totals[item.itemId] or 0)
+            + integer_value(item.count, 0)
+    end
+    local snapshots = {}
+    for item_id, sold_count in pairs(totals) do
+        local ok, snapshot = pcall(
+            instance.inventorySnapshotResolver,
+            item_id,
+            sold_count
+        )
+        if ok and type(snapshot) == "table"
+            and type(snapshot.readCurrentCount) == "function"
+            and integer_value(snapshot.initialCount, nil) ~= nil then
+            snapshot.itemId = item_id
+            snapshot.soldCount = sold_count
+            snapshots[item_id] = snapshot
+        end
+    end
+    for _, item in ipairs(items or {}) do
+        item.inventorySnapshot = snapshots[item.itemId]
+    end
+end
+
 local function default_window_id()
     if os ~= nil and type(os.date) == "function" then
         return "real-day:" .. os.date("!%Y-%m-%d")
@@ -271,6 +364,9 @@ function CommerceBridge.create(commerce, options)
         windowIdProvider = options.windowIdProvider or default_window_id,
         transactionIdFactory = options.transactionIdFactory,
         priceResolver = options.priceResolver,
+        inventorySnapshotResolver =
+            options.inventorySnapshotResolver
+                or default_inventory_snapshot_resolver,
         vendorFactions = {},
         vendorMetadata = {},
         componentFactions = {},
@@ -628,6 +724,7 @@ function CommerceBridge:on_item_sell_ui_request(
     raw_slots
 )
     local items = extract_item_slots(raw_slots)
+    attach_inventory_snapshots(self, items)
     local vendor_context = self.pendingVendorInteraction
     self.pendingVendorInteraction = nil
     self.activeUiSaleAttempt = {
@@ -738,6 +835,38 @@ local function sale_item_replication_confirms(item)
         and current_item_id ~= item.itemId
 end
 
+local function sale_inventory_replication_confirms(items)
+    local snapshots = {}
+    for _, item in ipairs(items or {}) do
+        local snapshot = item.inventorySnapshot
+        if type(snapshot) ~= "table" then
+            return false
+        end
+        snapshots[item.itemId] = snapshot
+    end
+    local snapshot_count = 0
+    for _, snapshot in pairs(snapshots) do
+        snapshot_count = snapshot_count + 1
+        local read_ok, current_count = pcall(
+            snapshot.readCurrentCount
+        )
+        current_count = integer_value(current_count, nil)
+        local initial_count = integer_value(
+            snapshot.initialCount,
+            nil
+        )
+        local sold_count = integer_value(snapshot.soldCount, 0)
+        if not read_ok
+            or current_count == nil
+            or initial_count == nil
+            or sold_count <= 0
+            or current_count > initial_count - sold_count then
+            return false
+        end
+    end
+    return snapshot_count > 0
+end
+
 local function public_sale_items(items)
     local result = {}
     for _, item in ipairs(items or {}) do
@@ -783,9 +912,11 @@ function CommerceBridge:evaluate_native_sale_replication(
     if type(items) ~= "table" or #items == 0 then
         return false, "sale-items-unresolved"
     end
-    for _, item in ipairs(items) do
-        if not sale_item_replication_confirms(item) then
-            return false, "sale-replication-incomplete"
+    if not sale_inventory_replication_confirms(items) then
+        for _, item in ipairs(items) do
+            if not sale_item_replication_confirms(item) then
+                return false, "sale-replication-incomplete"
+            end
         end
     end
 
@@ -907,6 +1038,21 @@ function CommerceBridge:on_item_slot_replicated(slot, trigger)
                     trigger or "slot-replication"
                 )
             end
+        end
+    end
+    -- A native ItemShop may have supplied a presentation slot instead of the
+    -- player's replicated PalItemSlot. Any inventory OnRep is still a safe
+    -- wake-up signal: the aggregate player-inventory baseline must show the
+    -- full requested decrease before settlement can succeed.
+    for component_key, _ in pairs(self.pendingSales) do
+        local confirmed, outcome =
+            self:evaluate_native_sale_replication(
+                component_key,
+                (trigger or "slot-replication")
+                    .. "-inventory-aggregate"
+            )
+        if confirmed then
+            return true, outcome
         end
     end
     return false, "replicated-slot-not-pending-sale"
@@ -1054,6 +1200,11 @@ function CommerceBridge:start()
 end
 
 function CommerceBridge:status()
+    local current_window_id = "unavailable"
+    local window_ok, window_or_error = pcall(self.windowIdProvider)
+    if window_ok and window_or_error ~= nil then
+        current_window_id = tostring(window_or_error)
+    end
     return {
         version = self.version,
         hookCount = self.hookCount,
@@ -1088,6 +1239,7 @@ function CommerceBridge:status()
                     or "server-inventory-replication-probe-ready-settlement-disabled"
                 )
             or "ui-slots-extracted-server-success-pending-live-capture",
+        currentWindowId = current_window_id,
     }
 end
 

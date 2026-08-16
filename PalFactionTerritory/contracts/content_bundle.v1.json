@@ -9,6 +9,7 @@
     "manifest",
     "questTemplates",
     "strategicWorld",
+    "uniquePalCampaign",
     "endingRoutes",
     "contentActions",
     "leaderGuards",
@@ -27,6 +28,7 @@
     "contentActionsValidatedBeforeCommit": true,
     "leaderGuardsValidatedBeforeCommit": true,
     "rewardPoliciesValidatedBeforeCommit": true,
+    "uniquePalCampaignValidatedAfterStrategicWorldBeforeCommit": true,
     "localizationOwnershipValidatedBeforeCommit": true,
     "crossModGlobalsRequired": false,
     "configuredInternalModuleLoading": true

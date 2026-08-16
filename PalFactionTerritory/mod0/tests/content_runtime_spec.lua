@@ -17,6 +17,7 @@ local LocalizationRuntime = require("pwft.localization_runtime")
 local PalDiscourseRuntime = require("pwft.pal_discourse_runtime")
 local PalReconciliation = require("pwft.pal_reconciliation")
 local RewardPolicy = require("pwft.reward_policy")
+local UniquePalCampaign = require("pwft.unique_pal_campaign")
 
 local progression = Progression.create(Registry.progression)
 local manifests = ContentPackRegistry.create()
@@ -30,11 +31,13 @@ local content_actions = ContentActionRuntime.create(
     FactionApi.create(progression), world, endings, manifests
 )
 local rewards = RewardPolicy.create(progression)
+local unique_pal_campaign = UniquePalCampaign.create(progression, world)
 local runtime = ContentRuntime.create(progression, manifests, quests, world, endings, {
     palDiscourseRuntime = discourse,
     localizationRuntime = localization,
     contentActionRuntime = content_actions,
     rewardPolicy = rewards,
+    uniquePalCampaign = unique_pal_campaign,
 })
 
 local manifest = {
@@ -52,6 +55,7 @@ local manifest = {
         "pwft.world.city-states",
         "pwft.world.endings",
         "pwft.world.unique-pals",
+        "pwft.world.unique-pal-campaign",
     },
     localizationKeys = {
         "sample.bundle.l10n.quest.objective",
@@ -184,6 +188,38 @@ local ending_pack = {
     },
 }
 
+local unique_pal_campaign_pack = {
+    schemaVersion = "pwft.unique-pal-campaign.pack.v1",
+    contentPackId = manifest.contentPackId,
+    contentVersion = manifest.contentVersion,
+    uniquePals = {{
+        id = "sample.bundle.unique.smoke",
+        target = {
+            kind = "faction",
+            id = "pwft.faction.rayne_syndicate",
+            affectedFactionIds = {
+                "pwft.faction.rayne_syndicate",
+            },
+        },
+        boss = {
+            speciesId = "SampleSmokePal",
+            nativeBossAvailable = false,
+            bindingStatus = "pending",
+            strengthProfile = "raid-slab",
+        },
+        schedule = {
+            minimumIntervalTicks = 10,
+            maximumIntervalTicks = 20,
+            noticeTicks = 5,
+            openTicks = 10,
+        },
+        ransomPrice = 99999999,
+        candidateFactionIds = {
+            "pwft.faction.pidf",
+        },
+    }},
+}
+
 local invalid_strategic = {}
 for key, value in pairs(strategic_pack) do invalid_strategic[key] = value end
 invalid_strategic.cities = {
@@ -202,6 +238,7 @@ local invalid_bundle = {
     endingRoutes = ending_pack,
     palDiscourse = pal_discourse,
     localization = localization_bundle,
+    uniquePalCampaign = unique_pal_campaign_pack,
 }
 local invalid = runtime:register(invalid_bundle)
 assert(not invalid.ok)
@@ -220,6 +257,7 @@ local bundle = {
     endingRoutes = ending_pack,
     palDiscourse = pal_discourse,
     localization = localization_bundle,
+    uniquePalCampaign = unique_pal_campaign_pack,
     rewardPolicies = {
         schemaVersion = "pwft.reward-policy.pack.v1",
         contentPackId = manifest.contentPackId,
@@ -245,6 +283,8 @@ assert(registered.questTemplateCount == 1)
 assert(registered.strategicWorldRegistered and registered.endingRoutesRegistered)
 assert(registered.palDiscourseRegistered and registered.localizationRegistered)
 assert(registered.rewardPoliciesRegistered)
+assert(registered.uniquePalCampaignRegistered)
+assert(registered.uniquePalCampaignCount == 1)
 assert(registered.rewardPolicyCount == 1)
 assert(registered.localizedMessageCount == 3)
 assert(runtime:register(bundle).reason == "content-bundle-already-registered")
@@ -253,6 +293,8 @@ assert(runtime:status().modelMayRegisterContent == false)
 assert(runtime:status().palDiscourseFactionCount == 1)
 assert(runtime:status().localizationPackCount == 1)
 assert(runtime:status().rewardPolicyCount == 1)
+assert(runtime:status().uniquePalCampaignCount == 1)
+assert(runtime:status().uniquePalCampaignPackCount == 1)
 assert(localization:resolve("zh-CN", "sample.bundle.l10n.quest.title") == "占位标题")
 
 assert(quests:start(

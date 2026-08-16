@@ -30,6 +30,7 @@ local ok, error_message = pcall(function()
     local QuestRuntime = require("pwft.quest_runtime")
     local RewardPolicy = require("pwft.reward_policy")
     local StrategicWorld = require("pwft.strategic_world")
+    local UniquePalCampaign = require("pwft.unique_pal_campaign")
 
     local bundle = require(module_name)
     assert(type(bundle) == "table", "bundle module must return a table")
@@ -60,6 +61,10 @@ local ok, error_message = pcall(function()
         faction_api,
         { providerWhitelist = {} }
     )
+    local unique_pal_campaign = UniquePalCampaign.create(
+        progression,
+        world
+    )
     local runtime = ContentRuntime.create(
         progression,
         manifests,
@@ -77,6 +82,7 @@ local ok, error_message = pcall(function()
                 manifests
             ),
             npcLeaderGuardOrchestrator = leader_guards,
+            uniquePalCampaign = unique_pal_campaign,
         }
     )
     local registered = runtime:register(bundle)
@@ -96,6 +102,12 @@ local ok, error_message = pcall(function()
     print("rewardPolicies=" .. tostring(registered.rewardPoliciesRegistered))
     print("rewardPolicyCount=" .. tostring(registered.rewardPolicyCount))
     print("leaderGuardLeaders=" .. tostring(registered.leaderGuardLeaderCount))
+    print("uniquePalCampaign=" .. tostring(
+        registered.uniquePalCampaignRegistered
+    ))
+    print("uniquePalCampaignCount=" .. tostring(
+        registered.uniquePalCampaignCount
+    ))
     print("palDiscourse=" .. tostring(registered.palDiscourseRegistered))
     print("localizedMessages=" .. tostring(registered.localizedMessageCount))
     print("registeredBundles=" .. tostring(status.registeredBundleCount))

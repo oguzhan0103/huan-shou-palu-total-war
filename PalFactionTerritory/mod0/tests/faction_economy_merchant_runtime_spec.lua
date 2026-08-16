@@ -421,6 +421,14 @@ assert(queued_market.reason == "economy-market-activation-queued")
 assert(#queued_market.spawned == 7)
 assert(market_runtime:status().activeCount == 7)
 assert(market_runtime:status().pendingCount == 0)
+assert(market_runtime:status().invalidRecordCount == 0)
+market_runtime.records["stale-callback-sentinel"] = function()
+end
+local hardened_status = market_runtime:status()
+assert(hardened_status.activeCount == 7)
+assert(hardened_status.pendingCount == 0)
+assert(hardened_status.invalidRecordCount == 1)
+market_runtime.records["stale-callback-sentinel"] = nil
 local spawned_row_count = 0
 for _, _ in pairs(market_spawn_rows) do
     spawned_row_count = spawned_row_count + 1

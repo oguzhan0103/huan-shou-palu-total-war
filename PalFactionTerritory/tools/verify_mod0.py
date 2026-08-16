@@ -108,6 +108,7 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "progression_store.lua",
         SCRIPTS_ROOT / "pwft" / "quest_runtime.lua",
         SCRIPTS_ROOT / "pwft" / "strategic_world.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_campaign.lua",
         SCRIPTS_ROOT / "pwft" / "runtime.lua",
         SCRIPTS_ROOT / "pwft" / "settlement_raid.lua",
         SCRIPTS_ROOT / "pwft" / "world_balance.lua",
@@ -139,6 +140,7 @@ def main() -> int:
         PROJECT_ROOT / "mod0" / "tests" / "localization_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "quest_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "strategic_world_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_campaign_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "ending_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "content_pack_author_sdk_e2e_spec.lua",
         PROJECT_ROOT / "examples" / "minimal-content-pack" / "README.md",
@@ -147,6 +149,7 @@ def main() -> int:
         PROJECT_ROOT / "examples" / "minimal-content-pack" / "localization_keys.lua",
         PROJECT_ROOT / "examples" / "minimal-content-pack" / "quest_template.lua",
         PROJECT_ROOT / "examples" / "minimal-content-pack" / "strategic_world.lua",
+        PROJECT_ROOT / "examples" / "minimal-content-pack" / "unique_pal_campaign.lua",
         PROJECT_ROOT / "examples" / "minimal-content-pack" / "ending_routes.lua",
         PROJECT_ROOT / "examples" / "minimal-content-pack" / "pal_discourse.lua",
         PROJECT_ROOT / "examples" / "minimal-content-pack" / "localization_catalogs.lua",
@@ -167,6 +170,7 @@ def main() -> int:
         PROJECT_ROOT / "contracts" / "content_pack.v1.json",
         PROJECT_ROOT / "contracts" / "content_bundle.v1.json",
         PROJECT_ROOT / "contracts" / "strategic_world.v1.json",
+        PROJECT_ROOT / "contracts" / "unique_pal_campaign.v1.json",
         PROJECT_ROOT / "contracts" / "ending_routes.v1.json",
         PROJECT_ROOT
         / "evidence"

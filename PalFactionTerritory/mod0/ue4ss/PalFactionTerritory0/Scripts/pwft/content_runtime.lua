@@ -11,6 +11,7 @@ local PalReconciliation = require("pwft.pal_reconciliation")
 local QuestRuntime = require("pwft.quest_runtime")
 local RewardPolicy = require("pwft.reward_policy")
 local StrategicWorld = require("pwft.strategic_world")
+local UniquePalCampaign = require("pwft.unique_pal_campaign")
 
 local ContentRuntime = {}
 
@@ -72,6 +73,7 @@ local function assert_bundle_shape(bundle)
         contentActions = true,
         leaderGuards = true,
         rewardPolicies = true,
+        uniquePalCampaign = true,
     }
     for key in pairs(bundle) do
         assert(allowed[key] == true, "content bundle contains unsupported field: " .. tostring(key))
@@ -93,6 +95,9 @@ local function assert_bundle_shape(bundle)
         "content bundle leader guards must be a table")
     assert(bundle.rewardPolicies == nil or type(bundle.rewardPolicies) == "table",
         "content bundle reward policies must be a table")
+    assert(bundle.uniquePalCampaign == nil
+        or type(bundle.uniquePalCampaign) == "table",
+        "content bundle unique-Pal campaign must be a table")
     return non_empty(bundle.manifest.contentPackId, "content bundle pack ID")
 end
 
@@ -157,6 +162,15 @@ local function stage_bundle(instance, bundle)
         assert(bundle.rewardPolicies.contentPackId == pack_id,
             "reward-policy pack ID mismatch")
     end
+    if bundle.uniquePalCampaign ~= nil then
+        assert(bundle.uniquePalCampaign.contentPackId == pack_id,
+            "unique-Pal campaign pack ID mismatch")
+        assert(bundle.uniquePalCampaign.contentVersion
+            == bundle.manifest.contentVersion,
+            "unique-Pal campaign pack version mismatch")
+        assert(bundle.strategicWorld ~= nil,
+            "unique-Pal campaign requires a strategic-world definition in the same bundle")
+    end
 
     local staged_registry = clone_registry(instance.contentPackRegistry)
     local manifest_result = staged_registry:register(bundle.manifest)
@@ -175,6 +189,27 @@ local function stage_bundle(instance, bundle)
     staged_world.packDefinitions = copy(instance.strategicWorld.packDefinitions)
     staged_world.uniquePalDefinitions = copy(instance.strategicWorld.uniquePalDefinitions)
     staged_world.cityDefinitions = copy(instance.strategicWorld.cityDefinitions)
+
+    local staged_unique_pal_campaign = nil
+    if instance.uniquePalCampaign ~= nil then
+        staged_unique_pal_campaign = UniquePalCampaign.create(
+            staged_progression,
+            staged_world,
+            {
+                playerId = instance.uniquePalCampaign.playerId,
+                maxHistory = instance.uniquePalCampaign.maxHistory,
+            }
+        )
+        for _, existing_pack_id in ipairs(sorted_keys(
+            instance.uniquePalCampaign.packDefinitions
+        )) do
+            local replayed = staged_unique_pal_campaign:register_pack(
+                instance.uniquePalCampaign.packDefinitions[existing_pack_id]
+            )
+            assert(replayed.ok,
+                "installed unique-Pal campaign packs could not be cloned")
+        end
+    end
 
     local staged_endings = EndingRuntime.create(staged_progression, staged_world, {
         contentPackRegistry = staged_registry,
@@ -282,6 +317,7 @@ local function stage_bundle(instance, bundle)
         contentActions = nil,
         leaderGuards = nil,
         rewardPolicies = nil,
+        uniquePalCampaign = nil,
     }
     for _, template in ipairs(bundle.questTemplates or {}) do
         local registered = staged_quests:register_template(template)
@@ -291,6 +327,15 @@ local function stage_bundle(instance, bundle)
     if bundle.strategicWorld ~= nil then
         staged_results.strategicWorld = staged_world:register_pack(bundle.strategicWorld)
         if not staged_results.strategicWorld.ok then return staged_results.strategicWorld end
+    end
+    if bundle.uniquePalCampaign ~= nil then
+        assert(staged_unique_pal_campaign ~= nil,
+            "unique-Pal campaign runtime is not configured")
+        staged_results.uniquePalCampaign = staged_unique_pal_campaign
+            :register_pack(bundle.uniquePalCampaign)
+        if not staged_results.uniquePalCampaign.ok then
+            return staged_results.uniquePalCampaign
+        end
     end
     if bundle.endingRoutes ~= nil then
         staged_results.endingRoutes = staged_endings:register_pack(bundle.endingRoutes)
@@ -370,6 +415,9 @@ function ContentRuntime.create(
     assert(options.rewardPolicy == nil
         or type(options.rewardPolicy) == "table",
         "reward-policy runtime must be a table")
+    assert(options.uniquePalCampaign == nil
+        or type(options.uniquePalCampaign) == "table",
+        "unique-Pal campaign runtime must be a table")
     return setmetatable({
         version = API_VERSION,
         progression = progression,
@@ -383,6 +431,7 @@ function ContentRuntime.create(
         npcLeaderGuardOrchestrator =
             options.npcLeaderGuardOrchestrator,
         rewardPolicy = options.rewardPolicy,
+        uniquePalCampaign = options.uniquePalCampaign,
         registeredBundles = {},
         bundleFingerprints = {},
         capabilities = {
@@ -397,6 +446,8 @@ function ContentRuntime.create(
             leaderGuardAtomicRegistration =
                 options.npcLeaderGuardOrchestrator ~= nil,
             rewardPolicyAtomicRegistration = options.rewardPolicy ~= nil,
+            uniquePalCampaignAtomicRegistration =
+                options.uniquePalCampaign ~= nil,
         },
     }, { __index = ContentRuntime })
 end
@@ -442,6 +493,14 @@ function ContentRuntime:register(bundle)
     if bundle.strategicWorld ~= nil then
         strategic_result = self.strategicWorld:register_pack(bundle.strategicWorld)
         assert(strategic_result.ok, "staged strategic-world pack failed during deterministic commit")
+    end
+    local unique_pal_campaign_result = nil
+    if bundle.uniquePalCampaign ~= nil then
+        unique_pal_campaign_result = self.uniquePalCampaign:register_pack(
+            bundle.uniquePalCampaign
+        )
+        assert(unique_pal_campaign_result.ok,
+            "staged unique-Pal campaign pack failed during deterministic commit")
     end
     local ending_result = nil
     if bundle.endingRoutes ~= nil then
@@ -505,6 +564,10 @@ function ContentRuntime:register(bundle)
         rewardPoliciesRegistered = reward_policy_result ~= nil,
         rewardPolicyCount = reward_policy_result
             and reward_policy_result.registeredPolicyCount or 0,
+        uniquePalCampaignRegistered =
+            unique_pal_campaign_result ~= nil,
+        uniquePalCampaignCount = unique_pal_campaign_result
+            and unique_pal_campaign_result.uniquePalCount or 0,
     }
     self.registeredBundles[pack_id] = copy(record)
     self.bundleFingerprints[pack_id] = stable_encode(bundle)
@@ -538,6 +601,12 @@ function ContentRuntime:status()
         rewardPolicyCount = self.rewardPolicy
             and self.rewardPolicy:status().policyCount or 0,
         rewardPolicyAtomicRegistration = self.rewardPolicy ~= nil,
+        uniquePalCampaignPackCount = self.uniquePalCampaign
+            and self.uniquePalCampaign:status().packCount or 0,
+        uniquePalCampaignCount = self.uniquePalCampaign
+            and self.uniquePalCampaign:status().uniquePalCount or 0,
+        uniquePalCampaignAtomicRegistration =
+            self.uniquePalCampaign ~= nil,
         atomicCrossDomainValidation = true,
         modelMayRegisterContent = false,
         storyContentIncluded = false,

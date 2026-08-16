@@ -13,7 +13,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "Mod 0 verification failed; package was not created."
 }
 
-$ReleaseName = "PalFactionTerritory0-v1.0.3-build24575825"
+$ReleaseName = "PalFactionTerritory0-v1.0.4-build24575825-runtime-source"
 $OutputRoot = [System.IO.Path]::GetFullPath($OutputRoot)
 New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
 $StageRoot = Join-Path $OutputRoot "$ReleaseName-staging"
@@ -47,6 +47,8 @@ Copy-Item -LiteralPath (Join-Path $ProjectRoot "tools\validate_content_pack.lua"
 $StagedCompanion = Join-Path $StageRoot "Companion"
 Copy-Item -LiteralPath (Join-Path $ProjectRoot "companion") `
     -Destination $StagedCompanion -Recurse
+Copy-Item -LiteralPath (Join-Path (Split-Path -Parent $ProjectRoot) "INSTALL.md") `
+    -Destination (Join-Path $StageRoot "INSTALL.md")
 $StagedContracts = Join-Path $StageRoot "AuthorSDK\contracts"
 New-Item -ItemType Directory -Path $StagedContracts -Force | Out-Null
 foreach ($ContractName in @(
@@ -54,6 +56,7 @@ foreach ($ContractName in @(
     "content_bundle.v1.json",
     "pal_reconciliation.v1.json",
     "strategic_world.v1.json",
+    "unique_pal_campaign.v1.json",
     "ending_routes.v1.json"
 )) {
     Copy-Item -LiteralPath (Join-Path $ProjectRoot "contracts\$ContractName") -Destination $StagedContracts
@@ -78,10 +81,12 @@ $ManifestFiles = @(
 
 $Manifest = [ordered]@{
     schemaVersion = "1.0.0"
-    releaseId = "PalFactionTerritory0-v1.0.3"
-    releaseVersion = "1.0.3"
+    releaseId = "PalFactionTerritory0-v1.0.4-runtime-source"
+    releaseVersion = "1.0.4"
     expectedSteamBuildId = "24575825"
     installRelativeRoot = "Pal/Binaries/Win64/ue4ss"
+    sourceOnly = $true
+    cookedAssetsIncluded = $false
     safetyMode = "mod-owned-state-no-palworld-save-write"
     files = $ManifestFiles
 }
@@ -148,10 +153,12 @@ try {
         "Mods/PalFactionTerritory0/Scripts/pwft/settlement_raid.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/strategic_world_native_bus.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/strategic_world.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/unique_pal_campaign.lua",
         "AuthorSDK/contracts/content_pack.v1.json",
         "AuthorSDK/contracts/content_bundle.v1.json",
         "AuthorSDK/contracts/pal_reconciliation.v1.json",
         "AuthorSDK/contracts/strategic_world.v1.json",
+        "AuthorSDK/contracts/unique_pal_campaign.v1.json",
         "AuthorSDK/contracts/ending_routes.v1.json",
         "AuthorSDK/validate-content-pack.ps1",
         "AuthorSDK/validate_content_pack.lua",
@@ -161,6 +168,7 @@ try {
         "AuthorSDK/minimal-content-pack/localization_keys.lua",
         "AuthorSDK/minimal-content-pack/quest_template.lua",
         "AuthorSDK/minimal-content-pack/strategic_world.lua",
+        "AuthorSDK/minimal-content-pack/unique_pal_campaign.lua",
         "AuthorSDK/minimal-content-pack/ending_routes.lua",
         "AuthorSDK/minimal-content-pack/pal_discourse.lua",
         "AuthorSDK/minimal-content-pack/localization_catalogs.lua",
@@ -171,6 +179,7 @@ try {
         "Companion/public/index.html",
         "Companion/public/app.js",
         "Companion/public/styles.css",
+        "INSTALL.md",
         "package-manifest.json"
     )
     foreach ($RequiredEntry in $RequiredEntries) {

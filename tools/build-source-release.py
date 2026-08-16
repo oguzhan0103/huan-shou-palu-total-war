@@ -21,7 +21,7 @@ from pathlib import Path, PurePosixPath
 from typing import Iterable
 
 
-VERSION = "1.0.3"
+VERSION = "1.0.4"
 TARGET_STEAM_BUILD_ID = "24575825"
 FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
 ROOT = Path(__file__).resolve().parent.parent
@@ -75,11 +75,13 @@ FORBIDDEN_SECRET_PATTERNS = {
 
 COMMON_FILES = (
     "LICENSE",
+    "INSTALL.md",
     "CHANGELOG.md",
     "CONTRIBUTING.md",
     "SECURITY.md",
     "THIRD_PARTY_NOTICES.md",
     "幻兽帕鲁全面战争_已完成内容.md",
+    "幻兽帕鲁全面战争_2026-08-08至2026-08-16开发与测试总结.md",
 )
 
 CORE_CONTRACTS = (
@@ -98,6 +100,7 @@ CORE_CONTRACTS = (
     "strategic_world.v1.json",
     "territory_assignments.v1.json",
     "tower_territories.v1.json",
+    "unique_pal_campaign.v1.json",
 )
 
 
@@ -110,7 +113,8 @@ CORE_README = f"""# 幻兽帕鲁全面战争 Core Foundation v{VERSION}
 战略世界/结局接口、内容包契约和作者示例。它不包含正式剧情文本、游戏资产、
 存档、日志、安装产物或玄绒龙美术资源。
 
-状态：商人商会正式落位、生产驻场、原生 ItemShop、单次需求品出售好感度、
+状态：商人商会正式落位、生产驻场、原生 ItemShop、真实购买、需求／非需求出售、
+复制去重、单窗口 20 点封顶和敌对商业修复 60 点已完成；
 F5 面板、原生代表对话和玩家护卫完整生命周期已在 Build 24575825 验证。四成员
 攻城的完整结算与有限信物证据来自 Build 24467282；旧证据不冒充新 Build 的自然
 incident 证明。本地 Ollama、Core 文件桥和操作台链路已验证，正式剧情代表仍由
@@ -119,6 +123,8 @@ incident 证明。本地 Ollama、Core 文件桥和操作台链路已验证，�
 本包不含地图、UMG 或商店 DataTable 的 Cooked PAK，因此是开发者基座，不是
 一键安装的完整玩家版。UE4SS 源码位于
 `PalFactionTerritory/mod0/ue4ss/PalFactionTerritory0/`。
+
+下载、复制目录和 Cooked PAK 边界详见包内 `INSTALL.md`。
 
 内容作者可运行：
 
@@ -373,7 +379,7 @@ def build_release(output: Path) -> dict[str, object]:
             "Core",
             f"PalworldTotalWar-v{VERSION}-Core-source",
             "mixed-live-accepted-and-offline-verified-source-only",
-            "Build 24575825: merchant production presence, trade settlement, native dialogue, faction panel, and guard lifecycle accepted; raid settlement evidence remains Build 24467282",
+            "Build 24575825: merchant production presence, representative transactions, capped commerce, hostile recovery, native dialogue, faction panel, and guard lifecycle accepted; raid settlement evidence remains Build 24467282",
             "24575825",
             CORE_README,
         ),

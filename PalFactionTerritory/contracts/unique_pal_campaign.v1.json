@@ -1,0 +1,93 @@
+{
+  "schemaVersion": "1.0.0",
+  "apiVersion": "1.0.0",
+  "contentPackSchema": "pwft.unique-pal-campaign.pack.v1",
+  "contentStatus": "mechanics_only_player_content_required",
+  "storyContentIncluded": false,
+  "bossPolicy": {
+    "palBossWhitelistOnly": true,
+    "nonUniquePalBossesSuppressed": true,
+    "nativeBossPreferred": true,
+    "replacementBossSlotAllowed": true,
+    "requiredStrengthProfile": "raid-slab",
+    "nativeSpawnConfirmationRequiredBeforeOpening": true,
+    "captureRequiredForPlayerOwnership": true
+  },
+  "openingPolicy": {
+    "states": [
+      "closed",
+      "scheduled",
+      "announced",
+      "activation-pending",
+      "open",
+      "owned"
+    ],
+    "preOpeningNotificationRequired": true,
+    "deterministicSavedSchedule": true,
+    "timeoutAssignment": "deterministic-random-surviving-human-faction",
+    "unconfirmedNativeSpawnMayTimeoutAssign": false,
+    "lateAndDuplicateResultsFailClosed": true
+  },
+  "authorityPolicy": {
+    "bossSpawnConfirmation": "pwft.native-unique-pal-boss-spawn.v1",
+    "captureConfirmation": "pwft.native-unique-pal-capture.v1",
+    "destructionWarResult": "pwft.unique-pal-war-result.v1",
+    "ransomPaymentConfirmation": "pwft.native-ransom-payment.v1",
+    "modelMayConfirmOrSettle": false,
+    "inlineTextMayConfirmOrSettle": false
+  },
+  "ownershipPolicy": {
+    "singleOwnerDelegatedToStrategicWorld": true,
+    "allowedOwnerKinds": [
+      "unclaimed",
+      "wild",
+      "player",
+      "faction"
+    ],
+    "optimisticExpectedOwnerTransferRequired": true,
+    "operationIdsRequired": true
+  },
+  "destructionWarPolicy": {
+    "npcOwnerMayDeclare": true,
+    "backgroundRouteWhenTargetHasNoPlayerMembership": true,
+    "backgroundRoutePresentation": "text-only",
+    "playerDefenseRouteWhenAnyAffectedFactionJoined": true,
+    "qualifiedPlayerVictory": "playerParticipated-and-playerSideWon",
+    "absenceOrLossDestroysTarget": true,
+    "ownerMustStillHoldUniquePalAtSettlement": true,
+    "destroyedFactionMayDeclare": false,
+    "selfDestructionAllowed": false
+  },
+  "extinctionPolicy": {
+    "persistentInModOwnedProgressionSidecar": true,
+    "cityState": "destroyed",
+    "settlementNpcSpawnsSuppressed": true,
+    "patrolAndFactionCombatSpawnsSuppressed": true,
+    "merchantGuildCounterSuppressed": true,
+    "mapBuildingsDeleted": false,
+    "PalworldSaveMutationAllowed": false,
+    "nativeSuppressionProviderStatus": "policy-and-api-ready-native-binding-pending"
+  },
+  "ransomPolicy": {
+    "onlyFactionHeldUniquePals": true,
+    "targetMembershipRequired": true,
+    "destroyedTargetMayBeRansomed": false,
+    "currency": "Gold",
+    "exactConfiguredPriceRequired": true,
+    "nativePaymentConfirmationRequired": true,
+    "pendingDestructionWarCancelledAfterPayment": true,
+    "commerceReputationAward": 0,
+    "nativeCurrencyAdapterStatus": "contract-ready-native-binding-pending"
+  },
+  "currentImplementation": {
+    "stateMachine": "implemented-offline-verified",
+    "contentBundleAtomicRegistration": "implemented-offline-verified",
+    "sidecarRestoreRebind": "implemented-offline-verified",
+    "bossSpawnerRedirection": "pending-native-asset-evidence",
+    "raidSlabStatApplication": "pending-native-provider",
+    "playerDefenseRaidPresentation": "descriptor-ready-native-route-pending",
+    "factionSpawnSuppression": "policy-ready-native-provider-pending",
+    "merchantRansomUiAndPayment": "contract-ready-native-provider-pending",
+    "liveAcceptance": "not-run"
+  }
+}

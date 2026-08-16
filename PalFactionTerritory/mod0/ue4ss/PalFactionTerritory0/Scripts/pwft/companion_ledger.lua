@@ -105,10 +105,36 @@ local function safe_call(callback, ...)
     return true, first
 end
 
+local function safe_copy(value)
+    local ok, result = pcall(copy, value)
+    if not ok then
+        return false, tostring(result)
+    end
+    return true, result
+end
+
 local function atomic_write(instance, path, value)
     local temporary_path = path .. ".tmp"
     local backup_path = path .. ".bak"
-    local encoded = Json.encode(value)
+    local encode_ok, encoded = pcall(Json.encode, value)
+    if not encode_ok then
+        local field = "root"
+        if type(value) == "table" then
+            local inspect_ok = pcall(function()
+                for key, item in pairs(value) do
+                    local item_ok = pcall(Json.encode, item)
+                    if not item_ok then
+                        field = tostring(key)
+                        break
+                    end
+                end
+            end)
+            if not inspect_ok then
+                field = "root-diagnostic"
+            end
+        end
+        return false, "encode-failed:" .. field .. ":" .. tostring(encoded)
+    end
     local write_ok, write_error = safe_call(
         instance.filesystem.write,
         temporary_path,
@@ -257,16 +283,26 @@ function CompanionLedger:record(event)
         return false, "profile-not-active"
     end
     assert(type(event) == "table", "companion event must be a table")
+    local copied, envelope_or_error = safe_copy(event)
+    if not copied then
+        self.lastError = "event-copy-failed:" .. envelope_or_error
+        return false, self.lastError
+    end
     local next_sequence = self.sequence + 1
-    local envelope = copy(event)
+    local envelope = envelope_or_error
     envelope.schemaVersion = SCHEMA_VERSION
     envelope.profileKey = self.identity.profileKey
     envelope.sequence = next_sequence
     envelope.epoch = self.now()
+    local encode_ok, encoded = pcall(Json.encode, envelope)
+    if not encode_ok then
+        self.lastError = "event-encode-failed:" .. tostring(encoded)
+        return false, self.lastError
+    end
     local ok, append_error = safe_call(
         self.filesystem.append,
         self.eventsPath,
-        Json.encode(envelope) .. "\n"
+        encoded .. "\n"
     )
     if not ok then
         self.lastError = "event-append-failed:" .. append_error
@@ -282,7 +318,12 @@ function CompanionLedger:publish(payload)
         return false, "profile-not-active"
     end
     assert(type(payload) == "table", "companion state payload must be a table")
-    local envelope = copy(payload)
+    local copied, envelope_or_error = safe_copy(payload)
+    if not copied then
+        self.lastError = "state-copy-failed:" .. envelope_or_error
+        return false, self.lastError
+    end
+    local envelope = envelope_or_error
     envelope.schemaVersion = SCHEMA_VERSION
     envelope.profileKey = self.identity.profileKey
     envelope.identity = copy(self.identity)

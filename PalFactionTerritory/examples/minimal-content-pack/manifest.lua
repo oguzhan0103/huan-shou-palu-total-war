@@ -13,6 +13,7 @@ return {
         "pwft.quest.templates",
         "pwft.pal.discourse",
         "pwft.world.unique-pals",
+        "pwft.world.unique-pal-campaign",
         "pwft.world.city-states",
         "pwft.world.endings",
         "pwft.reward.policies",
