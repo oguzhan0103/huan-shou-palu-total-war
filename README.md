@@ -54,7 +54,9 @@ UE4SS 目录、运行时源码包、三个未公开 Cooked PAK、可选多帕鲁
 ## 获取与验证
 
 已发布附件见 [GitHub Releases](https://github.com/oguzhan0103/huan-shou-palu-total-war/releases)。
-下载者请先阅读 [INSTALL.md](./INSTALL.md)。`runtime-source.zip` 可以直接解压到
+下载者如果不清楚附件用途，请先阅读
+[中文下载文件总说明](./请先看_幻兽帕鲁全面战争_v1.0.4_下载文件说明_玩家安装与开发者指南.md)，
+再按 [INSTALL.md](./INSTALL.md) 操作。`runtime-source.zip` 可以直接解压到
 UE4SS 根目录，但公开包不含地图、UMG 和商店 DataTable 的 Cooked PAK，因此不能
 单独还原本项目本机验收时的完整画面与商品内容。
 开发者克隆仓库后运行：
