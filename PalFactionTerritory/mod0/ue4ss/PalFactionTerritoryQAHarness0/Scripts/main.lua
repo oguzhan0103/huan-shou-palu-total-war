@@ -19,6 +19,7 @@ local active_item_shop_widget = nil
 local pending_item_shop_pushes = {}
 local SALE_TEST_ITEM_ID = "IronIngot"
 local SALE_TEST_ITEM_COUNT = 40
+local SALE_TEST_BULK_ITEM_COUNT = 400
 local make_name
 local full_name
 
@@ -174,7 +175,12 @@ local function stabilize_test_player()
     end
 
     if type(ExecuteInGameThread) == "function" then
-        ExecuteInGameThread(apply)
+        -- UE4SS stores only a Lua registry reference for queued callbacks. Keep
+        -- the closure reachable until the game thread has consumed it; without
+        -- this strong reference a manual QA hotkey can be collected before the
+        -- next tick and fail with "Ref was not function".
+        callbacks.stabilizeTestPlayerApply = apply
+        ExecuteInGameThread(callbacks.stabilizeTestPlayerApply)
     else
         apply()
     end
@@ -513,7 +519,11 @@ local function sell_sale_test_items()
         ))
     end
     if type(ExecuteInGameThread) == "function" then
-        ExecuteInGameThread(apply)
+        -- Keep the queued closure alive until UE4SS consumes it on the game
+        -- thread. The harness is disabled by default, so retaining one latest
+        -- callback for its lifetime is intentional.
+        callbacks.sellSaleTestItemsApply = apply
+        ExecuteInGameThread(callbacks.sellSaleTestItemsApply)
     else
         apply()
     end
@@ -543,7 +553,10 @@ make_name = function(value)
     return nil, "native-name-conversion-unavailable"
 end
 
-local function grant_sale_test_items()
+local function grant_sale_test_items(requested_count)
+    local grant_count = tonumber(requested_count)
+        or SALE_TEST_ITEM_COUNT
+    grant_count = math.max(1, math.floor(grant_count))
     local apply = function()
         if type(FindAllOf) ~= "function" then
             log("QA_ITEM_GRANT_FAILED reason=FindAllOf-unavailable")
@@ -575,7 +588,7 @@ local function grant_sale_test_items()
                     local added, result_or_error = pcall(function()
                         return inventory:AddItem_ServerInternal(
                             native_name,
-                            SALE_TEST_ITEM_COUNT,
+                            grant_count,
                             false,
                             0.0,
                             true
@@ -588,11 +601,11 @@ local function grant_sale_test_items()
                     if added
                         and tonumber(after) ~= nil
                         and tonumber(after) >= (tonumber(before) or 0)
-                            + SALE_TEST_ITEM_COUNT then
+                            + grant_count then
                         log(string.format(
                             "QA_ITEM_GRANT_CONFIRMED item=%s count=%d inventory=%s before=%s after=%s result=%s route=PalPlayerInventoryData.AddItem_ServerInternal nameRoute=%s saveWrite=true restorationRequired=true",
                             SALE_TEST_ITEM_ID,
-                            SALE_TEST_ITEM_COUNT,
+                            grant_count,
                             inventory_name,
                             tostring(before),
                             tostring(after),
@@ -628,7 +641,7 @@ local function grant_sale_test_items()
                     local requested, request_error = pcall(function()
                         return player:RequestAddItem_ToServer(
                             native_name,
-                            SALE_TEST_ITEM_COUNT,
+                            grant_count,
                             false
                         )
                     end)
@@ -636,7 +649,7 @@ local function grant_sale_test_items()
                         log(string.format(
                             "QA_ITEM_GRANT_REQUESTED_UNCONFIRMED item=%s count=%d transmitter=%s player=%s nameRoute=%s saveWrite=true restorationRequired=true",
                             SALE_TEST_ITEM_ID,
-                            SALE_TEST_ITEM_COUNT,
+                            grant_count,
                             full_name(transmitter),
                             full_name(player),
                             tostring(name_route)
@@ -653,7 +666,10 @@ local function grant_sale_test_items()
         )
     end
     if type(ExecuteInGameThread) == "function" then
-        ExecuteInGameThread(apply)
+        -- Keep the queued closure alive for the same reason as the native sell
+        -- callback above.
+        callbacks.grantSaleTestItemsApply = apply
+        ExecuteInGameThread(callbacks.grantSaleTestItemsApply)
     else
         apply()
     end
@@ -762,15 +778,21 @@ end
 if type(RegisterKeyBind) == "function"
     and Key ~= nil
     and Key.F4 ~= nil
+    and Key.F3 ~= nil
     and Key.F5 ~= nil
     and Key.F7 ~= nil
     and Key.F9 ~= nil
     and Key.F10 ~= nil
+    and Key.F11 ~= nil
+    and Key.F12 ~= nil
     and ModifierKey ~= nil
     and ModifierKey.CONTROL ~= nil then
     callbacks.teleport = teleport_to_settlement
     callbacks.stabilizeTestPlayer = stabilize_test_player
     callbacks.grantSaleTestItems = grant_sale_test_items
+    callbacks.grantSaleTestItemsBulk = function()
+        grant_sale_test_items(SALE_TEST_BULK_ITEM_COUNT)
+    end
     callbacks.sellSaleTestItems = sell_sale_test_items
     callbacks.probe = function()
         if type(ExecuteInGameThread) == "function" then
@@ -783,9 +805,14 @@ if type(RegisterKeyBind) == "function"
     end
     RegisterKeyBind(Key.F10, { ModifierKey.CONTROL }, callbacks.teleport)
     RegisterKeyBind(Key.F4, { ModifierKey.CONTROL }, callbacks.stabilizeTestPlayer)
+    RegisterKeyBind(Key.F3, { ModifierKey.CONTROL }, callbacks.grantSaleTestItemsBulk)
     RegisterKeyBind(Key.F9, { ModifierKey.CONTROL }, callbacks.probe)
     RegisterKeyBind(Key.F7, { ModifierKey.CONTROL }, callbacks.grantSaleTestItems)
     RegisterKeyBind(Key.F5, { ModifierKey.CONTROL }, callbacks.sellSaleTestItems)
+    -- Unmodified fallbacks avoid collisions with the production Mod's own
+    -- modifier-aware F5/F7 routes on builds where UE4SS drops the later chord.
+    RegisterKeyBind(Key.F11, callbacks.grantSaleTestItems)
+    RegisterKeyBind(Key.F12, callbacks.sellSaleTestItems)
     if type(RegisterHook) == "function" then
         callbacks.itemShopConstruct = capture_constructed_item_shop
         local hook_ok, hook_error = pcall(
@@ -814,7 +841,7 @@ if type(RegisterKeyBind) == "function"
             tostring(push_hook_error)
         ))
     end
-    log("QA_READY teleport=Ctrl+F10 stabilizePlayer=Ctrl+F4 probe=Ctrl+F9 grantSaleItems=Ctrl+F7 sellSaleItems=Ctrl+F5 raidMutation=false testSustainSaveWrite=true itemGrantSaveWrite=true itemSellSaveWrite=true restorationRequired=true")
+    log("QA_READY teleport=Ctrl+F10 stabilizePlayer=Ctrl+F4 probe=Ctrl+F9 grantSaleItems=Ctrl+F7|F11 grantSaleItemsBulk=Ctrl+F3 sellSaleItems=Ctrl+F5|F12 raidMutation=false testSustainSaveWrite=true itemGrantSaveWrite=true itemSellSaveWrite=true restorationRequired=true")
 else
     log("QA_KEYBIND_UNAVAILABLE")
 end

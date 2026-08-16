@@ -6,6 +6,8 @@ local AgentDialogueFileBridge =
 local AgentDialogueOperator =
     require("pwft.agent_dialogue_operator")
 local CommerceBridge = require("pwft.commerce_bridge")
+local CommerceWindowLiveTest =
+    require("pwft.commerce_window_live_test")
 local ContentPackRegistry = require("pwft.content_pack_registry")
 local ContentActionRuntime = require("pwft.content_action_runtime")
 local ContentRuntime = require("pwft.content_runtime")
@@ -29,6 +31,8 @@ local FactionNpcAttitudeBus =
     require("pwft.faction_npc_attitude_bus")
 local HumanDefenseResultBridge =
     require("pwft.human_defense_result_bridge")
+local HostileCommerceLiveTest =
+    require("pwft.hostile_commerce_live_test")
 local FactionJoin = require("pwft.faction_join")
 local FactionJoinNativePresenter =
     require("pwft.faction_join_native_presenter")
@@ -71,6 +75,7 @@ local SettlementRaid = require("pwft.settlement_raid")
 local StrategicWorld = require("pwft.strategic_world")
 local StrategicWorldNativeBus =
     require("pwft.strategic_world_native_bus")
+local UniquePalCampaign = require("pwft.unique_pal_campaign")
 local WorldBalance = require("pwft.world_balance")
 
 local PREFIX = "[PalFactionTerritory0]"
@@ -304,6 +309,9 @@ local function make_state(config, registry)
     return {
         mapMode = config.defaultMapMode,
         nativeWorldGeneration = 0,
+        inGameWorldReady = false,
+        inGameWorldGeneration = nil,
+        mainWorldProbeScheduledGeneration = nil,
         relationEvents = {},
         relations = {},
         dangerWarningCount = 0,
@@ -2705,60 +2713,81 @@ local function schedule_economy_merchant_presence_poll(state, generation)
         log("ECONOMY_MERCHANT_PRESENCE_UNAVAILABLE scheduler-api")
         return
     end
+    local game_callback = function()
+        if presence.generation ~= generation then
+            return
+        end
+        if presence.liveRootSource == nil then
+            -- World-partition actors do not always exist when the load-map
+            -- callback first fires.  Keep resolving FTPoint90 until its
+            -- live, world-origin-rebased transform becomes available.
+            resolve_economy_merchant_live_root(state)
+        end
+        local player_location, _, player_error =
+            find_local_player_transform()
+        local previous_reason = presence.lastReason
+        local outcome = presence:tick(player_location)
+        local status = presence:status()
+        if status.tickCount <= 5
+            or outcome.reason ~= previous_reason
+            or outcome.transitioned == true
+            or outcome.reason == "economy-market-runtime-disabled"
+            or outcome.reason == "economy-merchant-spawn-failed" then
+            log(string.format(
+                "ECONOMY_MERCHANT_PRESENCE_POLL tick=%d ok=%s reason=%s player=(%s,%s,%s) distance=%s active=%d pending=%d generation=%d transitioned=%s playerError=%s",
+                status.tickCount,
+                tostring(outcome.ok),
+                tostring(outcome.reason),
+                tostring(player_location and player_location.X or "none"),
+                tostring(player_location and player_location.Y or "none"),
+                tostring(player_location and player_location.Z or "none"),
+                tostring(outcome.distance or "none"),
+                status.activeCount,
+                status.pendingCount,
+                generation,
+                tostring(outcome.transitioned == true),
+                tostring(player_error or "none")
+            ))
+        end
+        if not use_loop_async
+            and presence.generation == generation then
+            schedule_economy_merchant_presence_poll(
+                state,
+                generation
+            )
+        end
+    end
     local callback = function()
         -- LoopAsync owns the durable clock on UE4SS' async thread.  Recursive
         -- ExecuteWithDelay calls made from an ExecuteInGameThread callback can
         -- silently stop after the first hop on the live Palworld build.
         if presence.generation ~= generation then
+            if type(state.callbacks.economyMerchantPresencePolls)
+                == "table" then
+                state.callbacks.economyMerchantPresencePolls[generation] = nil
+            end
             return true
         end
-        ExecuteInGameThread(function()
-            if presence.generation ~= generation then
-                return
-            end
-            if presence.liveRootSource == nil then
-                -- World-partition actors do not always exist when the load-map
-                -- callback first fires.  Keep resolving FTPoint90 until its
-                -- live, world-origin-rebased transform becomes available.
-                resolve_economy_merchant_live_root(state)
-            end
-            local player_location, _, player_error =
-                find_local_player_transform()
-            local previous_reason = presence.lastReason
-            local outcome = presence:tick(player_location)
-            local status = presence:status()
-            if status.tickCount <= 5
-                or outcome.reason ~= previous_reason
-                or outcome.transitioned == true
-                or outcome.reason == "economy-market-runtime-disabled"
-                or outcome.reason == "economy-merchant-spawn-failed" then
-                log(string.format(
-                    "ECONOMY_MERCHANT_PRESENCE_POLL tick=%d ok=%s reason=%s player=(%s,%s,%s) distance=%s active=%d pending=%d generation=%d transitioned=%s playerError=%s",
-                    status.tickCount,
-                    tostring(outcome.ok),
-                    tostring(outcome.reason),
-                    tostring(player_location and player_location.X or "none"),
-                    tostring(player_location and player_location.Y or "none"),
-                    tostring(player_location and player_location.Z or "none"),
-                    tostring(outcome.distance or "none"),
-                    status.activeCount,
-                    status.pendingCount,
-                    generation,
-                    tostring(outcome.transitioned == true),
-                    tostring(player_error or "none")
-                ))
-            end
-            if not use_loop_async
-                and presence.generation == generation then
-                schedule_economy_merchant_presence_poll(
-                    state,
-                    generation
-                )
-            end
-        end)
+        ExecuteInGameThread(game_callback)
         return false
     end
-    state.callbacks.economyMerchantPresencePoll = callback
+    -- A Palworld boot crosses Splash, Login, Title and MainWorld UWorlds in
+    -- quick succession.  Each LoopAsync keeps its Lua callback until that
+    -- generation gets one final chance to observe the fence and return true.
+    -- Retaining only the newest callback lets UE4SS collect an older registry
+    -- ref while its native timer is still live ("Ref was not function"), which
+    -- can remove the shared EngineTick hook and prevent the MainWorld poll from
+    -- ever starting.  Keep every live generation strongly referenced instead.
+    state.callbacks.economyMerchantPresencePolls =
+        state.callbacks.economyMerchantPresencePolls or {}
+    state.callbacks.economyMerchantPresencePolls[generation] = callback
+    -- UE4SS holds the game-thread hop separately from the LoopAsync callback.
+    -- Retain both for the complete UWorld generation; otherwise the inner ref
+    -- can be collected immediately after a successful seven-merchant spawn.
+    state.callbacks.economyMerchantPresenceGameCallbacks =
+        state.callbacks.economyMerchantPresenceGameCallbacks or {}
+    state.callbacks.economyMerchantPresenceGameCallbacks[generation] =
+        game_callback
     if use_loop_async then
         LoopAsync(presence.pollIntervalMs, callback)
         log(string.format(
@@ -2797,45 +2826,83 @@ local function start_economy_merchant_presence(
         presence.pollIntervalMs,
         tostring(loaded.removed ~= nil)
     ))
-    if type(ExecuteWithDelay) ~= "function" then
-        log("ECONOMY_MERCHANT_PRESENCE_UNAVAILABLE scheduler-api")
+    local generation = loaded.generation
+    -- Register the durable loop directly from LoadMapPost.  Waiting on an
+    -- ExecuteWithDelay bootstrap made the MainWorld scheduler depend on the
+    -- same EngineTick callback registry that a stale prior-world timer could
+    -- invalidate.  The regular poll already tolerates a player/world that is
+    -- not ready, so an extra delayed bootstrap is unnecessary.
+    schedule_economy_merchant_presence_poll(state, generation)
+end
+
+local function activate_in_game_world_services(
+    config,
+    registry,
+    policy,
+    state,
+    source
+)
+    local generation = state.nativeWorldGeneration or 0
+    state.inGameWorldReady = true
+    state.inGameWorldGeneration = generation
+    start_economy_merchant_presence(config, state, source)
+
+    if state.mainWorldProbeScheduledGeneration == generation then
         return
     end
-    local generation = loaded.generation
-    local initial_delay = config.factionCommerce
-        .economyMerchantPresence.initialDelayMs
-    ExecuteWithDelay(initial_delay, function()
-        if type(ExecuteInGameThread) == "function" then
-            ExecuteInGameThread(function()
-                if presence.generation == generation then
-                    if presence.liveRootSource == nil then
-                        resolve_economy_merchant_live_root(state)
-                    end
-                    local player_location = find_local_player_transform()
-                    local outcome = presence:tick(player_location)
-                    local status = presence:status()
-                    log(string.format(
-                        "ECONOMY_MERCHANT_PRESENCE_POLL tick=%d ok=%s reason=%s player=(%s,%s,%s) distance=%s active=%d pending=%d generation=%d transitioned=%s initial=true",
-                        status.tickCount,
-                        tostring(outcome.ok),
-                        tostring(outcome.reason),
-                        tostring(player_location and player_location.X or "none"),
-                        tostring(player_location and player_location.Y or "none"),
-                        tostring(player_location and player_location.Z or "none"),
-                        tostring(outcome.distance or "none"),
-                        status.activeCount,
-                        status.pendingCount,
-                        generation,
-                        tostring(outcome.transitioned == true)
-                    ))
-                    schedule_economy_merchant_presence_poll(
-                        state,
-                        generation
+    state.mainWorldProbeScheduledGeneration = generation
+    if type(ExecuteWithDelay) ~= "function"
+        or type(ExecuteInGameThread) ~= "function" then
+        log("MAIN_WORLD_POSTLOAD_PROBE_UNAVAILABLE scheduler-api")
+        return
+    end
+
+    ExecuteWithDelay(10000, function()
+        ExecuteInGameThread(function()
+            if state.inGameWorldReady ~= true
+                or state.inGameWorldGeneration ~= generation
+                or state.nativeWorldGeneration ~= generation then
+                log(string.format(
+                    "MAIN_WORLD_POSTLOAD_PROBE_SKIPPED generation=%d reason=world-generation-fenced",
+                    generation
+                ))
+                return
+            end
+            -- The live Steam build does not dispatch the generic
+            -- UserWidget:Construct hook for its already-created player HUD.
+            -- Run these UObject probes only after the progression identity has
+            -- proved that this generation is an in-game world. Title/Login
+            -- worlds must never schedule them: FindFirstOf can otherwise
+            -- return a stale prior-world UObject while UE4SS is formatting a
+            -- Lua error, which crashes in luaH_next/luaL_traceback.
+            if config.enableNativePlaceNamePresentation == true then
+                local place_name_ready =
+                    ensure_native_place_name_display_hook(
+                        config,
+                        registry,
+                        policy,
+                        state
                     )
-                end
-            end)
-        end
+                log(string.format(
+                    "PLACE_NAME_HOOK_WORLD_READY source=identity-ready ready=%s",
+                    tostring(place_name_ready)
+                ))
+            end
+            scan_tower_bindings(config, registry, state)
+            resolve_economy_merchant_live_root(state)
+            if state.rayneMerchant ~= nil then
+                state.rayneMerchant:schedule_spawn(
+                    "identity-ready",
+                    config.rayneMerchant.spawnDelayMs
+                )
+            end
+        end)
     end)
+    log(string.format(
+        "MAIN_WORLD_POSTLOAD_PROBE_SCHEDULED generation=%d delayMs=10000 source=%s",
+        generation,
+        tostring(source or "unknown")
+    ))
 end
 
 local function register_guard_console_command(state)
@@ -3061,9 +3128,7 @@ local function register_guard_live_test(config, state)
     if state.nativeCharacterAdapter == nil
         or type(RegisterKeyBind) ~= "function"
         or Key == nil
-        or Key[qa.key] == nil
-        or ModifierKey == nil
-        or ModifierKey.CONTROL == nil then
+        or Key[qa.key] == nil then
         log("PLAYER_GUARD_LIVE_TEST_UNAVAILABLE native-adapter-or-keybind-api")
         return
     end
@@ -3190,6 +3255,74 @@ local function register_guard_live_test(config, state)
         qa.key,
         qa.factionId,
         qa.characterId
+    ))
+end
+
+local function register_rayne_relation_live_test(config, policy, state)
+    local qa = config.rayneMerchant.relationLiveTest
+    if qa == nil or qa.enabled ~= true then
+        log("RAYNE_RELATION_LIVE_TEST_DISABLED config=false")
+        return
+    end
+    if state.rayneMerchant == nil
+        or type(RegisterKeyBind) ~= "function"
+        or Key == nil
+        or Key[qa.key] == nil
+        or ModifierKey == nil
+        or ModifierKey.CONTROL == nil then
+        log("RAYNE_RELATION_LIVE_TEST_UNAVAILABLE merchant-or-keybind-api")
+        return
+    end
+    local faction_id = config.rayneMerchant.factionId
+    local callback = function()
+        local apply = function()
+            local current = state.relations[faction_id]
+            local previous = type(current) == "table"
+                    and current.state
+                or current
+                or "Friendly"
+            local relation = previous == "Hostile" and "Friendly" or "Hostile"
+            local revision = #state.relationEvents + 1
+            table.insert(state.relationEvents, {
+                factionId = faction_id,
+                state = relation,
+                revision = revision,
+            })
+            local ok, latest_or_error = pcall(function()
+                return policy.latest_relations(state.relationEvents)
+            end)
+            if not ok then
+                table.remove(state.relationEvents)
+                log(string.format(
+                    "RAYNE_RELATION_LIVE_TEST_REJECTED previous=%s requested=%s error=%s saveWrites=0",
+                    tostring(previous),
+                    tostring(relation),
+                    tostring(latest_or_error)
+                ))
+                return
+            end
+            state.relations = latest_or_error
+            state.rayneMerchant:on_relation_changed(relation)
+            log(string.format(
+                "RAYNE_RELATION_LIVE_TEST_APPLIED key=%s previous=%s relation=%s revision=%d saveWrites=0",
+                qa.key,
+                tostring(previous),
+                tostring(relation),
+                revision
+            ))
+        end
+        if type(ExecuteInGameThread) == "function" then
+            ExecuteInGameThread(apply)
+        else
+            apply()
+        end
+    end
+    state.callbacks.rayneRelationLiveTest = callback
+    RegisterKeyBind(Key[qa.key], callback)
+    log(string.format(
+        "RAYNE_RELATION_LIVE_TEST_READY key=%s faction=%s saveWrites=0",
+        qa.key,
+        faction_id
     ))
 end
 
@@ -3404,6 +3537,107 @@ local function register_economy_merchant_live_test(config, state)
         qa.forwardDistance,
         (qa.allCounters == true or qa.factionId == "all")
                 and 7 or 1
+    ))
+end
+
+local function register_commerce_window_live_test(config, state)
+    local qa = config.factionCommerce.commerceWindowLiveTest
+    if type(qa) ~= "table" or qa.enabled ~= true then
+        log("COMMERCE_WINDOW_LIVE_TEST_DISABLED config=false")
+        return
+    end
+    if state.commerceWindowLiveTest == nil
+        or type(RegisterKeyBind) ~= "function"
+        or Key == nil
+        or Key[qa.key] == nil
+        or ModifierKey == nil
+        or ModifierKey.CONTROL == nil then
+        log("COMMERCE_WINDOW_LIVE_TEST_UNAVAILABLE runtime-or-keybind-api")
+        return
+    end
+    local callback = function()
+        local apply = function()
+            local outcome = state.commerceWindowLiveTest:advance()
+            log(string.format(
+                "COMMERCE_WINDOW_LIVE_TEST_ADVANCE ok=%s reason=%s previous=%s window=%s index=%d/%d nativeTransactionsOnly=true directReputationWrites=0",
+                tostring(outcome.ok),
+                tostring(outcome.reason),
+                tostring(outcome.previousWindowId or "none"),
+                tostring(outcome.windowId),
+                tonumber(outcome.windowIndex) or 0,
+                tonumber(outcome.windowCount) or 0
+            ))
+        end
+        if type(ExecuteInGameThread) == "function" then
+            ExecuteInGameThread(apply)
+        else
+            apply()
+        end
+    end
+    state.callbacks.commerceWindowLiveTest = callback
+    RegisterKeyBind(
+        Key[qa.key],
+        { ModifierKey.CONTROL },
+        callback
+    )
+    local status = state.commerceWindowLiveTest:status()
+    log(string.format(
+        "COMMERCE_WINDOW_LIVE_TEST_READY key=Ctrl+%s window=%s index=%d/%d nativeTransactionsOnly=true directReputationWrites=0 persistent=false",
+        qa.key,
+        status.windowId,
+        status.windowIndex,
+        status.windowCount
+    ))
+end
+
+local function register_hostile_commerce_live_test(config, state)
+    local qa = config.factionCommerce.hostileCommerceLiveTest
+    if type(qa) ~= "table" or qa.enabled ~= true then
+        log("HOSTILE_COMMERCE_LIVE_TEST_DISABLED config=false")
+        return
+    end
+    if state.hostileCommerceLiveTest == nil
+        or type(RegisterKeyBind) ~= "function"
+        or Key == nil
+        or Key[qa.key] == nil
+        or ModifierKey == nil
+        or ModifierKey.CONTROL == nil then
+        log("HOSTILE_COMMERCE_LIVE_TEST_UNAVAILABLE runtime-or-keybind-api")
+        return
+    end
+    local callback = function()
+        local apply = function()
+            local outcome = state.hostileCommerceLiveTest:activate()
+            log(string.format(
+                "HOSTILE_COMMERCE_LIVE_TEST_ACTIVATE ok=%s reason=%s joinFaction=%s joinReason=%s targetFaction=%s before=%s relation=%s reputation=%s directReputationWrites=false nativeTransactionsRequired=true",
+                tostring(outcome.ok),
+                tostring(outcome.reason),
+                tostring(outcome.joinFactionId),
+                tostring(outcome.joinOutcome
+                    and outcome.joinOutcome.reason or "none"),
+                tostring(outcome.targetFactionId),
+                tostring(outcome.beforeRelation or "none"),
+                tostring(outcome.afterRelation or "none"),
+                tostring(outcome.targetReputation or "none")
+            ))
+        end
+        if type(ExecuteInGameThread) == "function" then
+            ExecuteInGameThread(apply)
+        else
+            apply()
+        end
+    end
+    state.callbacks.hostileCommerceLiveTest = callback
+    RegisterKeyBind(
+        Key[qa.key],
+        { ModifierKey.CONTROL },
+        callback
+    )
+    log(string.format(
+        "HOSTILE_COMMERCE_LIVE_TEST_READY key=Ctrl+%s joinFaction=%s targetFaction=%s directReputationWrites=false nativeTransactionsRequired=true",
+        qa.key,
+        qa.joinFactionId,
+        qa.targetFactionId
     ))
 end
 
@@ -4210,6 +4444,9 @@ local function register_runtime_probes(config, registry, policy, state)
         local load_map_pre_callback = function()
             state.nativeWorldGeneration =
                 (state.nativeWorldGeneration or 0) + 1
+            state.inGameWorldReady = false
+            state.inGameWorldGeneration = nil
+            state.mainWorldProbeScheduledGeneration = nil
             if state.agentDialogueOperator ~= nil then
                 state.agentDialogueOperator:on_world_unloading()
             end
@@ -4282,37 +4519,10 @@ local function register_runtime_probes(config, registry, policy, state)
             if identity_probe_enabled then
                 begin_progression_identity_probe(config, state)
             end
-            start_economy_merchant_presence(
-                config,
-                state,
-                "load-map-post"
-            )
-            if type(ExecuteWithDelay) == "function" and type(ExecuteInGameThread) == "function" then
-                ExecuteWithDelay(10000, function()
-                    ExecuteInGameThread(function()
-                        -- The live Steam build does not dispatch the generic
-                        -- UserWidget:Construct hook for its already-created
-                        -- player HUD.  By this one-shot post-world-load point,
-                        -- WBP_IngamePlaceName and Display Region are resident,
-                        -- so register against the real function here instead
-                        -- of polling for it.
-                        if config.enableNativePlaceNamePresentation == true then
-                            local place_name_ready = ensure_native_place_name_display_hook(config, registry, policy, state)
-                            log(string.format(
-                                "PLACE_NAME_HOOK_WORLD_READY source=load-map-post ready=%s",
-                                tostring(place_name_ready)
-                            ))
-                        end
-                        scan_tower_bindings(config, registry, state)
-                        resolve_economy_merchant_live_root(state)
-                        if state.rayneMerchant ~= nil then
-                            state.rayneMerchant:schedule_spawn(
-                                "load-map-post",
-                                config.rayneMerchant.spawnDelayMs
-                            )
-                        end
-                    end)
-                end)
+            if not identity_probe_enabled then
+                log(
+                    "MAIN_WORLD_SERVICES_DEFERRED reason=identity-probe-disabled"
+                )
             end
         end
         state.callbacks.loadMapPost = load_map_post_callback
@@ -4372,6 +4582,10 @@ function Runtime.start(config, registry, policy)
     assert(type(config.factionCommerce.nativeCharacterAdapter.merchantDefaultActionClassPath) == "string" and config.factionCommerce.nativeCharacterAdapter.merchantDefaultActionClassPath ~= "", "merchant salesperson action class is required")
     assert(type(config.factionCommerce.economyMerchantLiveTest) == "table", "economy merchant live-test configuration is required")
     assert(type(config.factionCommerce.economyMerchantLiveTest.enabled) == "boolean", "economy merchant live-test flag is required")
+    assert(type(config.factionCommerce.commerceWindowLiveTest) == "table", "commerce window live-test configuration is required")
+    assert(type(config.factionCommerce.commerceWindowLiveTest.enabled) == "boolean", "commerce window live-test flag is required")
+    assert(type(config.factionCommerce.hostileCommerceLiveTest) == "table", "hostile commerce live-test configuration is required")
+    assert(type(config.factionCommerce.hostileCommerceLiveTest.enabled) == "boolean", "hostile commerce live-test flag is required")
     assert(type(config.factionCommerce.economyMerchantPresence) == "table", "economy merchant presence configuration is required")
     assert(type(config.factionCommerce.economyMerchantPresence.enabled) == "boolean", "economy merchant presence flag is required")
     assert(type(config.factionCommerce.economyMerchantPresence.activationRadius) == "number", "economy merchant activation radius is required")
@@ -4470,6 +4684,9 @@ function Runtime.start(config, registry, policy)
                 or nil,
             strategicWorldNativeBus = state.strategicWorldNativeBus
                     and state.strategicWorldNativeBus:status()
+                or nil,
+            uniquePalCampaign = state.uniquePalCampaign
+                    and state.uniquePalCampaign:status()
                 or nil,
             endingEffectProviderBus = state.endingEffectProviderBus
                     and state.endingEffectProviderBus:status()
@@ -4705,6 +4922,16 @@ function Runtime.start(config, registry, policy)
         state.strategicWorld,
         { onChange = on_faction_state_changed }
     )
+    state.uniquePalCampaign = UniquePalCampaign.create(
+        state.factionProgression,
+        state.strategicWorld,
+        {
+            playerId = "local-player",
+            onChange = function(event)
+                on_faction_state_changed(nil, event, nil)
+            end,
+        }
+    )
     state.endingRuntime = EndingRuntime.create(
         state.factionProgression,
         state.strategicWorld,
@@ -4753,6 +4980,7 @@ function Runtime.start(config, registry, policy)
             rewardPolicy = state.rewardPolicy,
             npcLeaderGuardOrchestrator =
                 state.npcLeaderGuardOrchestrator,
+            uniquePalCampaign = state.uniquePalCampaign,
         }
     )
     _G.PWFT_CONTENT_PACK_API_V1 = state.contentPackRegistry
@@ -4763,6 +4991,7 @@ function Runtime.start(config, registry, policy)
     _G.PWFT_ENDING_API_V1 = state.endingRuntime
     _G.PWFT_STRATEGIC_WORLD_NATIVE_BUS_V1 =
         state.strategicWorldNativeBus
+    _G.PWFT_UNIQUE_PAL_CAMPAIGN_V1 = state.uniquePalCampaign
     _G.PWFT_ENDING_EFFECT_PROVIDER_BUS_V1 =
         state.endingEffectProviderBus
     _G.PWFT_FACTION_RESOURCE_LEDGER_V1 =
@@ -4790,6 +5019,7 @@ function Runtime.start(config, registry, policy)
             factionResourceLedger = state.factionResourceLedger,
             factionEconomyWar = state.factionEconomyWar,
             strategicWorldNativeBus = state.strategicWorldNativeBus,
+            uniquePalCampaign = state.uniquePalCampaign,
             endingEffectProviderBus = state.endingEffectProviderBus,
             rewardPolicy = state.rewardPolicy,
             factionNpcAttitudeBus = state.factionNpcAttitudeBus,
@@ -4954,6 +5184,19 @@ function Runtime.start(config, registry, policy)
                 "faction-economy-commodity-signals-v1",
         }
     )
+    state.commerceWindowLiveTest = nil
+    if config.factionCommerce.commerceWindowLiveTest.enabled == true then
+        state.commerceWindowLiveTest = CommerceWindowLiveTest.create(
+            config.factionCommerce.commerceWindowLiveTest
+        )
+    end
+    state.hostileCommerceLiveTest = nil
+    if config.factionCommerce.hostileCommerceLiveTest.enabled == true then
+        state.hostileCommerceLiveTest = HostileCommerceLiveTest.create(
+            config.factionCommerce.hostileCommerceLiveTest,
+            state.factionApi
+        )
+    end
     state.commerceBridge = CommerceBridge.create(
         state.factionCommerce,
         {
@@ -4961,8 +5204,22 @@ function Runtime.start(config, registry, policy)
             eventSink = function(event)
                 if state.companionLedger ~= nil
                     and state.companionLedger:status().active then
-                    state.companionLedger:record(event)
-                    publish_companion_state("commerce-event")
+                    local recorded, record_reason =
+                        state.companionLedger:record(event)
+                    if not recorded then
+                        log(
+                            "COMPANION_COMMERCE_EVENT_DEFERRED stage=record reason="
+                                .. tostring(record_reason)
+                        )
+                    end
+                    local published, publish_reason =
+                        publish_companion_state("commerce-event")
+                    if not published then
+                        log(
+                            "COMPANION_COMMERCE_EVENT_DEFERRED stage=publish reason="
+                                .. tostring(publish_reason)
+                        )
+                    end
                 end
             end,
             nativeSaleReplicationProbeEnabled =
@@ -4971,6 +5228,11 @@ function Runtime.start(config, registry, policy)
             nativeSaleReputationSettlementEnabled =
                 registry.economy.runtimeActivation
                     .requestedSaleReputationSettlementEnabled,
+            windowIdProvider = state.commerceWindowLiveTest
+                    and function()
+                        return state.commerceWindowLiveTest:window_id()
+                    end
+                or nil,
         }
     )
     if config.factionCommerce.nativeBridgeEnabled then
@@ -5106,6 +5368,13 @@ function Runtime.start(config, registry, policy)
         if state.progressionStore.enabled
             and state.progressionStore.profileKey
                 == identity.profileKey then
+            activate_in_game_world_services(
+                config,
+                registry,
+                policy,
+                state,
+                "progression-identity-already-active"
+            )
             return true, "already-active"
         end
         local store = ProgressionStore.create({
@@ -5168,6 +5437,13 @@ function Runtime.start(config, registry, policy)
         if state.factionUiPresenter ~= nil then
             state.factionUiPresenter:refresh()
         end
+        activate_in_game_world_services(
+            config,
+            registry,
+            policy,
+            state,
+            "progression-identity-ready"
+        )
         return true, "active:" .. restore_source
     end
     _G.PWFT_COMMERCE_API_V1 = state.factionCommerce
@@ -5303,6 +5579,8 @@ function Runtime.start(config, registry, policy)
         tostring(pal_native_router_error or "none")
     ))
     local strategic_world_status = state.strategicWorld:status()
+    local unique_pal_campaign_status =
+        state.uniquePalCampaign:status()
     local content_pack_status = state.contentPackRegistry:status()
     local content_runtime_status = state.contentRuntime:status()
     local localization_status = state.localizationRuntime:status()
@@ -5368,6 +5646,21 @@ function Runtime.start(config, registry, policy)
         strategic_world_status.uniquePalCount,
         strategic_world_status.cityCount,
         strategic_world_status.ultimatumCount
+    ))
+    log(string.format(
+        "UNIQUE_PAL_CAMPAIGN_READY api=%s packs=%d uniquePals=%d activationPending=%d open=%d wars=%d destroyedTargets=%d bossSpawnAuthority=%s captureAuthority=%s ransomAuthority=%s nativeBossMutation=%s nativeCurrencyMutation=%s story=false saveWrites=false",
+        unique_pal_campaign_status.apiVersion,
+        unique_pal_campaign_status.packCount,
+        unique_pal_campaign_status.uniquePalCount,
+        unique_pal_campaign_status.activationPendingCount,
+        unique_pal_campaign_status.openCount,
+        unique_pal_campaign_status.pendingWarCount,
+        unique_pal_campaign_status.destroyedTargetCount,
+        unique_pal_campaign_status.bossSpawnAuthority,
+        unique_pal_campaign_status.captureAuthority,
+        unique_pal_campaign_status.ransomAuthority,
+        tostring(unique_pal_campaign_status.capabilities.nativeBossMutation),
+        tostring(unique_pal_campaign_status.capabilities.nativeCurrencyMutation)
     ))
     local ending_status = state.endingRuntime:status()
     log(string.format(
@@ -5658,8 +5951,11 @@ function Runtime.start(config, registry, policy)
     register_guard_console_command(state)
     register_agent_dialogue_runtime(config, state)
     register_guard_live_test(config, state)
+    register_rayne_relation_live_test(config, policy, state)
     register_economy_merchant_interaction_router(state)
     register_economy_merchant_live_test(config, state)
+    register_commerce_window_live_test(config, state)
+    register_hostile_commerce_live_test(config, state)
     register_native_map_keybinds(config, registry, policy, state)
     register_runtime_probes(config, registry, policy, state)
     schedule_map_widget_poll(state, 120, 1000)

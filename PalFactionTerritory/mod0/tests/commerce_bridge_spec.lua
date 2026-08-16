@@ -300,6 +300,80 @@ assert(settled_outcome.ok)
 assert(settled_outcome.requestedAward == 2)
 assert(#awards == 3)
 
+-- The native ItemShop can submit a transient presentation slot which does
+-- not change when the authoritative player inventory removes a full stack.
+-- An unrelated real inventory OnRep must wake the aggregate inventory probe,
+-- while settlement still requires the exact total item-count decrease.
+local aggregate_inventory_count = 1
+local aggregate_bridge = CommerceBridge.create(commerce, {
+    windowIdProvider = function()
+        return "world-day-aggregate-21"
+    end,
+    nativeSaleReplicationProbeEnabled = true,
+    nativeSaleReputationSettlementEnabled = true,
+    inventorySnapshotResolver = function(item_id, sold_count)
+        assert(item_id == "Coal")
+        assert(sold_count == 1)
+        return {
+            initialCount = aggregate_inventory_count,
+            readCurrentCount = function()
+                return aggregate_inventory_count
+            end,
+        }
+    end,
+})
+local aggregate_actor = {
+    GetFullName = function()
+        return "BP_NPC_Trader_C /Game/Test/AggregateVendor"
+    end,
+}
+local aggregate_component = {
+    GetFullName = function()
+        return "PalNetworkShopComponent /Game/Test/AggregatePlayer"
+    end,
+}
+local presentation_slot = {
+    ItemId = { StaticId = coal_name },
+    StackCount = 1,
+    GetFullName = function()
+        return "PalItemSlot /Engine/Transient/PresentationSale"
+    end,
+}
+assert(aggregate_bridge:register_vendor_actor(
+    "pwft.faction.rayne_syndicate",
+    aggregate_actor,
+    { mode = "fixed-market", commercialTruce = true }
+))
+assert(aggregate_bridge:on_shop_setup(
+    aggregate_component,
+    aggregate_actor
+))
+assert(aggregate_bridge:on_item_sell_ui_request(
+    item_shop_ui,
+    { presentation_slot }
+))
+assert(aggregate_bridge:on_sell_request(
+    aggregate_component,
+    { A = 21, B = 22, C = 23, D = 24 },
+    {}
+))
+aggregate_inventory_count = 0
+local aggregate_confirmed, aggregate_outcome =
+    aggregate_bridge:on_item_slot_replicated(
+        {
+            GetFullName = function()
+                return "PalItemSlot /Game/Test/RealInventorySlot"
+            end,
+        },
+        "test-OnRep_ItemId"
+    )
+assert(aggregate_confirmed)
+assert(aggregate_outcome.ok)
+assert(aggregate_outcome.applied == 0)
+assert(aggregate_outcome.reason == "no-requested-items")
+assert(presentation_slot.StackCount == 1)
+assert(aggregate_bridge:status().confirmedSellCount == 1)
+
 -- A temporary sidecar/progression rejection after authoritative inventory
 -- replication must not lose the sale. The same confirmation and commerce
 -- window are retried, so the eventual success is awarded exactly once.

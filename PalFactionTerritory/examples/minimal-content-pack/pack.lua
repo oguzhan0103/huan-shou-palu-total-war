@@ -5,6 +5,8 @@ return {
     manifest = require("minimal-content-pack.manifest"),
     questTemplate = require("minimal-content-pack.quest_template"),
     strategicWorld = require("minimal-content-pack.strategic_world"),
+    uniquePalCampaign =
+        require("minimal-content-pack.unique_pal_campaign"),
     endingRoutes = require("minimal-content-pack.ending_routes"),
     contentActions = require("minimal-content-pack.content_actions"),
     leaderGuards = require("minimal-content-pack.leader_guards"),

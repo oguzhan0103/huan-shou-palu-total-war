@@ -1,7 +1,7 @@
 # PalAgentDialogue
 
 Component version: `1.0.1` release candidate. The repository-wide source-only
-bundle version is `v1.0.3`; these are separate version lines.
+bundle version is `v1.0.4`; these are separate version lines.
 
 PalAgentDialogue is an external, content-pack-driven multi-NPC Agent runtime for
 Palworld mods. It supports local Ollama servers and OpenAI-compatible chat

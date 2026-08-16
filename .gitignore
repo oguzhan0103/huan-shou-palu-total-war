@@ -8,11 +8,13 @@
 /*.obj
 /*.md
 !/README.md
+!/INSTALL.md
 !/CHANGELOG.md
 !/CONTRIBUTING.md
 !/SECURITY.md
 !/THIRD_PARTY_NOTICES.md
 !/幻兽帕鲁全面战争_已完成内容.md
+!/幻兽帕鲁全面战争_2026-08-08至2026-08-16开发与测试总结.md
 
 **/build/
 **/artifacts/

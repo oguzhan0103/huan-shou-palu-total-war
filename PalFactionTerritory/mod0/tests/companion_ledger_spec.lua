@@ -127,4 +127,50 @@ local retried_record, retried_envelope = ledger:record({
 assert(retried_record == true)
 assert(retried_envelope.sequence == sequence_before_failure + 1)
 
+local sequence_before_encode_failure = ledger:status().eventSequence
+local encoded_record, encoded_record_reason = ledger:record({
+    type = "invalid-numeric-object-key",
+    invalid = { [0] = "zero" },
+})
+assert(encoded_record == false)
+assert(string.find(encoded_record_reason, "event%-encode%-failed") ~= nil)
+assert(ledger:status().eventSequence == sequence_before_encode_failure)
+
+local state_before_encode_failure = files[status.statePath]
+local encoded_publish, encoded_publish_reason = ledger:publish({
+    releaseId = "must-not-replace-on-encode-failure",
+    invalid = { [0] = "zero" },
+})
+assert(encoded_publish == false)
+assert(string.find(
+    encoded_publish_reason,
+    "encode%-failed:invalid"
+) ~= nil)
+assert(files[status.statePath] == state_before_encode_failure)
+assert(files[status.statePath .. ".tmp"] == nil)
+
+local hostile_pairs = setmetatable({}, {
+    __pairs = function()
+        error("hostile-pairs")
+    end,
+})
+local sequence_before_copy_failure = ledger:status().eventSequence
+local copied_record, copied_record_reason = ledger:record({
+    type = "invalid-copy-source",
+    invalid = hostile_pairs,
+})
+assert(copied_record == false)
+assert(string.find(copied_record_reason, "event%-copy%-failed") ~= nil)
+assert(ledger:status().eventSequence == sequence_before_copy_failure)
+
+local state_before_copy_failure = files[status.statePath]
+local copied_publish, copied_publish_reason = ledger:publish({
+    releaseId = "must-not-replace-on-copy-failure",
+    invalid = hostile_pairs,
+})
+assert(copied_publish == false)
+assert(string.find(copied_publish_reason, "state%-copy%-failed") ~= nil)
+assert(files[status.statePath] == state_before_copy_failure)
+assert(files[status.statePath .. ".tmp"] == nil)
+
 print("PASS external companion ledger transaction stream and failure-safe replacement")

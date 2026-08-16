@@ -60,6 +60,51 @@ local function current_relation(shared_state, faction_id)
     return relation or "Neutral"
 end
 
+-- The standalone Rayne Pal merchant is not one of the seven Merchant Guild
+-- counters.  A hostile relationship must therefore close its native
+-- interaction route explicitly instead of relying on battle mode to suppress
+-- the prompt as an incidental side effect.  The actor is respawned whenever
+-- the relation changes, so a later peaceful actor gets a clean native route.
+local function apply_relation_interaction_policy(actor, relation)
+    if not is_valid_object(actor) then
+        return false, "merchant-actor-unavailable"
+    end
+    local hostile = relation == "Hostile"
+    local interaction = safe_property(actor, "BP_NPCInteractionComponent")
+    local flags_ok = false
+    local flags_error = "npc-interaction-component-unavailable"
+    if is_valid_object(interaction) then
+        flags_ok, flags_error = pcall(function()
+            interaction.bDisableTalk = hostile
+            interaction.bDisableTalkWhenCaptured = hostile
+            if interaction.OnRep_DisableTalk ~= nil then
+                interaction:OnRep_DisableTalk()
+            end
+        end)
+    end
+    local active_ok, active_error = pcall(function()
+        actor:SetActive_Interact_ToAll(not hostile)
+    end)
+    log(string.format(
+        "RELATION_INTERACTION_POLICY relation=%s hostile=%s flags=%s flagsDetail=%s active=%s activeDetail=%s interactEnabled=%s",
+        tostring(relation),
+        tostring(hostile),
+        tostring(flags_ok),
+        tostring(flags_error),
+        tostring(active_ok),
+        tostring(active_error),
+        tostring(not hostile)
+    ))
+    if not flags_ok then
+        return false, "npc-interaction-flags-failed:" .. tostring(flags_error)
+    end
+    if not active_ok then
+        return false, "npc-interaction-activation-failed:" .. tostring(active_error)
+    end
+    return true, hostile and "hostile-interaction-disabled"
+        or "peaceful-interaction-enabled"
+end
+
 local function find_player_pawns()
     if type(FindAllOf) ~= "function" then
         return nil, "FindAllOf-unavailable"
@@ -560,6 +605,40 @@ local function for_each_array(array, callback)
     if array == nil then
         return false
     end
+
+    -- Never prefer TArray:ForEach in the live game. UE4SS executes that
+    -- callback from its native TArray bridge; if any UObject method called by
+    -- the callback raises, UE4SS 3.0.1 may crash while constructing the Lua
+    -- traceback (luaH_next/lua_next) instead of returning through pcall. A
+    -- fixed-length, indexed snapshot keeps every potentially failing read in
+    -- ordinary Lua control flow and fails the whole pass closed.
+    local get_array_num = safe_property(array, "GetArrayNum")
+    if type(get_array_num) == "function" then
+        local count_ok, count = pcall(function()
+            return array:GetArrayNum()
+        end)
+        count = count_ok and tonumber(count) or nil
+        if count == nil or count < 0 then
+            return false
+        end
+        for index = 1, count do
+            local read_ok, element = pcall(function()
+                return array[index]
+            end)
+            if not read_ok then
+                return false
+            end
+            local callback_ok = pcall(callback, index, element)
+            if not callback_ok then
+                return false
+            end
+        end
+        return true
+    end
+
+    -- Compatibility fallback for older UE4SS wrappers that expose only
+    -- ForEach. Current Palworld product/passive TArrays expose GetArrayNum, so
+    -- this route is not used by the production merchant.
     local for_each = safe_property(array, "ForEach")
     if type(for_each) == "function" then
         local ok = pcall(function()
@@ -569,6 +648,7 @@ local function for_each_array(array, callback)
         end)
         return ok
     end
+    -- Plain Lua tables are used by offline tests and content fixtures.
     if type(array) == "table" then
         for index, element in pairs(array) do
             callback(index, element)
@@ -638,24 +718,6 @@ local function unreal_value_text(value)
     return tostring(value)
 end
 
-local function get_product_getter_parameter(product)
-    local getter_ok, getter_return, getter_out = pcall(function()
-        return product:GetProductPalParameter()
-    end)
-    if not getter_ok then
-        return nil
-    end
-    getter_return = unwrap_remote_value(getter_return)
-    getter_out = unwrap_remote_value(getter_out)
-    if getter_return ~= nil and type(getter_return) ~= "boolean" then
-        return getter_return
-    end
-    if getter_out ~= nil and type(getter_out) ~= "boolean" then
-        return getter_out
-    end
-    return nil
-end
-
 local function get_product_parameter_sources(product)
     local sources = {}
     local seen = {}
@@ -684,8 +746,6 @@ local function get_product_parameter_sources(product)
         "product",
         safe_property(product, "ProductPalSaveParameter")
     )
-
-    add_source("getter", get_product_getter_parameter(product))
 
     local giver = unwrap_remote_value(safe_property(product, "MyProductGiver"))
     add_source(
@@ -905,30 +965,10 @@ local function inject_rainbow_passives(instance)
     local getter_visible = 0
     local selected_samples = {}
     local source_write_counts = {}
-    local stock_read = 0
-    local stock_one = 0
-    local stock_infinite = 0
-    local stock_other = 0
     local traversed = for_each_array(products, function(_, product_or_param)
         local product = unwrap_remote_value(product_or_param)
         if is_valid_object(product) then
             total = total + 1
-            local stock_ok, max_stock = pcall(function()
-                return product:GetMaxStockNum()
-            end)
-            local infinity_ok, is_infinite = pcall(function()
-                return product:IsInfinityStock()
-            end)
-            if stock_ok and max_stock ~= nil then
-                stock_read = stock_read + 1
-                if infinity_ok and is_infinite == true then
-                    stock_infinite = stock_infinite + 1
-                elseif max_stock == 1 then
-                    stock_one = stock_one + 1
-                else
-                    stock_other = stock_other + 1
-                end
-            end
             if math.random() <= instance.config.rainbowChance then
                 selected = selected + 1
                 local sources = get_product_parameter_sources(product)
@@ -995,15 +1035,6 @@ local function inject_rainbow_passives(instance)
                     end
                     if product_replaced > 0 then
                         modified = modified + 1
-                        local getter_parameter =
-                            get_product_getter_parameter(product)
-                        if getter_parameter ~= nil
-                            and parameter_contains_passive(
-                                getter_parameter,
-                                desired[1]
-                            ) then
-                            getter_visible = getter_visible + 1
-                        end
                         if #selected_samples < 12 then
                             local character_id = unreal_value_text(
                                 safe_property(
@@ -1050,12 +1081,12 @@ local function inject_rainbow_passives(instance)
     instance.lastRainbowSelectedCount = selected
     instance.lastRainbowModifiedCount = modified
     log(string.format(
-        "SHOP_STOCK_AUDIT products=%d readable=%d single=%d infinite=%d other=%d restockMinutes=%d shopSource=%s productSource=%s",
+        "SHOP_STOCK_AUDIT products=%d readable=%d single=%d infinite=%d other=%d restockMinutes=%d shopSource=%s productSource=%s nativeGetterAudit=disabled",
         total,
-        stock_read,
-        stock_one,
-        stock_infinite,
-        stock_other,
+        0,
+        0,
+        0,
+        0,
         instance.config.restockMinutes,
         tostring(shop_source),
         tostring(product_source)
@@ -1110,9 +1141,11 @@ local function inject_rainbow_passives(instance)
         )
     end
     -- Live UI validation on 2026-07-24 confirmed that the shop displays these
-    -- traits even though a direct Lua call to the out-parameter getter reports
-    -- no readable return value. Treat verified product/giver writes as the
-    -- source of truth and keep getterVisible as diagnostics only.
+    -- traits. Product/giver UProperty writes are therefore the source of truth.
+    -- Do not call product diagnostic UFunctions here: during map teardown or a
+    -- fast reload Palworld can leave a product wrapper alive after its native
+    -- object has gone stale, and UE4SS 3.0.1 may crash while formatting that
+    -- UFunction error instead of returning through pcall.
     return true, nil
 end
 
@@ -1122,8 +1155,16 @@ local function schedule_trait_injection(instance, attempt)
     if type(ExecuteWithDelay) ~= "function" then
         return
     end
+    local scheduled_generation = instance.lifecycleGeneration
+    local scheduled_actor = instance.actor
+    local scheduled_vendor = instance.vendor
     local callback = function()
         local function execute()
+            if instance.lifecycleGeneration ~= scheduled_generation
+                or instance.actor ~= scheduled_actor
+                or instance.vendor ~= scheduled_vendor then
+                return
+            end
             if not is_valid_object(instance.actor) or not is_valid_object(instance.vendor) then
                 return
             end
@@ -1321,11 +1362,23 @@ local function complete_native_merchant_setup(
     instance.actor = actor
     instance.spawnHandle = handle
     instance.vendor = vendor
+    instance.lifecycleGeneration = instance.lifecycleGeneration + 1
     instance.lastSpawnError = nil
     instance.lastShopSetupError = nil
     instance.hostileTargets = {}
     instance.nativeSetupScheduled = false
-    if instance.sharedState.factionMerchantRuntime ~= nil then
+    local relation = current_relation(
+        instance.sharedState,
+        instance.config.factionId
+    )
+    local interaction_ready, interaction_reason =
+        apply_relation_interaction_policy(actor, relation)
+    if not interaction_ready then
+        return false, interaction_reason
+    end
+
+    if relation ~= "Hostile"
+        and instance.sharedState.factionMerchantRuntime ~= nil then
         local binding =
             instance.sharedState.factionMerchantRuntime
                 :bind_existing_fixed(
@@ -1342,7 +1395,8 @@ local function complete_native_merchant_setup(
                     .. tostring(binding.reason)
             )
         end
-    elseif instance.sharedState.commerceBridge ~= nil then
+    elseif relation ~= "Hostile"
+        and instance.sharedState.commerceBridge ~= nil then
         local bridge_ok, bridge_reason =
             instance.sharedState.commerceBridge:register_vendor_actor(
                 instance.config.factionId,
@@ -1378,33 +1432,33 @@ local function complete_native_merchant_setup(
         safe_full_name(vendor),
         instance.config.enableCustomShop and "custom" or "vanilla",
         instance.config.enableCustomShop and instance.config.shopRowName or "<native>",
-        current_relation(instance.sharedState, instance.config.factionId)
+        relation
     ))
 
-    if instance.config.enableCustomShop then
-        -- The shop RPC snapshots product data for the client. Inject traits
-        -- before that snapshot, otherwise the server logs successful writes
-        -- while the purchase UI keeps the earlier empty-passive copy.
-        local injected, injection_error = inject_rainbow_passives(instance)
-        if injected then
-            instance.traitInjectionComplete = true
-            local network_requested, network_error =
-                request_shop_network_setup(instance)
-            if not network_requested then
-                instance.lastShopSetupError = network_error
-                log(string.format(
-                    "SHOP_NETWORK_SETUP_RETRY attempt=0 reason=%s",
-                    tostring(network_error)
-                ))
-                schedule_shop_network_setup(instance, 1)
-            end
-        else
-            instance.lastShopSetupError = injection_error
+    if relation == "Hostile" then
+        instance.networkSetupComplete = false
+        log(string.format(
+            "SHOP_ACCESS_BLOCKED relation=Hostile actor=%s interaction=false networkShop=false commercialTruce=false",
+            safe_full_name(actor)
+        ))
+    elseif instance.config.enableCustomShop then
+        if instance.config.enableRainbowPassives == true then
+            -- SetupShopData may report READY before all 288 product wrappers
+            -- have finished their native reconstruction. Fence the optional
+            -- pass to this exact actor generation.
             log(string.format(
-                "RAINBOW_PASS_RETRY attempt=0 reason=%s",
-                tostring(injection_error)
+                "RAINBOW_PASS_SCHEDULED attempt=1 delayMs=%d generation=%d",
+                instance.config.traitInjectionRetryMs,
+                instance.lifecycleGeneration
             ))
             schedule_trait_injection(instance, 1)
+        else
+            log("RAINBOW_PASS_DISABLED safety=ue4ss-tarray-reload-crash catalog=preserved")
+            local requested, network_error = request_shop_network_setup(instance)
+            if not requested then
+                instance.lastShopSetupError = network_error
+                schedule_shop_network_setup(instance, 1)
+            end
         end
     else
         log("VANILLA_SHOP_PRESERVED stage=1")
@@ -1615,6 +1669,8 @@ schedule_hostility_monitor = function(instance)
 end
 
 local function destroy_actor(instance, reason)
+    -- Invalidate delayed native callbacks before touching any UObject.
+    instance.lifecycleGeneration = instance.lifecycleGeneration + 1
     if instance.sharedState.factionMerchantRuntime ~= nil
         and instance.actor ~= nil then
         instance.sharedState.factionMerchantRuntime
@@ -1687,6 +1743,7 @@ local function validate_config(config)
     assert(type(config.merchantLevelCap) == "number" and config.merchantLevelCap > 0, "invalid native merchant level cap")
     assert(config.merchantLevel <= config.merchantLevelCap, "native merchant level exceeds the supported game cap")
     assert(type(config.enableCustomShop) == "boolean", "custom shop stage flag is required")
+    assert(type(config.enableRainbowPassives) == "boolean", "rainbow passive safety flag is required")
     assert(type(config.enableFactionHostility) == "boolean", "faction hostility stage flag is required")
     assert(type(config.shopRowName) == "string" and config.shopRowName ~= "", "rayne merchant shop row is required")
     assert(type(config.rainbowPassives) == "table" and #config.rainbowPassives > 0, "rainbow passives are required")
@@ -1735,6 +1792,7 @@ function RayneMerchant.create(config, shared_state)
         nativeSetupScheduled = false,
         nativeSpawnRequested = false,
         spawnScheduled = false,
+        lifecycleGeneration = 0,
         callbacks = {},
     }
 
@@ -1888,6 +1946,9 @@ function RayneMerchant.create(config, shared_state)
         if self.config.enableCustomShop ~= true then
             return false, "custom-shop-disabled"
         end
+        if self.config.enableRainbowPassives ~= true then
+            return false, "rainbow-passives-disabled-for-ue4ss-safety"
+        end
         if not is_valid_object(self.actor) or not is_valid_object(self.vendor) then
             return false, "merchant-not-spawned"
         end
@@ -1928,6 +1989,7 @@ end
 
 RayneMerchant._test = {
     current_relation = current_relation,
+    apply_relation_interaction_policy = apply_relation_interaction_policy,
     choose_rainbow_passives = choose_rainbow_passives,
     unwrap_remote_value = unwrap_remote_value,
     for_each_array = for_each_array,

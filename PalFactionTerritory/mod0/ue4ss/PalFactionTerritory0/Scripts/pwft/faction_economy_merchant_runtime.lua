@@ -990,15 +990,25 @@ function FactionEconomyMerchantRuntime:status()
     local active_count = 0
     local owned_count = 0
     local pending_count = 0
+    local invalid_record_count = 0
     for _, record in pairs(self.records) do
-        if record.actor ~= nil then
-            active_count = active_count + 1
-            if record.owned then
-                owned_count = owned_count + 1
+        -- UE4SS may retain a stale callback value while its callback garbage
+        -- collector is retiring an old native actor.  Status is called from a
+        -- repeating hook and therefore must never let one malformed registry
+        -- entry remove the whole hook.  Known faction records remain the
+        -- authority; unexpected values are reported and ignored fail-closed.
+        if type(record) ~= "table" then
+            invalid_record_count = invalid_record_count + 1
+        else
+            if record.actor ~= nil then
+                active_count = active_count + 1
+                if record.owned then
+                    owned_count = owned_count + 1
+                end
             end
-        end
-        if record.pending then
-            pending_count = pending_count + 1
+            if record.pending then
+                pending_count = pending_count + 1
+            end
         end
     end
     local activation = self.shopCatalog.contract.runtimeActivation
@@ -1008,6 +1018,7 @@ function FactionEconomyMerchantRuntime:status()
         activeCount = active_count,
         ownedCount = owned_count,
         pendingCount = pending_count,
+        invalidRecordCount = invalid_record_count,
         adapterReady = self.adapter ~= nil,
         activationAuthorized = self.activationAuthorized,
         nativeMerchantSpawnEnabled =
