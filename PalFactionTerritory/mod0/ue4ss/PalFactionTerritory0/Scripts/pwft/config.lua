@@ -38,6 +38,29 @@ return {
         maxAttempts = 60,
     },
 
+    -- Production delivery is a capability, not a built-in story pack.  It
+    -- exposes the Build-24575825 route that passed exact PalInstanceID
+    -- spawn/capture/storage-readback acceptance, but can mutate only after a
+    -- trusted content module registers an active P2 world-effect provider,
+    -- exact target binding, route key and an approved unique-Pal mapping.
+    -- The five IDs below are the user-confirmed base-island mappings.  The
+    -- tentative Feybreak/Cloud-whirl entry is deliberately absent.
+    uniquePalNativeDeliveryProduction = {
+        enabled = true,
+        buildId = "24575825",
+        objectDumpSha256 =
+            "3e84e8a6936b7d1c33de6cfc034c4a200655a3e762cbc2ec4c6a57516476ec78",
+        deliveryLevel = 80,
+        approvedSpeciesByUniquePalId = {
+            ["pwft.unique.pinkcat"] = "PinkCat",
+            ["pwft.unique.anubis"] = "Anubis",
+            ["pwft.unique.weasel_dragon"] = "WeaselDragon",
+            ["pwft.unique.black_metal_dragon"] = "BlackMetalDragon",
+            ["pwft.unique.ronin"] = "Ronin",
+        },
+        storyContentIncluded = false,
+    },
+
     -- The progression core owns reputation, independent human memberships,
     -- ranks, commerce caps, guard eligibility, and ending gates. Runtime
     -- Reputation is authoritative in a Mod-owned external sidecar.  The

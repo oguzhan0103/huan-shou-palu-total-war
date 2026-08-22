@@ -43,11 +43,23 @@ contentModules = {
 
 3. 启动后检查 UE4SS 日志：该包必须出现 `CONTENT_MODULE ... registered=true activated=true`，汇总必须为 `CONTENT_MODULE_LOADER_READY ... failed=0`。
 
-Core 会在同一个 Lua 环境中 `require` 配置的模块，先把 manifest、任务、战略世界、唯一 Boss 战役、结局、白名单机制动作、NPC 领主护卫、帕鲁论道和本地化全部放入临时运行时校验，再进行确定性提交。任何一域失败时，整包不注册。`activate(context)` 可取得 `uniquePalCampaign`、`uniquePalBossProviderBus`、`uniquePalWorldEffectBus`、`factionNpcAttitudeBus` 与 `npcLeaderGuardOrchestrator`，但必须注册配置白名单中的原生 provider，并精确绑定当前世界 actor；世界卸载后绑定和部署全部丢弃、重新发现，不写入 sidecar。不同 UE4SS Mod 的 `_G` 相互隔离，因此不支持另建一个 Mod 后通过 `_G.PWFT_*` 注入内容。
+Core 会在同一个 Lua 环境中 `require` 配置的模块，先把 manifest、任务、战略世界、唯一 Boss 战役、结局、白名单机制动作、NPC 领主护卫、帕鲁论道和本地化全部放入临时运行时校验，再进行确定性提交。任何一域失败时，整包不注册。`activate(context)` 可取得 `uniquePalCampaign`、`uniquePalBossProviderBus`、`uniquePalWorldEffectBus`、`uniquePalNativeDeliveryProduction`、`uniquePalRansomShopBridge`、`factionNpcAttitudeBus` 与 `npcLeaderGuardOrchestrator`，但必须注册配置白名单中的原生 provider，并精确绑定当前世界 actor；世界卸载后绑定和部署全部丢弃，Core 会在下一次 `load-map-post` 自动重新调用同一个受信 `activate(context)`，所以激活函数必须可幂等重入并重新发现当前世界对象，不能缓存上一代 UObject。不同 UE4SS Mod 的 `_G` 相互隔离，因此不支持另建一个 Mod 后通过 `_G.PWFT_*` 注入内容。
 
 唯一 Boss 接线只有在 `unique_pal_campaign.lua` 的 `bindingStatus = "bound"` 且内容模块同时提交经当前 Build 核验的 `speciesId`、spawner key、预期 Actor class、地点、原生已有 Boss 或替换槽位路线，以及完整 `raid-slab` 数值档时才会激活。Provider 必须保证 delivery ID 幂等和 world generation 回调隔离；缺少任一证据时保持 `pending`。示例故意不提供这些值，不能直接改成正式绑定。
 
 势力毁灭和赎回的世界效果同样不会从示例自动生效。`uniquePalWorldEffectBus` 要求每个目标显式绑定当前 Build 的势力刷新器、允许清理的 Actor binding/class、城市锚点与居民／功能 NPC 刷新器、商会柜台，以及文本、保卫袭击、后台结果、支付和 Pal 交付路线。禁止扫描全部 Actor、删除地图建筑或由模型确认胜负／付款；未核验时只保留 Core 状态和待投递记录。
+
+### P2 赎金商品与原生 Pal 交付
+
+本体只提供机制，不替内容作者猜写赎金价格、持有势力或剧情商品。生产接线必须在同一次 `activate(context)` 中按以下顺序完成：
+
+1. 向 `uniquePalWorldEffectBus` 注册 generation-fenced、delivery-ID 幂等的 Provider。
+2. 为目标注册当前 Build 的精确 world-effect target binding；其中 `ransomPaymentKey` 与 `palDeliveryKey` 必须是本内容包的稳定路线。
+3. 调用 `uniquePalNativeDeliveryProduction:register(...)`，只提交该 target binding 实际会交付的唯一帕鲁。Build 24575825 当前只批准 `pwft.unique.pinkcat/PinkCat`、`pwft.unique.anubis/Anubis`、`pwft.unique.weasel_dragon/WeaselDragon`、`pwft.unique.black_metal_dragon/BlackMetalDragon`、`pwft.unique.ronin/Ronin`；新地图暂定项不允许注册。
+4. Provider 收到 `ransom-offer` 时，用 `uniquePalRansomShopBridge:accept_offer(payload, context, nativeOffer)` 绑定一个已经生成并核验的原生 ItemShop 商品。`nativeOffer` 必须给出确切的 `nativeOfferId/shopId/productId/merchantFactionId/unitPrice/ransomPaymentKey`，库存和购买数量都为 1，价格等于 `unique_pal_campaign.lua` 的 `ransomPrice`，商人势力等于当前持有者。
+5. Provider 收到 `pal-delivery` 时，只调用 `uniquePalNativeDeliveryProduction:handle_delivery(payload, context)`；不要直接改金币、Pal 容器或存档。
+
+赎金商品的原生 DataTable 行属于内容密钥：静态 `OverridePrice` 必须与该 Pal 的 `ransomPrice` 相同。购买取消、余额不足或服务器返回失败时不会转移归属；服务器成功后商业好感固定为 0，随后事务桥只创建一次个体、只提交一次捕获，并在仓库回读完全相同的 individual identity 后才完成。合同见 `contracts/unique_pal_delivery_production.v1.json`，整链自动测试见 `mod0/tests/unique_pal_ransom_native_delivery_e2e_spec.lua`。
 
 默认 `modules = {}`，所以机制基座本身仍然不携带剧情。
 

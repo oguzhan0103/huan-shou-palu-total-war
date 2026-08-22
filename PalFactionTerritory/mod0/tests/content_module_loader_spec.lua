@@ -35,6 +35,8 @@ package.preload["test_content_modules.valid"] = function()
                 factionNpcAttitudeBus = context.factionNpcAttitudeBus,
                 npcLeaderGuardOrchestrator =
                     context.npcLeaderGuardOrchestrator,
+                uniquePalNativeDeliveryProduction =
+                    context.uniquePalNativeDeliveryProduction,
             }
             return { ok = true, reason = "fixture-activated" }
         end,
@@ -58,6 +60,7 @@ local loader = ContentModuleLoader.create(runtime, {
     marker = "trusted-context",
     factionNpcAttitudeBus = { api = "attitude" },
     npcLeaderGuardOrchestrator = { api = "guards" },
+    uniquePalNativeDeliveryProduction = { api = "production-delivery" },
 }, {
     logger = function(message) logs[#logs + 1] = message end,
 })
@@ -70,6 +73,8 @@ assert(activations[1].marker == "trusted-context")
 assert(activations[1].contentPackId == "test.module.valid")
 assert(activations[1].factionNpcAttitudeBus.api == "attitude")
 assert(activations[1].npcLeaderGuardOrchestrator.api == "guards")
+assert(activations[1].uniquePalNativeDeliveryProduction.api
+    == "production-delivery")
 assert(#logs == 2)
 local status = loader:status()
 assert(status.registeredCount == 2)
@@ -78,6 +83,16 @@ assert(status.failedCount == 0)
 assert(status.internalRequireOnly == true)
 assert(status.crossModGlobalsRequired == false)
 assert(loader:load().reason == "content-modules-already-loaded")
+local reactivated = loader:reactivate("spec-world-load-2")
+assert(reactivated.ok and reactivated.reason
+    == "content-modules-reactivated")
+assert(#registrations == 2)
+assert(#activations == 2)
+assert(activations[2].contentPackId == "test.module.valid")
+assert(loader:status().reactivationCount == 1)
+assert(loader:status().reactivationFailureCount == 0)
+assert(loader:status().lastReactivationReason == "spec-world-load-2")
+assert(#logs == 3)
 
 local failing = ContentModuleLoader.create(runtime, {
     enabled = true,
@@ -91,5 +106,6 @@ assert(not failed.ok and failed.reason == "content-module-load-failed")
 assert(failing:status().failedCount == 2)
 assert(failing:status().records[1].reason == "invalid-content-module-name")
 assert(failing:status().records[2].reason == "content-module-require-failed")
+assert(failing:reactivate("spec-failed-world-load").ok)
 
 print("PWFT internal content-module loader specification: PASS")

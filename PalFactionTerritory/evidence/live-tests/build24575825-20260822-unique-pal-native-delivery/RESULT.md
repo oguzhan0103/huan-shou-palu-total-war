@@ -27,9 +27,9 @@
 
 ## 存档与正式配置恢复
 
-- 测试前快照：`C:\Users\asus\Documents\帕鲁\outputs\live-test-preflight\build24575825-20260822-174857366\snapshot\SaveGames`
+- 测试前快照：`<ProjectWorkspace>\outputs\live-test-preflight\build24575825-20260822-174857366\snapshot\SaveGames`
 - 快照文件数：363
-- 测试后变更存档隔离：`C:\Users\asus\Documents\帕鲁\outputs\live-test-save-quarantine\20260822-175545-unique-pal-native-delivery-success-build24575825\76561198452346716`
+- 测试后变更存档隔离：`<ProjectWorkspace>\outputs\live-test-save-quarantine\20260822-175545-unique-pal-native-delivery-success-build24575825\<SteamUserId>`
 - 恢复校验：预期 363、实际 363、哈希差异 0、额外文件 0。
 - `uniquePalNativeDeliveryLiveTest.enabled` 已恢复 `false`。
 - 正式部署脚本随后再次通过：75 个运行时文件与清单及当前源码一致。

@@ -88,6 +88,8 @@ local UniquePalNativeDeliveryBridge =
     require("pwft.unique_pal_native_delivery_bridge")
 local UniquePalNativeDeliveryAdapter =
     require("pwft.unique_pal_native_delivery_adapter")
+local UniquePalNativeDeliveryProduction =
+    require("pwft.unique_pal_native_delivery_production")
 local UniquePalNativeDeliveryProbe =
     require("pwft.unique_pal_native_delivery_probe")
 local UniquePalNativeDeliveryLiveTest =
@@ -4600,7 +4602,8 @@ local function register_runtime_probes(config, registry, policy, state)
                 state.uniquePalNativeDeliveryLiveTest:unbind_world(
                     "runtime-world-unloading"
                 )
-            elseif state.uniquePalNativeDeliveryAdapter ~= nil
+            end
+            if state.uniquePalNativeDeliveryAdapter ~= nil
                 and state.uniquePalNativeDeliveryAdapter:status()
                     .worldBound == true then
                 state.uniquePalNativeDeliveryAdapter:unbind_world(
@@ -4674,6 +4677,19 @@ local function register_runtime_probes(config, registry, policy, state)
                     tonumber(replay.pendingCount) or 0
                 ))
             end
+            if state.contentModuleLoader ~= nil then
+                local reactivated = state.contentModuleLoader:reactivate(
+                    "load-map-post:g"
+                        .. tostring(state.nativeWorldGeneration)
+                )
+                log(string.format(
+                    "CONTENT_MODULE_WORLD_REACTIVATE ok=%s reason=%s generation=%d failed=%d",
+                    tostring(reactivated.ok == true),
+                    tostring(reactivated.reason),
+                    state.nativeWorldGeneration,
+                    tonumber(reactivated.failedCount) or 0
+                ))
+            end
             if state.settlementRaid ~= nil then
                 state.settlementRaid:on_world_loaded("load-map-post")
             end
@@ -4728,6 +4744,13 @@ function Runtime.start(config, registry, policy)
     assert(type(config.uniquePalNativeDeliveryLiveTest.level) == "number" and config.uniquePalNativeDeliveryLiveTest.level >= 1, "unique-Pal native delivery live-test level is invalid")
     assert(type(config.uniquePalNativeDeliveryLiveTest.retryDelayMs) == "number" and config.uniquePalNativeDeliveryLiveTest.retryDelayMs > 0, "unique-Pal native delivery live-test retry delay is invalid")
     assert(type(config.uniquePalNativeDeliveryLiveTest.maxAttempts) == "number" and config.uniquePalNativeDeliveryLiveTest.maxAttempts > 0, "unique-Pal native delivery live-test attempt limit is invalid")
+    assert(type(config.uniquePalNativeDeliveryProduction) == "table", "unique-Pal native delivery production configuration is required")
+    assert(type(config.uniquePalNativeDeliveryProduction.enabled) == "boolean", "unique-Pal native delivery production flag is required")
+    assert(config.uniquePalNativeDeliveryProduction.buildId == config.expectedSteamBuildId, "unique-Pal native delivery production Build ID drifted")
+    assert(config.uniquePalNativeDeliveryProduction.objectDumpSha256 == config.uniquePalNativeDeliveryProbe.objectDumpSha256, "unique-Pal native delivery production ObjectDump hash drifted")
+    assert(type(config.uniquePalNativeDeliveryProduction.deliveryLevel) == "number" and config.uniquePalNativeDeliveryProduction.deliveryLevel >= 1, "unique-Pal native delivery production level is invalid")
+    assert(type(config.uniquePalNativeDeliveryProduction.approvedSpeciesByUniquePalId) == "table", "unique-Pal native delivery production whitelist is required")
+    assert(config.uniquePalNativeDeliveryProduction.approvedSpeciesByUniquePalId["pwft.unique.feybreak"] == nil, "tentative Feybreak unique Pal must remain fail-closed")
     assert(config.factionProgression.enabled == true, "faction progression core must be enabled")
     assert(type(config.palReconciliation) == "table", "Pal reconciliation must be explicitly configured")
     assert(config.palReconciliation.enabled == true, "Pal reconciliation core must be enabled")
@@ -5295,21 +5318,39 @@ function Runtime.start(config, registry, policy)
         })
     state.uniquePalNativeDeliveryAdapter =
         UniquePalNativeDeliveryAdapter.create({
-            buildId = config.uniquePalNativeDeliveryLiveTest.buildId,
-            objectDumpSha256 = config.uniquePalNativeDeliveryLiveTest
+            buildId = config.uniquePalNativeDeliveryProduction.buildId,
+            objectDumpSha256 = config.uniquePalNativeDeliveryProduction
                 .objectDumpSha256,
             allowMutatingDelivery = config
-                .uniquePalNativeDeliveryLiveTest.enabled == true,
-            deliveryLevel = config.uniquePalNativeDeliveryLiveTest.level,
+                .uniquePalNativeDeliveryProduction.enabled == true,
+            deliveryLevel = config.uniquePalNativeDeliveryProduction
+                .deliveryLevel,
             logger = log,
         })
+    state.uniquePalNativeDeliveryProduction =
+        UniquePalNativeDeliveryProduction.create(
+            state.uniquePalNativeDeliveryBridge,
+            state.uniquePalNativeDeliveryAdapter,
+            state.uniquePalWorldEffectBus,
+            config.uniquePalNativeDeliveryProduction
+        )
+    state.uniquePalNativeDeliveryLiveTestAdapter = nil
     state.uniquePalNativeDeliveryLiveTest = nil
     if config.uniquePalNativeDeliveryLiveTest.enabled == true then
         assert(type(ExecuteWithDelay) == "function",
             "native Pal delivery live test requires ExecuteWithDelay")
+        state.uniquePalNativeDeliveryLiveTestAdapter =
+            UniquePalNativeDeliveryAdapter.create({
+                buildId = config.uniquePalNativeDeliveryLiveTest.buildId,
+                objectDumpSha256 = config.uniquePalNativeDeliveryLiveTest
+                    .objectDumpSha256,
+                allowMutatingDelivery = true,
+                deliveryLevel = config.uniquePalNativeDeliveryLiveTest.level,
+                logger = log,
+            })
         state.uniquePalNativeDeliveryLiveTest =
             UniquePalNativeDeliveryLiveTest.create(
-                state.uniquePalNativeDeliveryAdapter,
+                state.uniquePalNativeDeliveryLiveTestAdapter,
                 {
                     enabled = true,
                     buildId = config
@@ -5401,8 +5442,8 @@ function Runtime.start(config, registry, policy)
         state.uniquePalNativeDeliveryBridge
     _G.PWFT_UNIQUE_PAL_NATIVE_DELIVERY_PROBE_V1 =
         state.uniquePalNativeDeliveryProbe
-    _G.PWFT_UNIQUE_PAL_NATIVE_DELIVERY_ADAPTER_V1 =
-        state.uniquePalNativeDeliveryAdapter
+    _G.PWFT_UNIQUE_PAL_NATIVE_DELIVERY_PRODUCTION_V1 =
+        state.uniquePalNativeDeliveryProduction
     _G.PWFT_UNIQUE_PAL_NATIVE_DELIVERY_LIVE_TEST_V1 =
         state.uniquePalNativeDeliveryLiveTest
     _G.PWFT_UNIQUE_PAL_RANSOM_SHOP_BRIDGE_V1 =
@@ -5443,6 +5484,8 @@ function Runtime.start(config, registry, policy)
                 state.uniquePalWorldEffectBus,
             uniquePalNativeDeliveryBridge =
                 state.uniquePalNativeDeliveryBridge,
+            uniquePalNativeDeliveryProduction =
+                state.uniquePalNativeDeliveryProduction,
             uniquePalRansomShopBridge =
                 state.uniquePalRansomShopBridge,
             endingEffectProviderBus = state.endingEffectProviderBus,
@@ -6071,6 +6114,8 @@ function Runtime.start(config, registry, policy)
         state.uniquePalWorldEffectBus:status()
     local unique_pal_native_delivery_status =
         state.uniquePalNativeDeliveryBridge:status()
+    local unique_pal_native_delivery_production_status =
+        state.uniquePalNativeDeliveryProduction:status()
     local unique_pal_native_delivery_probe_status =
         state.uniquePalNativeDeliveryProbe:status()
     local unique_pal_ransom_shop_status =
@@ -6115,13 +6160,15 @@ function Runtime.start(config, registry, policy)
         localization_status.fallbackLocale
     ))
     log(string.format(
-        "CONTENT_MODULE_LOADER_READY api=%s enabled=%s configured=%d registered=%d activated=%d failed=%d internalRequire=%s crossModGlobals=%s story=false",
+        "CONTENT_MODULE_LOADER_READY api=%s enabled=%s configured=%d registered=%d activated=%d failed=%d reactivations=%d reactivationFailures=%d internalRequire=%s crossModGlobals=%s story=false",
         content_module_status.apiVersion,
         tostring(content_module_status.enabled),
         content_module_status.configuredModuleCount,
         content_module_status.registeredCount,
         content_module_status.activatedCount,
         content_module_status.failedCount,
+        content_module_status.reactivationCount,
+        content_module_status.reactivationFailureCount,
         tostring(content_module_status.internalRequireOnly),
         tostring(content_module_status.crossModGlobalsRequired)
     ))
@@ -6195,6 +6242,18 @@ function Runtime.start(config, registry, policy)
             .exactIndividualIdentityRequired),
         tostring(unique_pal_native_delivery_status.directContainerMutation),
         tostring(unique_pal_native_delivery_status.debugCaptureApiAllowed)
+    ))
+    log(string.format(
+        "UNIQUE_PAL_NATIVE_DELIVERY_PRODUCTION_READY api=%s enabled=%s build=%s approvedSpecies=%d contentBindings=%d registrations=%d worldRebinds=%d rejected=%d level=%d feybreak=false story=false directContainerMutation=false saveWrites=false",
+        unique_pal_native_delivery_production_status.apiVersion,
+        tostring(unique_pal_native_delivery_production_status.enabled),
+        unique_pal_native_delivery_production_status.buildId,
+        unique_pal_native_delivery_production_status.approvedSpeciesCount,
+        unique_pal_native_delivery_production_status.activeBindingCount,
+        unique_pal_native_delivery_production_status.registrationCount,
+        unique_pal_native_delivery_production_status.worldRebindCount,
+        unique_pal_native_delivery_production_status.rejectionCount,
+        unique_pal_native_delivery_production_status.deliveryLevel
     ))
     log(string.format(
         "UNIQUE_PAL_NATIVE_DELIVERY_PROBE_READY api=%s enabled=%s build=%s attempts=%d successes=%d readOnly=%s create=false capture=false directContainerMutation=false saveWrites=false",

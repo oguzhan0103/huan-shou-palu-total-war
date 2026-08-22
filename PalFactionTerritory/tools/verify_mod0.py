@@ -115,6 +115,7 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "unique_pal_world_effect_bus.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_bridge.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_adapter.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_production.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_live_test.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_probe.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_ransom_shop_bridge.lua",
@@ -156,6 +157,8 @@ def main() -> int:
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_world_effect_bus_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_bridge_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_adapter_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_production_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_ransom_native_delivery_e2e_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_live_test_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_probe_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_ransom_shop_bridge_spec.lua",
@@ -192,6 +195,7 @@ def main() -> int:
         PROJECT_ROOT / "contracts" / "unique_pal_boss_provider.v1.json",
         PROJECT_ROOT / "contracts" / "unique_pal_world_effects.v1.json",
         PROJECT_ROOT / "contracts" / "unique_pal_native_assets.v1.json",
+        PROJECT_ROOT / "contracts" / "unique_pal_delivery_production.v1.json",
         PROJECT_ROOT / "contracts" / "ending_routes.v1.json",
         PROJECT_ROOT
         / "evidence"
@@ -217,6 +221,7 @@ def main() -> int:
         PROJECT_ROOT / "tools" / "verify_pal_raid_result_adapter_contract.py",
         PROJECT_ROOT / "tools" / "verify_unique_pal_native_assets.py",
         PROJECT_ROOT / "tools" / "verify_unique_pal_native_delivery_contract.py",
+        PROJECT_ROOT / "tools" / "verify_unique_pal_delivery_production_contract.py",
         PROJECT_ROOT / "scripts" / "build-faction-economy-shops.ps1",
         PROJECT_ROOT / "evidence" / "asset_json" / "DT_PalMonsterParameter.mapped.json",
         HUMAN_PARAMETER_ASSET,
@@ -267,6 +272,14 @@ def main() -> int:
         [
             sys.executable,
             str(PROJECT_ROOT / "tools" / "verify_unique_pal_native_delivery_contract.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_unique_pal_delivery_production_contract.py"),
         ],
         cwd=PROJECT_ROOT,
         check=True,
@@ -967,6 +980,9 @@ def main() -> int:
     unique_pal_native_delivery_adapter_text = (
         SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_adapter.lua"
     ).read_text(encoding="utf-8")
+    unique_pal_native_delivery_production_text = (
+        SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_production.lua"
+    ).read_text(encoding="utf-8")
     unique_pal_native_delivery_live_test_text = (
         SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_live_test.lua"
     ).read_text(encoding="utf-8")
@@ -1409,16 +1425,27 @@ def main() -> int:
     )
     require(
         "UniquePalNativeDeliveryAdapter.create" in runtime_text
+        and "UniquePalNativeDeliveryProduction.create" in runtime_text
         and "UniquePalNativeDeliveryLiveTest.create" in runtime_text
-        and "allowMutatingDelivery = config"
+        and "PWFT_UNIQUE_PAL_NATIVE_DELIVERY_PRODUCTION_V1"
         in runtime_text
-        and ".uniquePalNativeDeliveryLiveTest.enabled == true"
-        in runtime_text
+        and "PWFT_UNIQUE_PAL_NATIVE_DELIVERY_ADAPTER_V1"
+        not in runtime_text
         and "PWFT_UNIQUE_PAL_NATIVE_DELIVERY_LIVE_TEST_V1"
         in runtime_text
-        and "uniquePalNativeDeliveryBridge:register_binding"
-        not in runtime_text,
-        "native Pal delivery adapter must remain QA-gated and outside the production bridge",
+        and "contentBindingRequired = true"
+        in unique_pal_native_delivery_production_text
+        and "feybreakTentativeEnabled = false"
+        in unique_pal_native_delivery_production_text
+        and "serverAuthoritativeSpawn = true"
+        in unique_pal_native_delivery_production_text
+        and "serverAuthoritativeCapture = true"
+        in unique_pal_native_delivery_production_text
+        and "directContainerMutation = false"
+        in unique_pal_native_delivery_production_text
+        and "PalworldSaveMutation = false"
+        in unique_pal_native_delivery_production_text,
+        "native Pal production delivery registration gates are incomplete",
     )
     require(
         "uniquePalNativeDeliveryLiveTest = {" in config_text
