@@ -111,8 +111,8 @@
   "currentImplementation": {
     "providerBus": "implemented-offline-verified",
     "runtimeAndContentModuleContext": "implemented-offline-verified",
-    "nativeExistingBossBinding": "contract-ready-real-binding-pending",
-    "replacementBossSlotBinding": "contract-ready-real-binding-pending",
+    "nativeExistingBossBinding": "five-current-pak-asset-candidates-confirmed-live-binding-pending",
+    "replacementBossSlotBinding": "not-required-for-confirmed-five-unresolved-species-fails-closed",
     "nativePresentation": "contract-ready-real-provider-pending",
     "nativeCallbacks": "contract-ready-real-provider-pending",
     "liveAcceptance": "not-run"

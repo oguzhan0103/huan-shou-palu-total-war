@@ -57,6 +57,9 @@ foreach ($ContractName in @(
     "pal_reconciliation.v1.json",
     "strategic_world.v1.json",
     "unique_pal_campaign.v1.json",
+    "unique_pal_boss_provider.v1.json",
+    "unique_pal_world_effects.v1.json",
+    "unique_pal_native_assets.v1.json",
     "ending_routes.v1.json"
 )) {
     Copy-Item -LiteralPath (Join-Path $ProjectRoot "contracts\$ContractName") -Destination $StagedContracts
@@ -159,6 +162,9 @@ try {
         "AuthorSDK/contracts/pal_reconciliation.v1.json",
         "AuthorSDK/contracts/strategic_world.v1.json",
         "AuthorSDK/contracts/unique_pal_campaign.v1.json",
+        "AuthorSDK/contracts/unique_pal_boss_provider.v1.json",
+        "AuthorSDK/contracts/unique_pal_world_effects.v1.json",
+        "AuthorSDK/contracts/unique_pal_native_assets.v1.json",
         "AuthorSDK/contracts/ending_routes.v1.json",
         "AuthorSDK/validate-content-pack.ps1",
         "AuthorSDK/validate_content_pack.lua",

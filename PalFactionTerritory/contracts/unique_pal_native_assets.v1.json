@@ -1,0 +1,163 @@
+{
+  "schemaVersion": "1.0.0",
+  "catalogId": "pwft.unique-pal-native-assets.v1",
+  "PalworldBuildId": "24575825",
+  "contentStatus": "current-pak-native-boss-assets-confirmed-live-bindings-pending",
+  "storyContentIncluded": false,
+  "activationPolicy": {
+    "definitionsRegisteredByBase": false,
+    "nativeSpawnEnabledByCatalog": false,
+    "irreversibleWorldEffectsEnabledByCatalog": false,
+    "assetPresenceIsNotLiveBindingEvidence": true,
+    "bindingStatusRequiredForActivation": "bound",
+    "currentBindingStatus": "pending",
+    "unknownSpeciesActorSpawnerLocationOrBalanceFailsClosed": true
+  },
+  "confirmedEntries": [
+    {
+      "uniquePalId": "pwft.unique.pinkcat",
+      "displayNameZhHans": "捣蛋猫",
+      "speciesId": "PinkCat",
+      "target": {
+        "kind": "faction",
+        "id": "pwft.faction.rayne_syndicate"
+      },
+      "nativeBoss": {
+        "nativeBossAvailable": true,
+        "parameterRowId": "BOSS_PinkCat",
+        "actorClassPath": "/Game/Pal/Blueprint/Character/Monster/PalActorBP/PinkCat/BP_PinkCat_BOSS.BP_PinkCat_BOSS_C",
+        "candidateSpawners": [
+          {
+            "spawnerKey": "/Game/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_50_2_dungeon_grass_boss",
+            "pakAssetPath": "Pal/Content/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_50_2_dungeon_grass_boss.uasset"
+          }
+        ],
+        "route": "native-existing",
+        "bindingStatus": "pending-live-spawner-actor-location-and-balance"
+      }
+    },
+    {
+      "uniquePalId": "pwft.unique.anubis",
+      "displayNameZhHans": "阿努比斯",
+      "speciesId": "Anubis",
+      "target": {
+        "kind": "faction",
+        "id": "pwft.faction.pidf"
+      },
+      "nativeBoss": {
+        "nativeBossAvailable": true,
+        "parameterRowId": "Boss_Anubis",
+        "actorClassPath": "/Game/Pal/Blueprint/Character/Monster/PalActorBP/Anubis/BP_Anubis_MiddleBoss.BP_Anubis_MiddleBoss_C",
+        "candidateSpawners": [
+          {
+            "spawnerKey": "/Game/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_81_1_grass_FBOSS_14",
+            "pakAssetPath": "Pal/Content/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_81_1_grass_FBOSS_14.uasset"
+          }
+        ],
+        "route": "native-existing",
+        "bindingStatus": "pending-live-spawner-actor-location-and-balance"
+      }
+    },
+    {
+      "uniquePalId": "pwft.unique.weasel_dragon",
+      "displayNameZhHans": "疾漩鼬",
+      "speciesId": "WeaselDragon",
+      "target": {
+        "kind": "faction",
+        "id": "pwft.faction.free_pal_alliance"
+      },
+      "nativeBoss": {
+        "nativeBossAvailable": true,
+        "parameterRowId": "BOSS_WeaselDragon",
+        "actorClassPath": "/Game/Pal/Blueprint/Character/Monster/PalActorBP/WeaselDragon/BP_WeaselDragon_BOSS.BP_WeaselDragon_BOSS_C",
+        "candidateSpawners": [
+          {
+            "spawnerKey": "/Game/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_1_10_plain_F_Boss_FairyDragon",
+            "pakAssetPath": "Pal/Content/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_1_10_plain_F_Boss_FairyDragon.uasset"
+          },
+          {
+            "spawnerKey": "/Game/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_50_12_dungeon_snow_boss",
+            "pakAssetPath": "Pal/Content/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_50_12_dungeon_snow_boss.uasset"
+          },
+          {
+            "spawnerKey": "/Game/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_50_13_dungeon_Sakurajima_boss",
+            "pakAssetPath": "Pal/Content/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_50_13_dungeon_Sakurajima_boss.uasset"
+          }
+        ],
+        "route": "native-existing",
+        "bindingStatus": "pending-live-spawner-actor-location-and-balance"
+      }
+    },
+    {
+      "uniquePalId": "pwft.unique.black_metal_dragon",
+      "displayNameZhHans": "魔渊龙",
+      "speciesId": "BlackMetalDragon",
+      "target": {
+        "kind": "faction",
+        "id": "pwft.faction.eternal_pyre"
+      },
+      "nativeBoss": {
+        "nativeBossAvailable": true,
+        "parameterRowId": "BOSS_BlackMetalDragon",
+        "actorClassPath": "/Game/Pal/Blueprint/Character/Monster/PalActorBP/BlackMetalDragon/BP_BlackMetalDragon_BOSS.BP_BlackMetalDragon_BOSS_C",
+        "candidateSpawners": [
+          {
+            "spawnerKey": "/Game/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_sanctuary_2_volcano_FBOSS",
+            "pakAssetPath": "Pal/Content/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_sanctuary_2_volcano_FBOSS.uasset"
+          }
+        ],
+        "route": "native-existing",
+        "bindingStatus": "pending-live-spawner-actor-location-and-balance"
+      }
+    },
+    {
+      "uniquePalId": "pwft.unique.ronin",
+      "displayNameZhHans": "浪刃武士",
+      "speciesId": "Ronin",
+      "target": {
+        "kind": "strategic-target",
+        "id": "pwft.island.sakurajima"
+      },
+      "nativeBoss": {
+        "nativeBossAvailable": true,
+        "parameterRowId": "BOSS_Ronin",
+        "actorClassPath": "/Game/Pal/Blueprint/Character/Monster/PalActorBP/Ronin/BP_Ronin_Boss.BP_Ronin_Boss_C",
+        "candidateSpawners": [
+          {
+            "spawnerKey": "/Game/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_81_1_grass_FBOSS_6",
+            "pakAssetPath": "Pal/Content/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_81_1_grass_FBOSS_6.uasset"
+          },
+          {
+            "spawnerKey": "/Game/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_50_8_dungeon_volcano_boss",
+            "pakAssetPath": "Pal/Content/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_50_8_dungeon_volcano_boss.uasset"
+          }
+        ],
+        "route": "native-existing",
+        "bindingStatus": "pending-live-spawner-actor-location-and-balance"
+      }
+    }
+  ],
+  "tentativeEntries": [
+    {
+      "displayNameZhHans": "空涡龙",
+      "speciesId": null,
+      "target": {
+        "kind": "strategic-target",
+        "id": "pwft.island.feybreak"
+      },
+      "status": "user-tentative-species-id-unresolved-no-binding"
+    }
+  ],
+  "liveBindingGate": {
+    "required": [
+      "current-build-spawner-object-identity",
+      "exact-world-location",
+      "spawned-actor-class-and-instance",
+      "single-instance-open-close-behaviour",
+      "raid-slab-balance-profile",
+      "capture-defeat-timeout-callbacks",
+      "return-to-title-and-world-generation-fencing"
+    ],
+    "allRequiredBeforeBound": true
+  }
+}

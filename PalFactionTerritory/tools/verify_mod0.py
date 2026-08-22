@@ -181,6 +181,7 @@ def main() -> int:
         PROJECT_ROOT / "contracts" / "unique_pal_campaign.v1.json",
         PROJECT_ROOT / "contracts" / "unique_pal_boss_provider.v1.json",
         PROJECT_ROOT / "contracts" / "unique_pal_world_effects.v1.json",
+        PROJECT_ROOT / "contracts" / "unique_pal_native_assets.v1.json",
         PROJECT_ROOT / "contracts" / "ending_routes.v1.json",
         PROJECT_ROOT
         / "evidence"
@@ -190,12 +191,17 @@ def main() -> int:
         / "evidence"
         / "contracts"
         / "faction-consequence-native-damage-build24370881.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "contracts"
+        / "unique-pal-native-assets-build24575825.json",
         PROJECT_ROOT / "contracts" / "faction_commerce.v1.json",
         PROJECT_ROOT / "contracts" / "faction_economy.v1.json",
         PROJECT_ROOT / "contracts" / "faction_economy_shops.v1.json",
         PROJECT_ROOT / "tools" / "build_faction_economy_shops.mjs",
         PROJECT_ROOT / "tools" / "verify_faction_economy_shops.py",
         PROJECT_ROOT / "tools" / "verify_pal_raid_result_adapter_contract.py",
+        PROJECT_ROOT / "tools" / "verify_unique_pal_native_assets.py",
         PROJECT_ROOT / "scripts" / "build-faction-economy-shops.ps1",
         PROJECT_ROOT / "evidence" / "asset_json" / "DT_PalMonsterParameter.mapped.json",
         HUMAN_PARAMETER_ASSET,
@@ -234,6 +240,14 @@ def main() -> int:
         cwd=PROJECT_ROOT,
         check=True,
     )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_unique_pal_native_assets.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
 
     assignments = json.loads(
         (PROJECT_ROOT / "contracts" / "territory_assignments.v1.json").read_text(encoding="utf-8")
@@ -261,6 +275,19 @@ def main() -> int:
         (PROJECT_ROOT / "contracts" / "unique_pal_world_effects.v1.json").read_text(
             encoding="utf-8"
         )
+    )
+    unique_pal_native_assets = json.loads(
+        (PROJECT_ROOT / "contracts" / "unique_pal_native_assets.v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    unique_pal_native_evidence = json.loads(
+        (
+            PROJECT_ROOT
+            / "evidence"
+            / "contracts"
+            / "unique-pal-native-assets-build24575825.json"
+        ).read_text(encoding="utf-8")
     )
     pal_reconciliation = json.loads(
         (PROJECT_ROOT / "contracts" / "pal_reconciliation.v1.json").read_text(encoding="utf-8")
@@ -348,6 +375,47 @@ def main() -> int:
         ]
         is True,
         "P1 Boss balance or non-transfer defeat policy drifted",
+    )
+    require(
+        unique_pal_native_assets["PalworldBuildId"] == "24575825"
+        and len(unique_pal_native_assets["confirmedEntries"]) == 5
+        and all(
+            entry["nativeBoss"]["bindingStatus"].startswith("pending-")
+            for entry in unique_pal_native_assets["confirmedEntries"]
+        )
+        and unique_pal_native_assets["activationPolicy"][
+            "nativeSpawnEnabledByCatalog"
+        ]
+        is False
+        and unique_pal_native_assets["activationPolicy"][
+            "irreversibleWorldEffectsEnabledByCatalog"
+        ]
+        is False,
+        "current-Build native asset inventory must remain definitions-only and fail closed",
+    )
+    require(
+        len(unique_pal_native_assets["tentativeEntries"]) == 1
+        and unique_pal_native_assets["tentativeEntries"][0]["displayNameZhHans"]
+        == "空涡龙"
+        and unique_pal_native_assets["tentativeEntries"][0]["speciesId"] is None
+        and unique_pal_native_evidence["conclusion"][
+            "confirmedNativeBossParameterRows"
+        ]
+        == 5
+        and unique_pal_native_evidence["conclusion"][
+            "confirmedNativeBossActorAssets"
+        ]
+        == 5
+        and unique_pal_native_evidence["conclusion"][
+            "confirmedCandidateSpawnerAssets"
+        ]
+        == 8
+        and unique_pal_native_evidence["conclusion"][
+            "liveSpawnerBindingsConfirmed"
+        ]
+        == 0
+        and unique_pal_native_evidence["conclusion"]["activationAllowed"] is False,
+        "unique-Pal native evidence count, tentative species, or activation gate drifted",
     )
     require(
         unique_pal_world_effects["schemaVersion"] == "1.0.0"
