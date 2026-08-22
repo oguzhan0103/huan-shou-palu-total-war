@@ -1,0 +1,98 @@
+{
+  "schemaVersion": "1.0.0",
+  "result": "PASS",
+  "gameBuild": "24575825",
+  "gameVersion": "1.0.3.101283",
+  "testDate": "2026-08-23",
+  "acceptanceGate": "b5-task-defense-authoritative-closure",
+  "contentModule": {
+    "moduleId": "pwft.foundation.b5-acceptance",
+    "registered": true,
+    "activated": true,
+    "defaultEnabled": false,
+    "storyContentIncluded": false,
+    "questTemplateCount": 1,
+    "activeQuestInstances": 1
+  },
+  "fastTravel": {
+    "mapPoint": "FTPoint24",
+    "mapIconClickEvent": true,
+    "nativeConfirmation": true,
+    "destinationSettlementId": "pwft.settlement.small_settlement"
+  },
+  "authoritativeRaid": {
+    "authority": "pwft-attendance-all-members-dead-v1",
+    "eventIdKind": "attendance-pal-raid",
+    "source": "attendance-native-countdown",
+    "playerPresent": true,
+    "playerWithinAggroRange": true,
+    "configuredAttackers": 4,
+    "spawnedAttackers": 4,
+    "readyAttackers": 4,
+    "attackerLevel": 1,
+    "deathCallbacks": 4,
+    "playerOwnedPalKillCredit": true,
+    "leaderKillCredited": true,
+    "allMembersDead": true,
+    "playerSideWon": true
+  },
+  "closure": {
+    "result": "PASS",
+    "factionId": "pwft.faction.rayne_syndicate",
+    "settlementId": "pwft.settlement.small_settlement",
+    "territoryId": "pwft.island.central_southeast_archipelago",
+    "playerParticipated": true,
+    "playerSideWon": true,
+    "credited": true,
+    "reputationApplied": 50,
+    "defenseReason": "human-defense-reputation-awarded",
+    "questReason": "quest-objective-event-applied",
+    "questTransitionCount": 1,
+    "replayed": false,
+    "storyContentIncluded": false,
+    "palworldSaveWrites": 0
+  },
+  "durableState": {
+    "rayneReputation": 50,
+    "rayneDefenseSourceTotal": 50,
+    "questTemplateId": "pwft.foundation.b5.quest.small-settlement-defense",
+    "questState": "completed",
+    "questSequence": 1,
+    "processedReputationOperations": 1,
+    "processedQuestObjectiveEvents": 1
+  },
+  "automatedBoundaries": {
+    "automatedTestOnly": true,
+    "replayReputationApplied": 0,
+    "absenceReputationApplied": 0,
+    "defeatReputationApplied": 0,
+    "missingTerritoryMappingFailsClosed": true,
+    "focusedLuaSpec": "PASS",
+    "fullVerification": "PASS",
+    "luaSourceFiles": 84,
+    "luaTests": 73
+  },
+  "restore": {
+    "result": "PASS",
+    "gameRunning": false,
+    "saveFiles": 384,
+    "saveDiffCount": 0,
+    "stateFiles": 12,
+    "stateDiffCount": 0,
+    "formalDeploymentFiles": 82,
+    "deploymentMatchesCurrentSource": true,
+    "mapFastTravelSelectionProbeEnabled": false,
+    "qaHotkeyEnabled": false,
+    "contentModulesEmpty": true,
+    "formalWorldLevel": 80
+  },
+  "evidenceBoundary": {
+    "positiveTaskDefenseClosureObserved": true,
+    "negativeBranchesObservedInLiveRun": false,
+    "negativeBranchesCoveredByAutomatedTests": true,
+    "rawLogsStateAndSavesPrivate": true,
+    "rawLogSha256": "412367633ea3af7ae883f5251d838b3d0053209f055c145b896a66fef7bc9861",
+    "palworldSaveMutationByMod": false,
+    "userAcceptance": "not-performed"
+  }
+}

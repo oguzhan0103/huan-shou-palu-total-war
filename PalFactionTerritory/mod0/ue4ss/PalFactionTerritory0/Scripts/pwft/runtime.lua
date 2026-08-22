@@ -35,6 +35,7 @@ local FactionNpcAttitudeBus =
     require("pwft.faction_npc_attitude_bus")
 local HumanDefenseResultBridge =
     require("pwft.human_defense_result_bridge")
+local TaskDefenseClosure = require("pwft.task_defense_closure")
 local HostileCommerceLiveTest =
     require("pwft.hostile_commerce_live_test")
 local FactionJoin = require("pwft.faction_join")
@@ -5771,6 +5772,55 @@ function Runtime.start(config, registry, policy)
             reputationAward = 50,
         }
     )
+    state.taskDefenseClosure = TaskDefenseClosure.create(
+        state.humanDefenseResultBridge,
+        state.questObjectiveRouter,
+        {
+            onChange = function(event)
+                log(string.format(
+                    "TASK_DEFENSE_CLOSURE type=%s event=%s faction=%s settlement=%s territory=%s participated=%s won=%s credited=%s applied=%s defense=%s quest=%s transitions=%s replayed=%s ok=%s reason=%s story=false saveWrites=0",
+                    tostring(event.type or "unknown"),
+                    tostring(event.eventId or "none"),
+                    tostring(event.factionId or "none"),
+                    tostring(event.settlementId or "none"),
+                    tostring(event.territoryId or "none"),
+                    tostring(event.playerParticipated == true),
+                    tostring(event.playerSideWon == true),
+                    tostring(event.credited == true),
+                    tostring(event.defenseApplied or 0),
+                    tostring(event.defenseReason or "none"),
+                    tostring(event.questReason or "none"),
+                    tostring(event.questTransitionCount or 0),
+                    tostring(event.questReplayed == true),
+                    tostring(event.ok == true),
+                    tostring(event.reason or "none")
+                ))
+                record_companion_event({
+                    type = event.type,
+                    eventId = event.eventId,
+                    resolutionId = event.resolutionId,
+                    factionId = event.factionId,
+                    settlementId = event.settlementId,
+                    territoryId = event.territoryId,
+                    playerParticipated = event.playerParticipated == true,
+                    playerSideWon = event.playerSideWon == true,
+                    credited = event.credited == true,
+                    defenseApplied = tonumber(event.defenseApplied) or 0,
+                    defenseReason = event.defenseReason,
+                    questDispatched = event.questDispatched == true,
+                    questOk = event.questOk == true,
+                    questReason = event.questReason,
+                    questTransitionCount =
+                        tonumber(event.questTransitionCount) or 0,
+                    questReplayed = event.questReplayed == true,
+                    ok = event.ok == true,
+                    reason = event.reason,
+                    storyContentIncluded = false,
+                    saveWrites = false,
+                }, "task-defense-closure")
+            end,
+        }
+    )
     state.factionGuard = FactionGuard.create(state.factionApi)
     state.nativeCharacterAdapter = nil
     if config.factionCommerce.nativeCharacterAdapter.enabled then
@@ -5984,6 +6034,7 @@ function Runtime.start(config, registry, policy)
     _G.PWFT_DEFENSE_API_V1 = state.factionDefense
     _G.PWFT_HUMAN_DEFENSE_RESULT_BRIDGE_V1 =
         state.humanDefenseResultBridge
+    _G.PWFT_TASK_DEFENSE_CLOSURE_V1 = state.taskDefenseClosure
     _G.PWFT_GUARD_API_V1 = state.factionGuard
     _G.PWFT_NATIVE_CHARACTER_ADAPTER_V1 =
         state.nativeCharacterAdapter
@@ -6481,7 +6532,7 @@ function Runtime.start(config, registry, policy)
                 if type(faction_id) ~= "string" or faction_id == "" then
                     return false, "settlement-human-faction-unresolved"
                 end
-                local opened = state.humanDefenseResultBridge:open({
+                local opened = state.taskDefenseClosure:open({
                     schemaVersion = "1.0.0",
                     routeKind = "human-settlement-defense",
                     authoritative = true,
@@ -6489,6 +6540,8 @@ function Runtime.start(config, registry, policy)
                     eventId = raid_start.raidEventId,
                     factionId = faction_id,
                     settlementId = raid_start.settlementId,
+                    territoryId =
+                        config.settlementRaid.settlement.islandId,
                     playerPresent = true,
                 })
                 return opened.ok, opened.reason
@@ -6502,7 +6555,7 @@ function Runtime.start(config, registry, policy)
                 if type(faction_id) ~= "string" or faction_id == "" then
                     return false, "settlement-human-faction-unresolved"
                 end
-                local settled = state.humanDefenseResultBridge:settle({
+                local settled = state.taskDefenseClosure:settle({
                     schemaVersion = "1.0.0",
                     routeKind = "human-settlement-defense",
                     authoritative = true,
@@ -6512,6 +6565,8 @@ function Runtime.start(config, registry, policy)
                         .. ":human-defense-cancelled",
                     factionId = faction_id,
                     settlementId = raid_cancel.settlementId,
+                    territoryId =
+                        config.settlementRaid.settlement.islandId,
                     playerParticipated = false,
                     playerSideWon = false,
                 })
@@ -6526,7 +6581,7 @@ function Runtime.start(config, registry, policy)
                 if type(faction_id) ~= "string" or faction_id == "" then
                     return false, "settlement-human-faction-unresolved"
                 end
-                local settled = state.humanDefenseResultBridge:settle({
+                local settled = state.taskDefenseClosure:settle({
                     schemaVersion = "1.0.0",
                     routeKind = "human-settlement-defense",
                     authoritative = true,
@@ -6536,27 +6591,12 @@ function Runtime.start(config, registry, policy)
                         .. ":human-defense",
                     factionId = faction_id,
                     settlementId = raid_result.settlementId,
+                    territoryId =
+                        config.settlementRaid.settlement.islandId,
                     playerParticipated =
                         raid_result.playerParticipated == true,
                     playerSideWon = raid_result.playerSideWon == true,
                 })
-                if settled.ok then
-                    state.questObjectiveRouter:dispatch({
-                        schemaVersion = "pwft.quest-objective-event.v1",
-                        eventId = raid_result.raidEventId
-                            .. ":quest-defense",
-                        authority = "pwft.defense.v1",
-                        source = "defense",
-                        kind = "completed",
-                        factionId = faction_id,
-                        territoryId =
-                            config.settlementRaid.settlement.islandId,
-                        outcome = raid_result.playerSideWon
-                                and "victory" or "defeat",
-                        playerParticipated =
-                            raid_result.playerParticipated == true,
-                    })
-                end
                 return settled.ok, settled.reason
             end,
         }

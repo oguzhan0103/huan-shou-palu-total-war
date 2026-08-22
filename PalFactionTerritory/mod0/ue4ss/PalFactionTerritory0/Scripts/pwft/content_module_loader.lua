@@ -144,12 +144,18 @@ function ContentModuleLoader:load()
             end
         end
         self:_log(string.format(
-            "CONTENT_MODULE module=%s registered=%s activated=%s reason=%s pack=%s",
+            "CONTENT_MODULE module=%s registered=%s activated=%s reason=%s pack=%s registrationReason=%s registrationError=%s",
             tostring(record.moduleName),
             tostring(record.registered),
             tostring(record.activated),
             tostring(record.reason),
-            tostring(record.contentPackId or "none")
+            tostring(record.contentPackId or "none"),
+            tostring(record.registration and record.registration.reason
+                or "none"),
+            tostring(record.registration
+                and (record.registration.validationError
+                    or record.registration.error)
+                or "none")
         ))
     end
 

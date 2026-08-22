@@ -86,6 +86,8 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "faction_consequence_native_binding.lua",
         SCRIPTS_ROOT / "pwft" / "faction_commerce.lua",
         SCRIPTS_ROOT / "pwft" / "faction_defense.lua",
+        SCRIPTS_ROOT / "pwft" / "human_defense_result_bridge.lua",
+        SCRIPTS_ROOT / "pwft" / "task_defense_closure.lua",
         SCRIPTS_ROOT / "pwft" / "faction_economy.lua",
         SCRIPTS_ROOT / "pwft" / "faction_economy_merchant_runtime.lua",
         SCRIPTS_ROOT / "pwft" / "faction_economy_shop_catalog.lua",
@@ -123,6 +125,11 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "settlement_raid.lua",
         SCRIPTS_ROOT / "pwft" / "world_balance.lua",
         SCRIPTS_ROOT / "pwft" / "pal_faction_island_mask.lua",
+        SCRIPTS_ROOT / "pwft_b5_acceptance" / "manifest.lua",
+        SCRIPTS_ROOT / "pwft_b5_acceptance" / "localization_keys.lua",
+        SCRIPTS_ROOT / "pwft_b5_acceptance" / "quest_template.lua",
+        SCRIPTS_ROOT / "pwft_b5_acceptance" / "bundle.lua",
+        SCRIPTS_ROOT / "pwft_b5_acceptance" / "content_module.lua",
         PROJECT_ROOT / "mod0" / "tests" / "policy_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_api_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_consequence_router_spec.lua",
@@ -133,6 +140,8 @@ def main() -> int:
         PROJECT_ROOT / "mod0" / "tests" / "faction_economy_merchant_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_economy_shop_catalog_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_services_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "human_defense_result_bridge_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "task_defense_closure_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_ui_presenter_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_merchant_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_join_spec.lua",
@@ -177,6 +186,7 @@ def main() -> int:
         PROJECT_ROOT / "examples" / "minimal-content-pack" / "bundle.lua",
         PROJECT_ROOT / "examples" / "minimal-content-pack" / "content_module.lua",
         PROJECT_ROOT / "scripts" / "validate-content-pack.ps1",
+        PROJECT_ROOT / "scripts" / "stage-b5-task-defense-live-test.ps1",
         PROJECT_ROOT / "tools" / "validate_content_pack.lua",
         PROJECT_ROOT / "mod0" / "tests" / "json_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "native_character_adapter_spec.lua",
@@ -226,10 +236,16 @@ def main() -> int:
         PROJECT_ROOT / "tools" / "verify_world_level_live_evidence.py",
         PROJECT_ROOT / "tools" / "verify_pal_faction_rage_live_evidence.py",
         PROJECT_ROOT / "tools" / "verify_companion_commerce_live_evidence.py",
+        PROJECT_ROOT / "tools" / "verify_b5_task_defense_live_evidence.py",
         PROJECT_ROOT
         / "evidence"
         / "live-tests"
         / "build24575825-20260822-progression-sidecar"
+        / "verification.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "live-tests"
+        / "build24575825-20260823-b5-task-defense"
         / "verification.json",
         PROJECT_ROOT
         / "evidence"
@@ -336,6 +352,14 @@ def main() -> int:
         [
             sys.executable,
             str(PROJECT_ROOT / "tools" / "verify_companion_commerce_live_evidence.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_b5_task_defense_live_evidence.py"),
         ],
         cwd=PROJECT_ROOT,
         check=True,
@@ -1024,6 +1048,18 @@ def main() -> int:
     quest_runtime_text = (
         SCRIPTS_ROOT / "pwft" / "quest_runtime.lua"
     ).read_text(encoding="utf-8")
+    task_defense_closure_text = (
+        SCRIPTS_ROOT / "pwft" / "task_defense_closure.lua"
+    ).read_text(encoding="utf-8")
+    b5_acceptance_module_text = (
+        SCRIPTS_ROOT / "pwft_b5_acceptance" / "content_module.lua"
+    ).read_text(encoding="utf-8")
+    b5_acceptance_quest_text = (
+        SCRIPTS_ROOT / "pwft_b5_acceptance" / "quest_template.lua"
+    ).read_text(encoding="utf-8")
+    b5_acceptance_bundle_text = (
+        SCRIPTS_ROOT / "pwft_b5_acceptance" / "bundle.lua"
+    ).read_text(encoding="utf-8")
     unique_pal_boss_provider_text = (
         SCRIPTS_ROOT / "pwft" / "unique_pal_boss_provider_bus.lua"
     ).read_text(encoding="utf-8")
@@ -1640,6 +1676,51 @@ def main() -> int:
     require("snapshotOwnedByProgression" in quest_runtime_text, "quest state must remain attached to progression snapshot")
     require("INLINE_TEXT_FIELDS" in quest_runtime_text, "quest inline narrative rejection missing")
     require("io." not in quest_runtime_text, "quest runtime cannot write files directly")
+    require(
+        "TaskDefenseClosure.create" in runtime_text
+        and "PWFT_TASK_DEFENSE_CLOSURE_V1" in runtime_text
+        and "state.taskDefenseClosure:open" in runtime_text
+        and "state.taskDefenseClosure:settle" in runtime_text
+        and "TASK_DEFENSE_CLOSURE" in runtime_text,
+        "B5 task/defense combined runtime route is incomplete",
+    )
+    require(
+        'OBJECTIVE_AUTHORITY = "pwft.defense.v1"'
+        in task_defense_closure_text
+        and "authority = OBJECTIVE_AUTHORITY" in task_defense_closure_text
+        and 'source = "defense"' in task_defense_closure_text
+        and 'kind = "completed"' in task_defense_closure_text
+        and "objective.replayed == true and 0" in task_defense_closure_text
+        and "absenceOrDefeatAwardsZero = true" in task_defense_closure_text
+        and "storyContentIncluded = false" in task_defense_closure_text
+        and "PalworldSaveMutation = false" in task_defense_closure_text
+        and "io." not in task_defense_closure_text,
+        "B5 task/defense authority, replay, or safety gate is incomplete",
+    )
+    require(
+        'modules = {}' in config_text
+        and "storyContentIncludedByBase = false" in config_text
+        and "defaultEnabled = false" in b5_acceptance_module_text
+        and "storyContentIncluded = false" in b5_acceptance_module_text,
+        "B5 mechanics-only acceptance content must remain disabled by default",
+    )
+    require(
+        'eventSource = "defense"' in b5_acceptance_quest_text
+        and 'outcome = "victory"' in b5_acceptance_quest_text
+        and "playerParticipated = true" in b5_acceptance_quest_text
+        and "pwft.faction.rayne_syndicate" in b5_acceptance_quest_text
+        and "pwft.island.central_southeast_archipelago"
+        in b5_acceptance_quest_text,
+        "B5 acceptance objective does not match the Small Settlement owner and territory",
+    )
+    require(
+        'local QuestTemplate = require("pwft_b5_acceptance.quest_template")'
+        in b5_acceptance_bundle_text
+        and "questTemplates = {\n        QuestTemplate," in b5_acceptance_bundle_text
+        and 'questTemplates = {\n        require("pwft_b5_acceptance.quest_template")'
+        not in b5_acceptance_bundle_text,
+        "B5 content bundle must not leak Lua require multi-return values into questTemplates",
+    )
     require("PAL_RECONCILIATION_READY" in runtime_text, "Pal reconciliation readiness log missing")
     require("PAL_RAID_RESULT_ADAPTER_READY" in runtime_text, "Pal raid-result adapter readiness log missing")
     require("PAL_DISCOURSE_RUNTIME_READY" in runtime_text, "Pal discourse runtime readiness log missing")
