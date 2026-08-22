@@ -444,6 +444,7 @@ local function make_payload(instance, delivery, binding)
         warId = event.warId,
         resolutionId = event.resolutionId,
         transactionId = event.transactionId,
+        offerId = event.offerId,
         route = event.route or (war and war.route),
         attackerFactionId = event.attackerFactionId
             or (war and war.attackerFactionId),
@@ -1258,6 +1259,18 @@ function UniquePalWorldEffectBus:delivery_status(delivery_id)
     local delivery = self.deliveries[delivery_id]
     if delivery == nil then return nil end
     return copy(delivery)
+end
+
+function UniquePalWorldEffectBus:provider_status(provider_id)
+    local provider = self.providers[provider_id]
+    if provider == nil then return nil end
+    return copy(provider)
+end
+
+function UniquePalWorldEffectBus:ransom_offer_status(offer_id)
+    local offer = self.ransomOffers[offer_id]
+    if offer == nil then return nil end
+    return copy(offer)
 end
 
 function UniquePalWorldEffectBus:status()

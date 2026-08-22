@@ -84,6 +84,8 @@ local UniquePalBossProviderBus =
     require("pwft.unique_pal_boss_provider_bus")
 local UniquePalWorldEffectBus =
     require("pwft.unique_pal_world_effect_bus")
+local UniquePalRansomShopBridge =
+    require("pwft.unique_pal_ransom_shop_bridge")
 local WorldBalance = require("pwft.world_balance")
 
 local PREFIX = "[PalFactionTerritory0]"
@@ -4444,6 +4446,11 @@ local function register_runtime_probes(config, registry, policy, state)
                 )
             end
             if state.uniquePalWorldEffectBus ~= nil then
+                if state.uniquePalRansomShopBridge ~= nil then
+                    state.uniquePalRansomShopBridge:unbind_world(
+                        "runtime-world-unloading"
+                    )
+                end
                 state.uniquePalWorldEffectBus:unbind_world(
                     "runtime-world-unloading"
                 )
@@ -5089,6 +5096,11 @@ function Runtime.start(config, registry, policy)
                 end,
             }
         )
+    state.uniquePalRansomShopBridge =
+        UniquePalRansomShopBridge.create(
+            state.uniquePalWorldEffectBus,
+            { logger = log }
+        )
     state.endingRuntime = EndingRuntime.create(
         state.factionProgression,
         state.strategicWorld,
@@ -5156,6 +5168,8 @@ function Runtime.start(config, registry, policy)
         state.uniquePalBossProviderBus
     _G.PWFT_UNIQUE_PAL_WORLD_EFFECT_BUS_V1 =
         state.uniquePalWorldEffectBus
+    _G.PWFT_UNIQUE_PAL_RANSOM_SHOP_BRIDGE_V1 =
+        state.uniquePalRansomShopBridge
     _G.PWFT_ENDING_EFFECT_PROVIDER_BUS_V1 =
         state.endingEffectProviderBus
     _G.PWFT_FACTION_RESOURCE_LEDGER_V1 =
@@ -5190,6 +5204,8 @@ function Runtime.start(config, registry, policy)
                 state.uniquePalBossProviderBus,
             uniquePalWorldEffectBus =
                 state.uniquePalWorldEffectBus,
+            uniquePalRansomShopBridge =
+                state.uniquePalRansomShopBridge,
             endingEffectProviderBus = state.endingEffectProviderBus,
             rewardPolicy = state.rewardPolicy,
             factionNpcAttitudeBus = state.factionNpcAttitudeBus,
@@ -5372,6 +5388,16 @@ function Runtime.start(config, registry, policy)
         {
             logger = log,
             eventSink = function(event)
+                local ransom_result = state.uniquePalRansomShopBridge
+                    :handle_commerce_event(event)
+                if event.settlementKind == "unique-pal-ransom" then
+                    log(string.format(
+                        "UNIQUE_PAL_RANSOM_COMMERCE_RESULT ok=%s reason=%s transaction=%s reputation=0",
+                        tostring(ransom_result.ok == true),
+                        tostring(ransom_result.reason),
+                        tostring(event.transactionId)
+                    ))
+                end
                 if state.companionLedger ~= nil
                     and state.companionLedger:status().active then
                     local recorded, record_reason =
@@ -5391,6 +5417,18 @@ function Runtime.start(config, registry, policy)
                         )
                     end
                 end
+            end,
+            priceResolver = function(shop_id, product_id, quantity)
+                return state.uniquePalRansomShopBridge:resolve_price(
+                    shop_id,
+                    product_id,
+                    quantity
+                )
+            end,
+            buyPolicyResolver = function(pending)
+                return state.uniquePalRansomShopBridge:buy_policy(
+                    pending
+                )
             end,
             nativeSaleReplicationProbeEnabled =
                 config.factionCommerce
@@ -5792,6 +5830,8 @@ function Runtime.start(config, registry, policy)
         state.uniquePalBossProviderBus:status()
     local unique_pal_world_effect_status =
         state.uniquePalWorldEffectBus:status()
+    local unique_pal_ransom_shop_status =
+        state.uniquePalRansomShopBridge:status()
     local content_pack_status = state.contentPackRegistry:status()
     local content_runtime_status = state.contentRuntime:status()
     local localization_status = state.localizationRuntime:status()
@@ -5897,6 +5937,18 @@ function Runtime.start(config, registry, policy)
         tostring(unique_pal_world_effect_status.exactBoundActorsOnly),
         tostring(unique_pal_world_effect_status.broadActorScan),
         tostring(unique_pal_world_effect_status.modelAuthority)
+    ))
+    log(string.format(
+        "UNIQUE_PAL_RANSOM_SHOP_READY api=%s open=%d settled=%d confirmed=%d rejected=%d route=%s reputation=%d directCurrencyMutation=%s palDelivery=%s saveWrites=false",
+        unique_pal_ransom_shop_status.apiVersion,
+        unique_pal_ransom_shop_status.openOfferCount,
+        unique_pal_ransom_shop_status.settledOfferCount,
+        unique_pal_ransom_shop_status.confirmedPaymentCount,
+        unique_pal_ransom_shop_status.rejectedPaymentCount,
+        unique_pal_ransom_shop_status.paymentRoute,
+        unique_pal_ransom_shop_status.commerceReputationAward,
+        tostring(unique_pal_ransom_shop_status.directCurrencyMutation),
+        tostring(unique_pal_ransom_shop_status.palDeliveryIncluded)
     ))
     local ending_status = state.endingRuntime:status()
     log(string.format(

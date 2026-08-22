@@ -81,6 +81,31 @@
     "commerceReputationAward": 0,
     "modelMayConfirmPaymentOrDelivery": false
   },
+  "ransomShopBridgePolicy": {
+    "paymentChannel": "native-server-authoritative-shop-buy-result",
+    "exactMatchFields": [
+      "offerId",
+      "providerId",
+      "bindingId",
+      "worldGeneration",
+      "shopId",
+      "productId",
+      "merchantFactionId",
+      "currency",
+      "amount",
+      "buyQuantity",
+      "nativeOfferId",
+      "ransomPaymentKey"
+    ],
+    "singlePurchaseStockRequired": true,
+    "serverAuthoritativePriceRequired": true,
+    "serverAuthoritativePaymentResultRequired": true,
+    "commerceReputationAward": 0,
+    "directCurrencyMutation": false,
+    "paymentAndPalDeliveryRemainSeparate": true,
+    "worldUnloadClearsTransientOffers": true,
+    "currentNativeProductBindings": 0
+  },
   "callbackPolicy": {
     "kinds": [
       "background-war",
@@ -115,7 +140,8 @@
     "emptyCityAndMerchantFilter": "contract-ready-real-binding-pending",
     "backgroundWarPresentationAndResult": "contract-ready-real-provider-pending",
     "playerDefenseRaidAndResult": "contract-ready-real-provider-pending",
-    "ransomPaymentAndPalDelivery": "contract-ready-real-provider-pending",
+    "ransomPayment": "native-itemshop-bridge-offline-verified-product-binding-pending",
+    "palDelivery": "contract-ready-real-provider-pending",
     "liveAcceptance": "not-run"
   }
 }

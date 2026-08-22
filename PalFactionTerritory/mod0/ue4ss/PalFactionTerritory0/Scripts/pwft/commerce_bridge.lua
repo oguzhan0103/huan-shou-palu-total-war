@@ -364,6 +364,7 @@ function CommerceBridge.create(commerce, options)
         windowIdProvider = options.windowIdProvider or default_window_id,
         transactionIdFactory = options.transactionIdFactory,
         priceResolver = options.priceResolver,
+        buyPolicyResolver = options.buyPolicyResolver,
         inventorySnapshotResolver =
             options.inventorySnapshotResolver
                 or default_inventory_snapshot_resolver,
@@ -379,6 +380,7 @@ function CommerceBridge.create(commerce, options)
         buyRequestCount = 0,
         successfulBuyCount = 0,
         failedBuyCount = 0,
+        noCommerceAwardBuyCount = 0,
         sellRequestCount = 0,
         itemSellUiRequestCount = 0,
         itemSellUiAcceptedCount = 0,
@@ -545,15 +547,28 @@ function CommerceBridge:on_buy_request(component, shop_guid, product_guid, buy_n
             total_gold = tonumber(resolved)
         end
     end
-    local queue = self.pendingBuys[component_key] or {}
-    table.insert(queue, {
+    local pending = {
+        factionId = faction_id,
         shopId = shop_id,
         productId = product_id,
         buyNum = integer_value(buy_num, 1),
         totalGold = total_gold,
         transactionId = tostring(transaction_id),
         commerceWindowId = tostring(self.windowIdProvider()),
-    })
+    }
+    if self.buyPolicyResolver ~= nil then
+        local ok, policy = pcall(
+            self.buyPolicyResolver,
+            copy(pending)
+        )
+        if ok and type(policy) == "table" then
+            pending.buyPolicy = copy(policy)
+        elseif not ok then
+            log(self, "BUY_POLICY_RESOLVER_FAILED reason=" .. tostring(policy))
+        end
+    end
+    local queue = self.pendingBuys[component_key] or {}
+    table.insert(queue, pending)
     self.pendingBuys[component_key] = queue
     self.buyRequestCount = self.buyRequestCount + 1
     return true, queue[#queue]
@@ -573,9 +588,18 @@ function CommerceBridge:on_buy_result(component, result_type)
             ok = false,
             reason = "native-buy-failed",
             transactionId = pending.transactionId,
+            factionId = pending.factionId,
             shopId = pending.shopId,
             productId = pending.productId,
             buyNum = pending.buyNum,
+            totalGold = pending.totalGold,
+            settlementKind = pending.buyPolicy
+                    and pending.buyPolicy.settlementKind or nil,
+            settlementReferenceId = pending.buyPolicy
+                    and pending.buyPolicy.settlementReferenceId or nil,
+            commerceReputationSuppressed = pending.buyPolicy
+                    and pending.buyPolicy.skipCommerceReputation == true
+                or false,
         })
         return true, {
             ok = false,
@@ -583,12 +607,29 @@ function CommerceBridge:on_buy_result(component, result_type)
             transactionId = pending.transactionId,
         }
     end
-    local outcome = self.commerce:confirm_buy(
-        pending.shopId,
-        pending.transactionId,
-        pending.totalGold,
-        pending.commerceWindowId
-    )
+    local suppress_commerce = pending.buyPolicy ~= nil
+        and pending.buyPolicy.skipCommerceReputation == true
+    local outcome
+    if suppress_commerce then
+        self.noCommerceAwardBuyCount = self.noCommerceAwardBuyCount + 1
+        outcome = {
+            ok = true,
+            reason = "native-buy-confirmed-commerce-award-suppressed",
+            applied = 0,
+            requestedAward = 0,
+            direction = "buy",
+            factionId = pending.factionId,
+            shopId = pending.shopId,
+            transactionId = pending.transactionId,
+        }
+    else
+        outcome = self.commerce:confirm_buy(
+            pending.shopId,
+            pending.transactionId,
+            pending.totalGold,
+            pending.commerceWindowId
+        )
+    end
     self.successfulBuyCount = self.successfulBuyCount + 1
     log(self, string.format(
         "ECONOMY_BUY_CONFIRMED shop=%s product=%s quantity=%d award=%s",
@@ -603,6 +644,13 @@ function CommerceBridge:on_buy_result(component, result_type)
     event.productId = pending.productId
     event.buyNum = pending.buyNum
     event.totalGold = pending.totalGold
+    event.settlementKind = pending.buyPolicy
+            and pending.buyPolicy.settlementKind or nil
+    event.settlementReferenceId = pending.buyPolicy
+            and pending.buyPolicy.settlementReferenceId or nil
+    event.commerceReputationSuppressed = suppress_commerce
+    event.settlementEligible = pending.buyPolicy
+            and pending.buyPolicy.settlementEligible or nil
     emit_event(self, event)
     return true, outcome
 end
@@ -1211,6 +1259,7 @@ function CommerceBridge:status()
         buyRequestCount = self.buyRequestCount,
         successfulBuyCount = self.successfulBuyCount,
         failedBuyCount = self.failedBuyCount,
+        noCommerceAwardBuyCount = self.noCommerceAwardBuyCount,
         sellRequestCount = self.sellRequestCount,
         itemSellUiRequestCount =
             self.itemSellUiRequestCount,

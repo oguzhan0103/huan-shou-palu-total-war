@@ -113,6 +113,7 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "unique_pal_campaign.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_boss_provider_bus.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_world_effect_bus.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_ransom_shop_bridge.lua",
         SCRIPTS_ROOT / "pwft" / "runtime.lua",
         SCRIPTS_ROOT / "pwft" / "settlement_raid.lua",
         SCRIPTS_ROOT / "pwft" / "world_balance.lua",
@@ -149,6 +150,7 @@ def main() -> int:
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_campaign_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_boss_provider_bus_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_world_effect_bus_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_ransom_shop_bridge_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "ending_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "content_pack_author_sdk_e2e_spec.lua",
         PROJECT_ROOT / "examples" / "minimal-content-pack" / "README.md",
@@ -452,6 +454,29 @@ def main() -> int:
         ]
         is False,
         "P2 ransom delivery or war authority boundary drifted",
+    )
+    require(
+        unique_pal_world_effects["ransomShopBridgePolicy"][
+            "paymentChannel"
+        ]
+        == "native-server-authoritative-shop-buy-result"
+        and unique_pal_world_effects["ransomShopBridgePolicy"][
+            "commerceReputationAward"
+        ]
+        == 0
+        and unique_pal_world_effects["ransomShopBridgePolicy"][
+            "directCurrencyMutation"
+        ]
+        is False
+        and unique_pal_world_effects["ransomShopBridgePolicy"][
+            "paymentAndPalDeliveryRemainSeparate"
+        ]
+        is True
+        and unique_pal_world_effects["ransomShopBridgePolicy"][
+            "currentNativeProductBindings"
+        ]
+        == 0,
+        "P2 native ransom shop route must remain exact, zero-reputation, and unbound",
     )
     require(len(progression["humanFactionIds"]) == 7, "expected 7 human progression factions")
     require(len(progression["palFactionIds"]) == 5, "expected 5 Pal progression factions")
@@ -894,6 +919,9 @@ def main() -> int:
     unique_pal_world_effect_text = (
         SCRIPTS_ROOT / "pwft" / "unique_pal_world_effect_bus.lua"
     ).read_text(encoding="utf-8")
+    unique_pal_ransom_shop_text = (
+        SCRIPTS_ROOT / "pwft" / "unique_pal_ransom_shop_bridge.lua"
+    ).read_text(encoding="utf-8")
     commerce_bridge_text = (SCRIPTS_ROOT / "pwft" / "commerce_bridge.lua").read_text(encoding="utf-8")
     world_balance_text = (SCRIPTS_ROOT / "pwft" / "world_balance.lua").read_text(encoding="utf-8")
     settlement_raid_text = (SCRIPTS_ROOT / "pwft" / "settlement_raid.lua").read_text(encoding="utf-8")
@@ -1280,6 +1308,27 @@ def main() -> int:
         and "confirm_pal_delivery" in unique_pal_world_effect_text
         and "pal-delivery" in unique_pal_world_effect_text,
         "P2 war, defense, ransom, or Pal-delivery bridge is incomplete",
+    )
+    require(
+        "serverAuthoritativePrice" in unique_pal_ransom_shop_text
+        and "serverAuthoritativePaymentResult"
+        in unique_pal_ransom_shop_text
+        and "skipCommerceReputation = true"
+        in unique_pal_ransom_shop_text
+        and "confirm_ransom_payment" in unique_pal_ransom_shop_text
+        and "directCurrencyMutation = false"
+        in unique_pal_ransom_shop_text
+        and "palDeliveryIncluded = false"
+        in unique_pal_ransom_shop_text,
+        "P2 native ransom shop bridge safety gates are incomplete",
+    )
+    require(
+        "UniquePalRansomShopBridge.create" in runtime_text
+        and "PWFT_UNIQUE_PAL_RANSOM_SHOP_BRIDGE_V1" in runtime_text
+        and "uniquePalRansomShopBridge:unbind_world" in runtime_text
+        and 'event.settlementKind == "unique-pal-ransom"'
+        in runtime_text,
+        "P2 native ransom shop bridge runtime lifecycle is incomplete",
     )
     require(
         pal_reconciliation["baselineStatus"]
