@@ -223,10 +223,22 @@ def main() -> int:
         PROJECT_ROOT / "tools" / "verify_unique_pal_native_delivery_contract.py",
         PROJECT_ROOT / "tools" / "verify_unique_pal_delivery_production_contract.py",
         PROJECT_ROOT / "tools" / "verify_progression_sidecar_live_evidence.py",
+        PROJECT_ROOT / "tools" / "verify_world_level_live_evidence.py",
+        PROJECT_ROOT / "tools" / "verify_pal_faction_rage_live_evidence.py",
         PROJECT_ROOT
         / "evidence"
         / "live-tests"
         / "build24575825-20260822-progression-sidecar"
+        / "verification.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "live-tests"
+        / "build24575825-20260822-world-level-80"
+        / "verification.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "live-tests"
+        / "build24575825-20260823-pal-faction-rage"
         / "verification.json",
         PROJECT_ROOT / "scripts" / "build-faction-economy-shops.ps1",
         PROJECT_ROOT / "evidence" / "asset_json" / "DT_PalMonsterParameter.mapped.json",
@@ -294,6 +306,22 @@ def main() -> int:
         [
             sys.executable,
             str(PROJECT_ROOT / "tools" / "verify_progression_sidecar_live_evidence.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_world_level_live_evidence.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_pal_faction_rage_live_evidence.py"),
         ],
         cwd=PROJECT_ROOT,
         check=True,
@@ -1796,8 +1824,20 @@ def main() -> int:
     require("AdditionalEnemyMaxHPRate" in world_balance_text, "native enemy HP rate missing")
     require("AdditionalEnemyInflictDamageRate" in world_balance_text, "native enemy damage rate missing")
     require("SetUncapturable" in world_balance_text, "native uncapturable route missing")
+    require("IsUncapturable" in world_balance_text, "native uncapturable readback missing")
+    require("GetSpawnedCharacterType" in world_balance_text, "native Predator-type readback missing")
+    require("PAL_FACTION_RAGE_VERIFIED" in world_balance_text, "B2 rage verification marker missing")
+    require("PAL_FACTION_RAGE_EXCLUDED" in world_balance_text, "B2 exclusion marker missing")
+    require("PAL_FACTION_RAGE_PROBE_OBSERVED" in world_balance_text, "B2 controlled probe missing")
     require("IsPlayersOtomo" in world_balance_text, "player Pal exclusion missing")
     require("IsAssignedToAnyWork" in world_balance_text, "base worker exclusion missing")
+    require(
+        "OwnerPlayerUId" in world_balance_text
+        and "rage_group_is_world_enemy" in world_balance_text
+        and "world-ungrouped-owner-empty" in world_balance_text
+        and "owner-state-unavailable" in world_balance_text,
+        "B2 group-0 wild eligibility must be owner-GUID gated and fail closed",
+    )
     require(
         "local function unwrap_hook_param" in world_balance_text
         and "local function unwrap(value)" not in world_balance_text,

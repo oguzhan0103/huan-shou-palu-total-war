@@ -103,6 +103,75 @@ local function safe_struct_assign(value, property_name, assigned_value)
     end)
 end
 
+local function safe_number(value)
+    if type(value) == "number" then
+        return value
+    end
+    local ok, numeric = pcall(tonumber, value)
+    if ok and numeric ~= nil then
+        return numeric
+    end
+    return tonumber(safe_to_string(value))
+end
+
+local function fixed_point_raw(value)
+    if value == nil then
+        return nil
+    end
+    return safe_number(safe_property(value, "Value"))
+end
+
+local function guid_has_nonzero_parts(value)
+    if value == nil then
+        return nil
+    end
+    for _, field_name in ipairs({ "A", "B", "C", "D" }) do
+        local part = safe_number(safe_property(value, field_name))
+        if part == nil then
+            return nil
+        end
+        if part ~= 0 then
+            return true
+        end
+    end
+    return false
+end
+
+local function save_owner_assigned(individual)
+    local save_parameter = safe_property(individual, "SaveParameter")
+    if save_parameter == nil then
+        return nil
+    end
+    return guid_has_nonzero_parts(
+        safe_property(save_parameter, "OwnerPlayerUId")
+    )
+end
+
+local function spawned_character_type_number(value)
+    local numeric = safe_number(value)
+    if numeric ~= nil then
+        return numeric
+    end
+    local text = safe_to_string(value)
+    local names = {
+        Common = 0,
+        Rare = 1,
+        FieldBoss = 2,
+        RandomDungeonBoss = 3,
+        ImprisonmentBoss = 4,
+        TowerBoss = 5,
+        RaidBoss = 6,
+        RaidBossServant = 7,
+        Predator = 8,
+    }
+    for name, number in pairs(names) do
+        if string.find(text, name, 1, true) ~= nil then
+            return number
+        end
+    end
+    return nil
+end
+
 local function is_player_character(actor)
     local full_name = safe_full_name(actor)
     return string.find(full_name, "PalPlayerCharacter", 1, true) ~= nil
@@ -150,6 +219,7 @@ end
 local method_is_true
 local parse_group_type
 local level_group_is_world_managed
+local rage_group_is_world_enemy
 local is_level_managed_pal
 local is_standalone_enemy_pal
 
@@ -349,12 +419,32 @@ is_standalone_enemy_pal = function(component, individual)
         return false, "trainer-owned"
     end
 
-    -- Neutral, ResidentEnemy, and RaidBoss are world enemies. Unknown or
-    -- Undefined group state fails closed: accepting it during initialization
-    -- can misclassify a story-friendly Pal whose group has not resolved yet.
     local group_type = parse_group_type(individual)
+    return rage_group_is_world_enemy(
+        group_type,
+        save_owner_assigned(individual)
+    )
+end
+
+rage_group_is_world_enemy = function(group_type, owner_assigned)
+    if owner_assigned == true then
+        return false, "save-owner-assigned"
+    end
+
+    -- Build 24575825 keeps ordinary wild Pals in Undefined (0), including
+    -- well after native initialization. Only accept that group when the
+    -- reflected save owner GUID is readable and empty. This protects caught
+    -- Pals in display/storage states that are neither Otomo nor base workers.
+    if group_type == 0 then
+        if owner_assigned == false then
+            return true, "world-ungrouped-owner-empty"
+        end
+        return false, "owner-state-unavailable"
+    end
+
+    -- Neutral, ResidentEnemy, and RaidBoss are exact world-enemy groups.
     if group_type == 1 or group_type == 5 or group_type == 6 then
-        return true, "world-enemy"
+        return true, "world-enemy-group:" .. tostring(group_type)
     end
     return false, "non-world-group:" .. tostring(group_type)
 end
@@ -370,6 +460,137 @@ local function classify_actor_island(actor)
         return nil
     end
     return IslandMask.classify_world(world_x, world_y)
+end
+
+local function read_rage_state(actor, component, individual, static_component)
+    local is_pal = false
+    if not is_valid_object(static_component) then
+        is_pal, static_component = is_pal_actor(actor)
+    else
+        is_pal = safe_property(static_component, "IsPal") == true
+    end
+    local spawn_ok, spawned_type = safe_call(
+        static_component,
+        "GetSpawnedCharacterType"
+    )
+    local uncapturable_ok, uncapturable = safe_call(
+        individual,
+        "IsUncapturable"
+    )
+    local max_hp_ok, max_hp = safe_call(component, "GetMaxHP")
+    return {
+        island = classify_actor_island(actor),
+        groupType = parse_group_type(individual),
+        ownerAssigned = save_owner_assigned(individual),
+        isPal = is_pal,
+        isPlayerCharacter = is_player_character(actor),
+        isPredator = safe_property(component, "IsPredator") == true,
+        hpRate = safe_number(safe_property(component, "AdditionalEnemyMaxHPRate")),
+        damageRate = safe_number(safe_property(component, "AdditionalEnemyInflictDamageRate")),
+        spawnedType = spawn_ok and spawned_character_type_number(spawned_type) or nil,
+        uncapturable = uncapturable_ok and uncapturable == true,
+        maxHpRaw = max_hp_ok and fixed_point_raw(max_hp) or nil,
+    }
+end
+
+local function rage_state_is_verified(state, rage)
+    local hp_rate = tonumber(state.hpRate)
+    local damage_rate = tonumber(state.damageRate)
+    return state.island ~= nil
+        and state.isPal == true
+        and state.isPredator == true
+        and hp_rate ~= nil
+        and math.abs(hp_rate - rage.hpMultiplier) < 0.001
+        and damage_rate ~= nil
+        and math.abs(damage_rate - rage.damageMultiplier) < 0.001
+        and state.spawnedType == PREDATOR_SPAWNED_CHARACTER_TYPE
+        and (
+            rage.makeUncapturable ~= true
+            or state.uncapturable == true
+        )
+end
+
+local function record_rage_observation(instance, actor, outcome)
+    local observation_key = safe_full_name(actor) .. "|" .. outcome
+    if instance.rageObservations[observation_key] == true then
+        return false
+    end
+    instance.rageObservations[observation_key] = true
+    instance.rageOutcomeCounts[outcome] =
+        (instance.rageOutcomeCounts[outcome] or 0) + 1
+    return true
+end
+
+local function log_rage_detail(instance, message)
+    if instance.rageDetailLogCount >= instance.config.maxDetailLogCount then
+        return
+    end
+    instance.rageDetailLogCount = instance.rageDetailLogCount + 1
+    log(message)
+end
+
+local function record_rage_exclusion(
+    instance,
+    actor,
+    component,
+    individual,
+    static_component,
+    reason
+)
+    local rage_audit = instance.config.palFactionRage.liveAudit
+    if type(rage_audit) ~= "table" or rage_audit.enabled ~= true then
+        return
+    end
+    local outcome = "excluded:" .. tostring(reason)
+    if not record_rage_observation(instance, actor, outcome) then
+        return
+    end
+    instance.rageExcludedCount = instance.rageExcludedCount + 1
+    local state = read_rage_state(
+        actor,
+        component,
+        individual,
+        static_component
+    )
+    log_rage_detail(instance, string.format(
+        "PAL_FACTION_RAGE_EXCLUDED actor=%s reason=%s isPal=%s player=%s group=%s ownerAssigned=%s island=%s predator=%s hpRate=%s damageRate=%s spawnedType=%s uncapturable=%s maxHpRaw=%s source=%s broadScan=false",
+        safe_full_name(actor),
+        tostring(reason),
+        tostring(state.isPal),
+        tostring(state.isPlayerCharacter),
+        tostring(state.groupType),
+        tostring(state.ownerAssigned),
+        tostring(state.island),
+        tostring(state.isPredator),
+        tostring(state.hpRate),
+        tostring(state.damageRate),
+        tostring(state.spawnedType),
+        tostring(state.uncapturable),
+        tostring(state.maxHpRaw),
+        tostring(instance.lastApplySource)
+    ))
+end
+
+local function record_rage_failure(instance, actor, state, reason)
+    local outcome = "failed:" .. tostring(reason)
+    if not record_rage_observation(instance, actor, outcome) then
+        return
+    end
+    instance.rageFailureCount = instance.rageFailureCount + 1
+    log_rage_detail(instance, string.format(
+        "PAL_FACTION_RAGE_FAILED actor=%s reason=%s group=%s island=%s predator=%s hpRate=%s damageRate=%s spawnedType=%s uncapturable=%s maxHpRaw=%s source=%s broadScan=false",
+        safe_full_name(actor),
+        tostring(reason),
+        tostring(state.groupType),
+        tostring(state.island),
+        tostring(state.isPredator),
+        tostring(state.hpRate),
+        tostring(state.damageRate),
+        tostring(state.spawnedType),
+        tostring(state.uncapturable),
+        tostring(state.maxHpRaw),
+        tostring(instance.lastApplySource)
+    ))
 end
 
 local function apply_level(instance, actor, component, individual)
@@ -503,21 +724,51 @@ local function apply_pal_faction_rage(instance, actor, component, individual)
 
     local is_pal, static_component = is_pal_actor(actor)
     if not is_pal then
+        record_rage_exclusion(
+            instance,
+            actor,
+            component,
+            individual,
+            static_component,
+            "not-pal"
+        )
         return false, "not-pal"
     end
 
     local standalone, standalone_reason = is_standalone_enemy_pal(component, individual)
     if not standalone then
+        record_rage_exclusion(
+            instance,
+            actor,
+            component,
+            individual,
+            static_component,
+            standalone_reason
+        )
         return false, standalone_reason
     end
 
     local island_id = classify_actor_island(actor)
     if island_id == nil then
+        record_rage_exclusion(
+            instance,
+            actor,
+            component,
+            individual,
+            static_component,
+            "outside-pal-faction-island"
+        )
         return false, "outside-pal-faction-island"
     end
 
     local actor_name = safe_full_name(actor)
     local first_application = instance.rageActors[actor_name] ~= island_id
+    local before = read_rage_state(
+        actor,
+        component,
+        individual,
+        static_component
+    )
 
     local predator_flag_ok = safe_assign(component, "IsPredator", true)
     local hp_rate_ok = safe_assign(
@@ -542,24 +793,63 @@ local function apply_pal_faction_rage(instance, actor, component, individual)
 
     if not predator_flag_ok or not hp_rate_ok or not damage_rate_ok
         or not spawn_type_ok or not uncapturable_ok then
+        local failed_state = read_rage_state(
+            actor,
+            component,
+            individual,
+            static_component
+        )
+        record_rage_failure(
+            instance,
+            actor,
+            failed_state,
+            "native-predator-parameter-failed"
+        )
         return false, "native-predator-parameter-failed"
+    end
+
+    local after = read_rage_state(
+        actor,
+        component,
+        individual,
+        static_component
+    )
+    if not rage_state_is_verified(after, rage) then
+        record_rage_failure(
+            instance,
+            actor,
+            after,
+            "native-predator-readback-failed"
+        )
+        return false, "native-predator-readback-failed"
     end
 
     instance.rageActors[actor_name] = island_id
     if first_application then
         instance.rageAppliedCount = instance.rageAppliedCount + 1
-        if instance.rageDetailLogCount < instance.config.maxDetailLogCount then
-            instance.rageDetailLogCount = instance.rageDetailLogCount + 1
-            log(string.format(
-                "PAL_FACTION_RAGE_APPLIED island=%s actor=%s level=%d hpRate=%.2f damageRate=%.2f predator=true uncapturable=%s",
-                island_id,
-                actor_name,
-                instance.config.targetLevel,
-                rage.hpMultiplier,
-                rage.damageMultiplier,
-                tostring(rage.makeUncapturable == true)
-            ))
-        end
+        instance.rageVerifiedCount = instance.rageVerifiedCount + 1
+        record_rage_observation(instance, actor, "verified:" .. island_id)
+        log_rage_detail(instance, string.format(
+            "PAL_FACTION_RAGE_VERIFIED island=%s actor=%s group=%s ownerAssigned=%s level=%d beforePredator=%s beforeHpRate=%s beforeDamageRate=%s beforeSpawnedType=%s beforeUncapturable=%s afterPredator=%s afterHpRate=%s afterDamageRate=%s afterSpawnedType=%s afterUncapturable=%s beforeMaxHpRaw=%s afterMaxHpRaw=%s source=%s broadScan=false",
+            island_id,
+            actor_name,
+            tostring(after.groupType),
+            tostring(after.ownerAssigned),
+            instance.config.targetLevel,
+            tostring(before.isPredator),
+            tostring(before.hpRate),
+            tostring(before.damageRate),
+            tostring(before.spawnedType),
+            tostring(before.uncapturable),
+            tostring(after.isPredator),
+            tostring(after.hpRate),
+            tostring(after.damageRate),
+            tostring(after.spawnedType),
+            tostring(after.uncapturable),
+            tostring(before.maxHpRaw),
+            tostring(after.maxHpRaw),
+            tostring(instance.lastApplySource)
+        ))
     end
     return true, island_id
 end
@@ -608,6 +898,20 @@ local function emit_level_audit_summary(instance, source)
         sorted_count_text(instance.levelCategoryCounts),
         sorted_count_text(instance.levelOutcomeCounts),
         instance.rageAppliedCount
+    ))
+end
+
+local function emit_rage_audit_summary(instance, source)
+    log(string.format(
+        "RAGE_AUDIT_SUMMARY source=%s applied=%d verified=%d excluded=%d failed=%d outcomes=%s probeSamples=%d broadScan=false levelEnabled=%s loadedActorReconcile=false",
+        tostring(source),
+        instance.rageAppliedCount,
+        instance.rageVerifiedCount,
+        instance.rageExcludedCount,
+        instance.rageFailureCount,
+        sorted_count_text(instance.rageOutcomeCounts),
+        #instance.rageProbeSamples,
+        tostring(instance.config.levelOverride.enabled == true)
     ))
 end
 
@@ -770,6 +1074,215 @@ local function spawn_boss_probe(instance)
     ExecuteWithDelay(probe.cleanupDelayMs, cleanup_callback)
 end
 
+local function rage_probe_control_is_unchanged(state)
+    local hp_rate = tonumber(state.hpRate)
+    local damage_rate = tonumber(state.damageRate)
+    return state.island == nil
+        and state.isPal == true
+        and state.isPredator ~= true
+        and hp_rate ~= nil
+        and math.abs(hp_rate - 1.0) < 0.001
+        and damage_rate ~= nil
+        and math.abs(damage_rate - 1.0) < 0.001
+        and state.spawnedType == 0
+        and state.uncapturable ~= true
+end
+
+local function emit_rage_probe_comparison(instance)
+    local control = nil
+    local target = nil
+    for _, sample in ipairs(instance.rageProbeSamples) do
+        if sample.targetIsland == true and target == nil then
+            target = sample
+        elseif sample.targetIsland == false and control == nil then
+            control = sample
+        end
+    end
+    if control == nil or target == nil then
+        return
+    end
+    log(string.format(
+        "PAL_FACTION_RAGE_PROBE_COMPARISON character=%s level=%d controlPass=%s targetPass=%s controlIsland=%s targetIsland=%s controlPredator=%s targetPredator=%s controlHpRate=%s targetHpRate=%s controlDamageRate=%s targetDamageRate=%s controlSpawnedType=%s targetSpawnedType=%s controlUncapturable=%s targetUncapturable=%s controlMaxHpRaw=%s targetMaxHpRaw=%s broadScan=false saveWrites=false",
+        tostring(control.characterId),
+        tonumber(control.spawnLevel) or 0,
+        tostring(control.passed),
+        tostring(target.passed),
+        tostring(control.state.island),
+        tostring(target.state.island),
+        tostring(control.state.isPredator),
+        tostring(target.state.isPredator),
+        tostring(control.state.hpRate),
+        tostring(target.state.hpRate),
+        tostring(control.state.damageRate),
+        tostring(target.state.damageRate),
+        tostring(control.state.spawnedType),
+        tostring(target.state.spawnedType),
+        tostring(control.state.uncapturable),
+        tostring(target.state.uncapturable),
+        tostring(control.state.maxHpRaw),
+        tostring(target.state.maxHpRaw)
+    ))
+end
+
+local function spawn_rage_probe(instance)
+    local rage = instance.config.palFactionRage
+    local audit = rage.liveAudit
+    local probe = audit.probe
+    if is_valid_object(instance.rageProbeHandle) then
+        log("PAL_FACTION_RAGE_PROBE_SKIPPED reason=probe-already-active")
+        return
+    end
+
+    local controller = resolve_local_controller()
+    if not is_valid_object(controller) then
+        log("PAL_FACTION_RAGE_PROBE_FAILED reason=local-player-controller-unavailable")
+        return
+    end
+    local player = safe_property(controller, "Pawn")
+    if not is_valid_object(player) then
+        player = safe_property(controller, "AcknowledgedPawn")
+    end
+    if not is_valid_object(player) then
+        local player_ok
+        player_ok, player = safe_call(controller, "K2_GetPawn")
+        if not player_ok then
+            player = nil
+        end
+    end
+    if not is_valid_object(player) then
+        log("PAL_FACTION_RAGE_PROBE_FAILED reason=local-player-character-unavailable")
+        return
+    end
+
+    local utility = nil
+    if type(StaticFindObject) == "function" then
+        local ok, value = pcall(
+            StaticFindObject,
+            "/Script/Pal.Default__PalUtility"
+        )
+        if ok and is_valid_object(value) then
+            utility = value
+        end
+    end
+    local manager_ok, manager = safe_call(utility, "GetNPCManager", controller)
+    if not manager_ok or not is_valid_object(manager) then
+        log("PAL_FACTION_RAGE_PROBE_FAILED reason=npc-manager-unavailable")
+        return
+    end
+    local controller_class = safe_property(manager, "NPCAIControllerBaseClass")
+    local location_ok, location = safe_call(player, "K2_GetActorLocation")
+    if not is_valid_object(controller_class) or not location_ok or location == nil then
+        log("PAL_FACTION_RAGE_PROBE_FAILED reason=spawn-context-unavailable")
+        return
+    end
+    local offset = probe.spawnOffset
+    local spawn_location = {
+        X = (tonumber(safe_property(location, "X")) or 0) + offset.X,
+        Y = (tonumber(safe_property(location, "Y")) or 0) + offset.Y,
+        Z = (tonumber(safe_property(location, "Z")) or 0) + offset.Z,
+    }
+    local expected_island = IslandMask.classify_world(
+        spawn_location.X,
+        spawn_location.Y
+    )
+    local handle_ok, handle = safe_call(
+        manager,
+        "SpawnNPCForServer",
+        {
+            ControllerClass = controller_class,
+            CharacterID = make_name(probe.characterId),
+            Level = probe.spawnLevel,
+            Location = spawn_location,
+            Yaw = 0,
+            Squad = nil,
+        },
+        nil
+    )
+    if not handle_ok or not is_valid_object(handle) then
+        log("PAL_FACTION_RAGE_PROBE_FAILED reason=native-spawn-not-accepted")
+        return
+    end
+    instance.rageProbeHandle = handle
+    log(string.format(
+        "PAL_FACTION_RAGE_PROBE_SPAWN_ACCEPTED character=%s requestedLevel=%d expectedIsland=%s targetExpected=%s levelOverride=%s loadedActorReconcile=false broadScan=false saveWrites=false",
+        probe.characterId,
+        probe.spawnLevel,
+        tostring(expected_island),
+        tostring(expected_island ~= nil),
+        tostring(instance.config.levelOverride.enabled == true)
+    ))
+
+    for index, delay_ms in ipairs(probe.observeDelaysMs) do
+        local observe_callback = function()
+            local actor_ok, actor = safe_call(handle, "TryGetIndividualActor")
+            if not actor_ok or not is_valid_object(actor) then
+                log(string.format(
+                    "PAL_FACTION_RAGE_PROBE_OBSERVE_PENDING delayIndex=%d actor=unavailable",
+                    index
+                ))
+                return
+            end
+            local component = get_component(actor)
+            local individual = get_individual_parameter(component)
+            apply_actor(instance, actor, component, "rage-probe-observe")
+            local state = read_rage_state(actor, component, individual, nil)
+            local target_island = state.island ~= nil
+            local passed = target_island
+                    and rage_state_is_verified(state, rage)
+                or rage_probe_control_is_unchanged(state)
+            log(string.format(
+                "PAL_FACTION_RAGE_PROBE_OBSERVED delayIndex=%d actor=%s character=%s level=%d targetIsland=%s island=%s group=%s ownerAssigned=%s passed=%s predator=%s hpRate=%s damageRate=%s spawnedType=%s uncapturable=%s maxHpRaw=%s broadScan=false saveWrites=false",
+                index,
+                safe_full_name(actor),
+                probe.characterId,
+                probe.spawnLevel,
+                tostring(target_island),
+                tostring(state.island),
+                tostring(state.groupType),
+                tostring(state.ownerAssigned),
+                tostring(passed),
+                tostring(state.isPredator),
+                tostring(state.hpRate),
+                tostring(state.damageRate),
+                tostring(state.spawnedType),
+                tostring(state.uncapturable),
+                tostring(state.maxHpRaw)
+            ))
+            local actor_name = safe_full_name(actor)
+            local is_last = index == #probe.observeDelaysMs
+            if instance.rageProbeObservedActors[actor_name] ~= true
+                and (passed or is_last) then
+                instance.rageProbeObservedActors[actor_name] = true
+                table.insert(instance.rageProbeSamples, {
+                    characterId = probe.characterId,
+                    spawnLevel = probe.spawnLevel,
+                    targetIsland = target_island,
+                    passed = passed,
+                    state = state,
+                })
+                emit_rage_probe_comparison(instance)
+            end
+        end
+        table.insert(instance.callbacks, observe_callback)
+        ExecuteWithDelay(delay_ms, observe_callback)
+    end
+
+    local cleanup_callback = function()
+        local actor_ok, actor = safe_call(handle, "TryGetIndividualActor")
+        local destroyed = false
+        if actor_ok and is_valid_object(actor) then
+            destroyed = safe_call(actor, "K2_DestroyActor")
+        end
+        instance.rageProbeHandle = nil
+        log(string.format(
+            "PAL_FACTION_RAGE_PROBE_CLEANUP destroyed=%s broadScan=false saveWrites=false",
+            tostring(destroyed == true)
+        ))
+    end
+    table.insert(instance.callbacks, cleanup_callback)
+    ExecuteWithDelay(probe.cleanupDelayMs, cleanup_callback)
+end
+
 local function schedule_actor_reapply(instance, actor, component, delay_ms, source)
     if type(ExecuteWithDelay) ~= "function" then
         return
@@ -879,6 +1392,8 @@ function WorldBalance.start(config)
     assert(type(config.loadedActorReconcile) == "table", "loaded-actor reconciliation configuration is required")
     assert(type(config.liveAudit) == "table", "world-balance live-audit configuration is required")
     assert(type(config.liveAudit.enabled) == "boolean", "world-balance live-audit gate is required")
+    assert(type(config.palFactionRage.liveAudit) == "table", "Pal-faction rage live-audit configuration is required")
+    assert(type(config.palFactionRage.liveAudit.enabled) == "boolean", "Pal-faction rage live-audit gate is required")
     assert(config.palFactionRage.hpMultiplier == 2.0, "Pal-faction HP multiplier must be 2.0")
     assert(config.palFactionRage.damageMultiplier == 2.0, "Pal-faction damage multiplier must be 2.0")
     assert(
@@ -891,6 +1406,10 @@ function WorldBalance.start(config)
         callbacks = {},
         hookIds = {},
         rageActors = {},
+        rageObservations = {},
+        rageOutcomeCounts = {},
+        rageProbeSamples = {},
+        rageProbeObservedActors = {},
         levelObservations = {},
         levelCategoryCounts = {},
         levelOutcomeCounts = {},
@@ -900,6 +1419,9 @@ function WorldBalance.start(config)
         levelWriteCount = 0,
         levelDetailLogCount = 0,
         rageAppliedCount = 0,
+        rageVerifiedCount = 0,
+        rageExcludedCount = 0,
+        rageFailureCount = 0,
         rageDetailLogCount = 0,
         lastApplySource = "startup",
     }
@@ -964,6 +1486,10 @@ function WorldBalance.start(config)
                         instance,
                         source .. "-delay-" .. tostring(index)
                     )
+                    emit_rage_audit_summary(
+                        instance,
+                        source .. "-delay-" .. tostring(index)
+                    )
                 end
                 table.insert(instance.callbacks, summary_callback)
                 ExecuteWithDelay(delay_ms, summary_callback)
@@ -1005,13 +1531,41 @@ function WorldBalance.start(config)
         end
     end
 
+    local rage_live_audit = config.palFactionRage.liveAudit
+    local rage_probe = rage_live_audit.probe
+    if rage_live_audit.enabled == true
+        and rage_probe.enabled == true
+        and type(RegisterKeyBind) == "function"
+        and type(Key) == "table"
+        and Key[rage_probe.key] ~= nil then
+        local rage_probe_callback = function()
+            if type(ExecuteInGameThread) == "function" then
+                ExecuteInGameThread(function()
+                    spawn_rage_probe(instance)
+                end)
+            else
+                spawn_rage_probe(instance)
+            end
+        end
+        table.insert(instance.callbacks, rage_probe_callback)
+        RegisterKeyBind(Key[rage_probe.key], rage_probe_callback)
+        log(string.format(
+            "PAL_FACTION_RAGE_PROBE_READY key=%s character=%s requestedLevel=%d cleanupMs=%d qaOnly=true broadScan=false saveWrites=false",
+            rage_probe.key,
+            rage_probe.characterId,
+            rage_probe.spawnLevel,
+            rage_probe.cleanupDelayMs
+        ))
+    end
+
     log(string.format(
-        "READY targetLevel=%d levelEnabled=%s rageEnabled=%s loadedActorReconcile=%s liveAudit=%s palFactionIslands=%d predatorType=%d hpRate=%.2f damageRate=%.2f noTick=true",
+        "READY targetLevel=%d levelEnabled=%s rageEnabled=%s loadedActorReconcile=%s liveAudit=%s rageAudit=%s palFactionIslands=%d predatorType=%d hpRate=%.2f damageRate=%.2f noTick=true",
         config.targetLevel,
         tostring(config.levelOverride.enabled == true),
         tostring(config.palFactionRage.enabled == true),
         tostring(reconcile.enabled == true),
         tostring(live_audit.enabled == true),
+        tostring(rage_live_audit.enabled == true),
         #IslandMask.islands,
         PREDATOR_SPAWNED_CHARACTER_TYPE,
         config.palFactionRage.hpMultiplier,
@@ -1023,5 +1577,9 @@ end
 WorldBalance.classify_world = IslandMask.classify_world
 WorldBalance.islandMask = IslandMask
 WorldBalance.level_group_is_world_managed = level_group_is_world_managed
+WorldBalance.guid_has_nonzero_parts = guid_has_nonzero_parts
+WorldBalance.rage_group_is_world_enemy = rage_group_is_world_enemy
+WorldBalance.rage_state_is_verified = rage_state_is_verified
+WorldBalance.rage_probe_control_is_unchanged = rage_probe_control_is_unchanged
 
 return WorldBalance

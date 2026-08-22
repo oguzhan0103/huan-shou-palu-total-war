@@ -530,6 +530,23 @@ return {
             makeUncapturable = true,
             hpMultiplier = 2.0,
             damageMultiplier = 2.0,
+            -- B2-only readback and controlled comparison probe. Formal
+            -- source/installations keep both gates disabled. QA stages one
+            -- level-80 PinkCat beside the player with F7, observes the exact
+            -- native Predator/rate/capture fields, then destroys it.
+            liveAudit = {
+                enabled = false,
+                probe = {
+                    enabled = false,
+                    key = "F7",
+                    characterId = "PinkCat",
+                    spawnLevel = 80,
+                    observeDelaysMs = { 1000, 3000 },
+                    cleanupDelayMs = 15000,
+                    spawnOffset = { X = 800, Y = 0, Z = 80 },
+                    saveWrites = false,
+                },
+            },
         },
         loadedActorReconcile = {
             enabled = false,

@@ -1,0 +1,123 @@
+{
+  "schemaVersion": "1.0.0",
+  "result": "PASS",
+  "gameBuild": "24575825",
+  "gameVersion": "1.0.3.101283",
+  "testDate": "2026-08-23",
+  "acceptanceGate": "B2-pal-faction-rage",
+  "staging": {
+    "targetLevel": 80,
+    "levelOverride": false,
+    "palFactionRage": true,
+    "rageLiveAudit": true,
+    "probeConfigured": true,
+    "loadedActorReconcile": false,
+    "broadActorScan": false,
+    "saveSnapshotRequired": true
+  },
+  "implementation": {
+    "route": "native-character-initialization-events-only",
+    "palFactionIslandCount": 5,
+    "eventScopedExactTarget": true,
+    "groupZeroRequiresReadableEmptyOwnerGuid": true,
+    "ownerStateUnavailableFailsClosed": true,
+    "playerOwnedWorkerAndNonWorldGroupExclusionBeforeWrite": true,
+    "nativeFields": [
+      "IsPredator",
+      "AdditionalEnemyMaxHPRate",
+      "AdditionalEnemyInflictDamageRate",
+      "SpawnedCharacterType",
+      "Uncapturable",
+      "MaxHP"
+    ]
+  },
+  "targetRun": {
+    "result": "PASS",
+    "island": "pwft.island.central_southeast_archipelago",
+    "verifiedInstances": 11,
+    "species": [
+      "PinkCat",
+      "ChickenPal",
+      "SheepBall"
+    ],
+    "firstAuditSummary": {
+      "applied": 4,
+      "verified": 4,
+      "excluded": 6,
+      "failed": 0
+    },
+    "laterStreamingVerified": 7,
+    "before": {
+      "predator": false,
+      "hpRate": 1.0,
+      "damageRate": 1.0,
+      "spawnedType": 0,
+      "uncapturable": false
+    },
+    "after": {
+      "predator": true,
+      "hpRate": 2.0,
+      "damageRate": 2.0,
+      "spawnedType": 8,
+      "uncapturable": true
+    },
+    "exactMaxHpDoublingInstances": 11,
+    "excluded": {
+      "playerCharacter": 1,
+      "ownedOrWorker": 5,
+      "nonWorldGroupObserved": true,
+      "allLoggedNativeFieldsUnchanged": true
+    },
+    "failedMarkers": 0,
+    "broadScan": false,
+    "levelOverride": false,
+    "loadedActorReconcile": false,
+    "rawLogSha256": "963151C0B9B79D3549ACE94FD1592FA21BEAFF0C6D6B10006B25161447129AE1"
+  },
+  "negativeControl": {
+    "result": "PASS",
+    "method": "installed-runtime-only-forced-mask-miss",
+    "organicOutsideGeography": false,
+    "sourceMaskUnchanged": true,
+    "naturalWildPalsExcluded": 8,
+    "summaryNaturalWildPalsExcluded": 7,
+    "summary": {
+      "applied": 0,
+      "verified": 0,
+      "excluded": 14,
+      "failed": 0
+    },
+    "unchanged": {
+      "predator": false,
+      "hpRate": 1.0,
+      "damageRate": 1.0,
+      "spawnedType": 0,
+      "uncapturable": false
+    },
+    "rawLogSha256": "AEC0DB82D4A2700FEB081B8C6F232251B77ACC33D2D02E8E914A529D3CE048D0"
+  },
+  "restore": {
+    "result": "PASS",
+    "gameRunning": false,
+    "saveFiles": 385,
+    "saveDiffCount": 0,
+    "criticalLevelSavSha256": "750FCC42971759F9E4D824BA86457B61DF988FF938DB29DB0357E9005EDAF2A7",
+    "stateFiles": 12,
+    "stateDiffCount": 0,
+    "formalDeploymentFiles": 76,
+    "formalRiskGatesDisabled": true,
+    "runtimeMaskMatchesSource": true
+  },
+  "evidenceBoundary": {
+    "nativePropertyReadback": true,
+    "visualCombatObserved": false,
+    "visualCaptureAttemptObserved": false,
+    "probeConfiguredButNoSample": true,
+    "probeHotkeyAlsoUsedByAnotherInstalledMod": true,
+    "unrelatedCommerceEventEncodeIssueObserved": true,
+    "directFilesystemSaveWrite": false,
+    "palworldSaveSnapshotRestored": true,
+    "rawLogsAndSavesPrivate": true,
+    "userAcceptance": "not-performed"
+  }
+}
