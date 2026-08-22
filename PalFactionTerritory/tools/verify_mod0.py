@@ -82,6 +82,7 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "ending_runtime.lua",
         SCRIPTS_ROOT / "pwft" / "commerce_bridge.lua",
         SCRIPTS_ROOT / "pwft" / "faction_api.lua",
+        SCRIPTS_ROOT / "pwft" / "faction_consequence_router.lua",
         SCRIPTS_ROOT / "pwft" / "faction_commerce.lua",
         SCRIPTS_ROOT / "pwft" / "faction_defense.lua",
         SCRIPTS_ROOT / "pwft" / "faction_economy.lua",
@@ -117,6 +118,7 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "pal_faction_island_mask.lua",
         PROJECT_ROOT / "mod0" / "tests" / "policy_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_api_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "faction_consequence_router_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "commerce_bridge_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_commerce_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_economy_spec.lua",
@@ -710,6 +712,12 @@ def main() -> int:
     policy_text = (SCRIPTS_ROOT / "pwft" / "policy.lua").read_text(encoding="utf-8")
     progression_text = (SCRIPTS_ROOT / "pwft" / "faction_progression.lua").read_text(encoding="utf-8")
     faction_api_text = (SCRIPTS_ROOT / "pwft" / "faction_api.lua").read_text(encoding="utf-8")
+    faction_consequence_router_text = (
+        SCRIPTS_ROOT / "pwft" / "faction_consequence_router.lua"
+    ).read_text(encoding="utf-8")
+    content_action_runtime_text = (
+        SCRIPTS_ROOT / "pwft" / "content_action_runtime.lua"
+    ).read_text(encoding="utf-8")
     faction_commerce_text = (SCRIPTS_ROOT / "pwft" / "faction_commerce.lua").read_text(encoding="utf-8")
     faction_economy_shop_text = (
         SCRIPTS_ROOT / "pwft" / "faction_economy_shop_catalog.lua"
@@ -1042,6 +1050,42 @@ def main() -> int:
     require("award_commerce" in faction_api_text, "commerce content API missing")
     require("apply_reputation_delta" in faction_api_text, "authoritative signed reputation content API missing")
     require("reputationDecrease = true" in faction_api_text, "signed reputation capability missing")
+    require(
+        "FactionConsequenceRouter.create" in runtime_text
+        and "_G.PWFT_FACTION_CONSEQUENCE_API_V1" in runtime_text
+        and "factionConsequenceRouter:unbind_world" in runtime_text
+        and "on_faction_consequence_recorded" in runtime_text
+        and "FACTION_CONSEQUENCE_ROUTER_READY" in runtime_text,
+        "authoritative faction-consequence router runtime lifecycle is incomplete",
+    )
+    require(
+        "exactActorAndClassBinding = true" in faction_consequence_router_text
+        and "nativeConfirmationRequired = true" in faction_consequence_router_text
+        and "worldGenerationFencing = true" in faction_consequence_router_text
+        and "event.actorRef == binding.actorRef" in faction_consequence_router_text
+        and "unbind_actor" in faction_consequence_router_text
+        and "modelMayDispatch = false" in faction_consequence_router_text,
+        "native consequence binding safety gates are incomplete",
+    )
+    require(
+        all(
+            reason in faction_consequence_router_text
+            for reason in (
+                "friendly-fire",
+                "civilian-harm",
+                "mission-failure",
+                "contract-breach",
+                "war-consequence",
+            )
+        ),
+        "faction-consequence reason routing is incomplete",
+    )
+    require(
+        'kind == "apply_faction_consequence"' in content_action_runtime_text
+        and "factionConsequenceRouter:dispatch" in content_action_runtime_text
+        and "pwft.consequence.content-action.v1" in content_action_runtime_text,
+        "content mission/contract consequence dispatch is not wired",
+    )
     require("reconcile_pal" in faction_api_text, "Pal reconciliation content API missing")
     require("operationId" in progression_text, "idempotent reputation operation IDs missing")
     require("reconcile_entitlement" in faction_guard_text, "guard demotion recall path missing")

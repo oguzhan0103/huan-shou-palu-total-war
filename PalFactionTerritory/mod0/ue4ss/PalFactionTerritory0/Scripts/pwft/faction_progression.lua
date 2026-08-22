@@ -296,6 +296,39 @@ local function validate_contract(contract)
     require_number(consequence.maximumPenaltyPerEvent, "maximum reputation penalty per event")
     assert(consequence.maximumPenaltyPerEvent > 0, "maximum reputation penalty must be positive")
     assert(consequence.authority == "pwft.faction-consequence.v1", "consequence authority mismatch")
+    local routing = consequence.routingPolicy
+    assert(type(routing) == "table", "consequence routing policy is required")
+    assert(routing.schemaVersion == "1.0.0", "unsupported consequence routing policy")
+    assert(routing.eventSchemaVersion == "1.0.0", "unsupported consequence event schema")
+    assert(routing.exactActorAndClassRequired == true, "actor consequences require exact bindings")
+    assert(routing.nativeConfirmationRequired == true, "actor consequences require native confirmation")
+    assert(routing.worldGenerationRequiredForActorEvents == true, "actor consequences require world generation fencing")
+    assert(routing.modelDispatchAllowed == false, "models cannot dispatch faction consequences")
+    assert(routing.arbitraryClientDispatchAllowed == false, "arbitrary clients cannot dispatch faction consequences")
+    local consequence_providers = {}
+    local consequence_reason_codes = {}
+    for _, provider in ipairs(routing.providers or {}) do
+        require_non_empty_string(provider.id, "consequence provider ID")
+        require_non_empty_string(provider.authoritySource, "consequence provider authority source")
+        assert(consequence_providers[provider.id] == nil, "duplicate consequence provider")
+        assert(type(provider.reasonCodes) == "table" and #provider.reasonCodes > 0, "consequence provider reason codes are required")
+        consequence_providers[provider.id] = provider.authoritySource
+        for _, reason_code in ipairs(provider.reasonCodes) do
+            require_non_empty_string(reason_code, "consequence provider reason code")
+            assert(consequence_reason_codes[reason_code] == nil, "duplicate consequence reason route")
+            consequence_reason_codes[reason_code] = provider.id
+        end
+    end
+    assert(#routing.providers == 3, "expected three consequence provider routes")
+    for _, reason_code in ipairs({
+        "friendly-fire",
+        "civilian-harm",
+        "contract-breach",
+        "mission-failure",
+        "war-consequence",
+    }) do
+        assert(consequence_reason_codes[reason_code] ~= nil, "missing consequence reason route: " .. reason_code)
+    end
 
     local pal_reconciliation = contract.reputationSources
         and contract.reputationSources.pal_reconciliation

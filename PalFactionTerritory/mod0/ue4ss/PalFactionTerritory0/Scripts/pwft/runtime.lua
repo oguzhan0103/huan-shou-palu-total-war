@@ -16,6 +16,8 @@ local EndingEffectProviderBus =
     require("pwft.ending_effect_provider_bus")
 local EndingRuntime = require("pwft.ending_runtime")
 local FactionApi = require("pwft.faction_api")
+local FactionConsequenceRouter =
+    require("pwft.faction_consequence_router")
 local FactionCommerce = require("pwft.faction_commerce")
 local FactionDefense = require("pwft.faction_defense")
 local FactionEconomy = require("pwft.faction_economy")
@@ -4441,6 +4443,11 @@ local function register_runtime_probes(config, registry, policy, state)
                     "runtime-world-unloading"
                 )
             end
+            if state.factionConsequenceRouter ~= nil then
+                state.factionConsequenceRouter:unbind_world(
+                    "runtime-world-unloading"
+                )
+            end
             if state.factionNpcAttitudeBus ~= nil then
                 state.factionNpcAttitudeBus:clear_world()
             end
@@ -4682,6 +4689,9 @@ function Runtime.start(config, registry, policy)
             uniquePalWorldEffectBus = state.uniquePalWorldEffectBus
                     and state.uniquePalWorldEffectBus:status()
                 or nil,
+            factionConsequences = state.factionConsequenceRouter
+                    and state.factionConsequenceRouter:status()
+                or nil,
             endingEffectProviderBus = state.endingEffectProviderBus
                     and state.endingEffectProviderBus:status()
                 or nil,
@@ -4823,11 +4833,48 @@ function Runtime.start(config, registry, policy)
                 })
             end
     end
+    local function on_faction_consequence_recorded(
+        faction_id,
+        outcome,
+        faction_status
+    )
+        -- FactionApi has already run the full relation/permission/UI
+        -- reconciliation callback.  This second, narrow callback persists the
+        -- router's idempotency ledger without replaying those side effects.
+        if state.progressionStore.enabled then
+            local save_result = state.progressionStore:save(
+                state.factionProgression:export_snapshot()
+            )
+            if not save_result.ok then
+                log(
+                    "FACTION_CONSEQUENCE_SAVE_FAILED reason="
+                        .. tostring(save_result.reason)
+                )
+            end
+        end
+        if state.companionLedger ~= nil
+            and state.companionLedger:status().active then
+            state.companionLedger:record({
+                type = "faction-consequence-recorded",
+                factionId = faction_id,
+                outcome = outcome,
+                faction = faction_status,
+            })
+            publish_companion_state("faction-consequence-recorded")
+        end
+    end
     state.factionApi = FactionApi.create(
         state.factionProgression,
         on_faction_state_changed
     )
     _G.PWFT_FACTION_API_V1 = state.factionApi
+    state.factionConsequenceRouter =
+        FactionConsequenceRouter.create(
+            state.factionApi,
+            { onChange = on_faction_consequence_recorded }
+        )
+    _G.PWFT_FACTION_CONSEQUENCE_API_V1 =
+        state.factionConsequenceRouter
     state.factionResourceLedger = FactionResourceLedger.create(
         state.factionProgression,
         registry.economy,
@@ -5045,7 +5092,8 @@ function Runtime.start(config, registry, policy)
         state.factionApi,
         state.strategicWorld,
         state.endingRuntime,
-        state.contentPackRegistry
+        state.contentPackRegistry,
+        state.factionConsequenceRouter
     )
     state.contentRuntime = ContentRuntime.create(
         state.factionProgression,
@@ -5057,6 +5105,8 @@ function Runtime.start(config, registry, policy)
             palDiscourseRuntime = state.palDiscourseRuntime,
             localizationRuntime = state.localizationRuntime,
             contentActionRuntime = state.contentActionRuntime,
+            factionConsequenceRouter =
+                state.factionConsequenceRouter,
             rewardPolicy = state.rewardPolicy,
             npcLeaderGuardOrchestrator =
                 state.npcLeaderGuardOrchestrator,
@@ -5568,6 +5618,20 @@ function Runtime.start(config, registry, policy)
         #registry.progression.palFactionIds,
         state.progressionStore.enabled and config.factionProgression.persistence.mode or "disabled",
         restore_source
+    ))
+    local consequence_status = state.factionConsequenceRouter:status()
+    log(string.format(
+        "FACTION_CONSEQUENCE_ROUTER_READY api=%s providers=%d reasons=%d bindings=%d events=%d generation=%d maxPenalty=%d exactActorClass=%s nativeConfirm=%s modelDispatch=%s saveWrites=false",
+        consequence_status.apiVersion,
+        consequence_status.providerCount,
+        consequence_status.reasonRouteCount,
+        consequence_status.activeBindingCount,
+        consequence_status.processedEventCount,
+        consequence_status.worldGeneration,
+        consequence_status.maximumPenaltyPerEvent,
+        tostring(consequence_status.exactActorAndClassBinding),
+        tostring(consequence_status.nativeConfirmationRequired),
+        tostring(consequence_status.modelMayDispatch)
     ))
     local pal_reconciliation_status =
         state.palReconciliation:status()

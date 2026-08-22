@@ -11,6 +11,8 @@ local ContentPackRegistry = require("pwft.content_pack_registry")
 local StrategicWorld = require("pwft.strategic_world")
 local EndingRuntime = require("pwft.ending_runtime")
 local ContentActionRuntime = require("pwft.content_action_runtime")
+local FactionConsequenceRouter =
+    require("pwft.faction_consequence_router")
 local Example = require("minimal-content-pack.pack")
 
 local progression = Progression.create(Registry.progression)
@@ -23,7 +25,14 @@ local endings = EndingRuntime.create(progression, world, {
     contentPackRegistry = packs,
 })
 assert(endings:register_pack(Example.endingRoutes).ok)
-local actions = ContentActionRuntime.create(faction_api, world, endings, packs)
+local consequence_router = FactionConsequenceRouter.create(faction_api)
+local actions = ContentActionRuntime.create(
+    faction_api,
+    world,
+    endings,
+    packs,
+    consequence_router
+)
 
 local player_id = "player-content-action-spec"
 local action_pack = {
@@ -37,6 +46,16 @@ local action_pack = {
             parameters = {
                 factionId = "pwft.faction.rayne_syndicate",
                 amount = 12,
+            },
+            requiresPlayerConfirmation = false,
+        },
+        {
+            actionId = "example.minimal.action.mission-failure",
+            kind = "apply_faction_consequence",
+            parameters = {
+                factionId = "pwft.faction.rayne_syndicate",
+                penalty = 20,
+                reasonCode = "mission-failure",
             },
             requiresPlayerConfirmation = false,
         },
@@ -80,7 +99,7 @@ local action_pack = {
 }
 
 local registered = actions:register_pack(action_pack)
-assert(registered.ok and registered.actionCount == 5)
+assert(registered.ok and registered.actionCount == 6)
 assert(actions:register_pack(action_pack).reason
     == "content-action-pack-already-registered")
 
@@ -120,6 +139,34 @@ local replayed = actions:dispatch(
 )
 assert(replayed.ok and replayed.reason == "content-action-already-dispatched")
 assert(faction_api:faction_status("pwft.faction.rayne_syndicate").reputation == 12)
+local penalized = actions:dispatch(
+    "example.minimal.action.mission-failure",
+    "example.minimal.event.mission-failure",
+    {
+        sourceKind = "quest-completion",
+        sourceId = "example.minimal.quest.instance.failed",
+        playerConfirmed = false,
+        playerId = player_id,
+    }
+)
+assert(penalized.ok and penalized.applied == -20)
+assert(penalized.reasonCode == "mission-failure")
+assert(faction_api:faction_status(
+    "pwft.faction.rayne_syndicate").reputation == -8)
+local repeated_penalty = actions:dispatch(
+    "example.minimal.action.mission-failure",
+    "example.minimal.event.mission-failure",
+    {
+        sourceKind = "quest-completion",
+        sourceId = "example.minimal.quest.instance.failed",
+        playerConfirmed = false,
+        playerId = player_id,
+    }
+)
+assert(repeated_penalty.ok and repeated_penalty.reason
+    == "content-action-already-dispatched")
+assert(faction_api:faction_status(
+    "pwft.faction.rayne_syndicate").reputation == -8)
 local structured = actions:dispatch_structured_result(
     { contentActionId = "example.minimal.action.ending-flag" },
     "example.minimal.event.structured-result",
@@ -183,11 +230,14 @@ local ending_routes = EndingRuntime.create(ending_progression, ending_world, {
     contentPackRegistry = ending_packs,
 })
 assert(ending_routes:register_pack(Example.endingRoutes).ok)
+local ending_consequence_router =
+    FactionConsequenceRouter.create(ending_api)
 local ending_actions = ContentActionRuntime.create(
     ending_api,
     ending_world,
     ending_routes,
-    ending_packs
+    ending_packs,
+    ending_consequence_router
 )
 assert(ending_actions:register_pack(action_pack).ok)
 assert(ending_actions:dispatch(
@@ -245,6 +295,6 @@ assert(actions:register_pack(invalid_confirmation).reason
 local state_before_rebind = actions.state
 assert(progression:restore_snapshot(progression:export_snapshot()).ok)
 assert(actions.state ~= state_before_rebind)
-assert(actions:status().processedEventCount == 4)
+assert(actions:status().processedEventCount == 5)
 
-print("PASS registered content actions, confirmation gates, deterministic dispatch, idempotency, and rebind")
+print("PASS registered content actions, confirmation gates, deterministic dispatch, authoritative faction consequences, idempotency, and rebind")

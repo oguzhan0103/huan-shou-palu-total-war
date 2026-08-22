@@ -69,6 +69,6 @@ powershell -ExecutionPolicy Bypass -File AuthorSDK/validate-content-pack.ps1 -Pa
 
 ## 确定性 Core 结算
 
-作者内容只能给出 key、稳定 ID、条件和预登记的白名单动作。UI 或剧情层选择某个分支后，`QuestRuntime` 记录 branch ID 与结构化 result；`ContentActionRuntime` 只接受已随内容包原子注册的动作，并把它们映射到势力、`StrategicWorld` 或 `EndingRuntime` 的显式操作。加入、唯一帕鲁转移、占领/毁灭/恢复城市、最后通牒与提交结局必须收到明确玩家确认；商业与防守好感、帕鲁和解均不允许由该通用入口伪造。每一步必须使用持久、唯一的 event/operation ID，重复事件只能重放同一结果，冲突事件必须失败关闭。
+作者内容只能给出 key、稳定 ID、条件和预登记的白名单动作。UI 或剧情层选择某个分支后，`QuestRuntime` 记录 branch ID 与结构化 result；`ContentActionRuntime` 只接受已随内容包原子注册的动作，并把它们映射到势力、`StrategicWorld` 或 `EndingRuntime` 的显式操作。加入、唯一帕鲁转移、占领/毁灭/恢复城市、最后通牒与提交结局必须收到明确玩家确认；商业与防守好感、帕鲁和解均不允许由该通用入口伪造。人类势力任务失败或违约可登记 `apply_faction_consequence`，参数为 `factionId`、正数 `penalty` 及 `mission-failure`/`contract-breach` 原因码；它仍由 Core 生成负向 delta，作者文本不能直接改好感。每一步必须使用持久、唯一的 event/operation ID，重复事件只能重放同一结果，冲突事件必须失败关闭。
 
 模型、对话文本、manifest 和内容包定义都无权直接改写世界或结局状态。端到端行为见 `mod0/tests/content_pack_author_sdk_e2e_spec.lua`。

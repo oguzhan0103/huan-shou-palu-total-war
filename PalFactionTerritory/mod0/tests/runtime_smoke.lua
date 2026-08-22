@@ -140,6 +140,22 @@ assert(state.factionCommerce.version == "1.0.0")
 assert(state.factionEconomy.version == "1.1.0")
 assert(state.factionEconomyShops.version == "1.0.0")
 assert(_G.PWFT_FACTION_API_V1 == state.factionApi)
+assert(
+    _G.PWFT_FACTION_CONSEQUENCE_API_V1
+        == state.factionConsequenceRouter
+)
+assert(state.factionConsequenceRouter:status().apiVersion == "1.0.0")
+assert(state.factionConsequenceRouter:status().providerCount == 3)
+assert(state.factionConsequenceRouter:status().reasonRouteCount == 5)
+assert(
+    state.factionConsequenceRouter:status()
+        .exactActorAndClassBinding == true
+)
+assert(
+    state.factionConsequenceRouter:status()
+        .nativeConfirmationRequired == true
+)
+assert(state.factionConsequenceRouter:status().modelMayDispatch == false)
 assert(_G.PWFT_COMPANION_LEDGER_V1 == state.companionLedger)
 assert(
     _G.PWFT_BACKGROUND_RAID_RECORDER_V1
@@ -354,8 +370,14 @@ assert(state.factionProgression:status("pwft.faction.dark_nocturnal_pal_tribe").
 -- committed ending through a stable generation ID and reports no-op when no
 -- ending has been committed; the bus never invents a successful provider.
 local generation_before = state.nativeWorldGeneration
+local consequence_generation_before =
+    state.factionConsequenceRouter:status().worldGeneration
 load_map_pre_hook()
 assert(state.nativeWorldGeneration == generation_before + 1)
+assert(
+    state.factionConsequenceRouter:status().worldGeneration
+        == consequence_generation_before + 1
+)
 assert(state.inGameWorldReady == false)
 assert(state.strategicWorldNativeBus:status().bindingCount == 0)
 local presence_generation_after_unload =

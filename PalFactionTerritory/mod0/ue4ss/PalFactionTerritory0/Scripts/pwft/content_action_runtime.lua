@@ -13,6 +13,11 @@ local ACTION_FIELDS = {
 
 local PARAMETER_FIELDS = {
     award_task_reputation = { factionId = true, amount = true },
+    apply_faction_consequence = {
+        factionId = true,
+        penalty = true,
+        reasonCode = true,
+    },
     join_human_faction = { factionId = true },
     clear_affiliation_hostility = {
         targetFactionId = true,
@@ -40,6 +45,7 @@ local PARAMETER_FIELDS = {
 
 local REQUIRED_CAPABILITY = {
     award_task_reputation = "pwft.quest.templates",
+    apply_faction_consequence = "pwft.quest.templates",
     join_human_faction = "pwft.quest.templates",
     clear_affiliation_hostility = "pwft.quest.templates",
     transfer_unique_pal = "pwft.world.unique-pals",
@@ -183,6 +189,19 @@ local function normalize_parameters(instance, pack_id, kind, parameters)
         require_human_faction(instance, value.factionId, "task faction ID")
         assert(type(value.amount) == "number" and value.amount > 0,
             "task reputation amount must be positive")
+    elseif kind == "apply_faction_consequence" then
+        assert(instance.factionConsequenceRouter ~= nil,
+            "faction consequence router is unavailable")
+        require_human_faction(instance, value.factionId,
+            "consequence faction ID")
+        assert(type(value.penalty) == "number" and value.penalty > 0,
+            "faction consequence penalty must be positive")
+        assert(value.penalty <= instance.factionConsequenceRouter
+            .maximumPenaltyPerEvent,
+            "faction consequence penalty exceeds the configured maximum")
+        assert(value.reasonCode == "mission-failure"
+            or value.reasonCode == "contract-breach",
+            "content actions may only dispatch mission or contract consequences")
     elseif kind == "join_human_faction" then
         require_human_faction(instance, value.factionId, "join faction ID")
     elseif kind == "clear_affiliation_hostility" then
@@ -289,19 +308,24 @@ function ContentActionRuntime.create(
     faction_api,
     strategic_world,
     ending_runtime,
-    content_pack_registry
+    content_pack_registry,
+    faction_consequence_router
 )
     assert(type(faction_api) == "table", "faction API is required")
     assert(type(strategic_world) == "table", "strategic world is required")
     assert(type(ending_runtime) == "table", "ending runtime is required")
     assert(type(content_pack_registry) == "table",
         "content-pack registry is required")
+    assert(faction_consequence_router == nil
+        or type(faction_consequence_router) == "table",
+        "faction consequence router must be a table")
     local instance = setmetatable({
         version = API_VERSION,
         factionApi = faction_api,
         strategicWorld = strategic_world,
         endingRuntime = ending_runtime,
         contentPackRegistry = content_pack_registry,
+        factionConsequenceRouter = faction_consequence_router,
         state = make_state(faction_api.progression),
         packDefinitions = {},
         actions = {},
@@ -312,6 +336,7 @@ function ContentActionRuntime.create(
             directCommerceAwards = false,
             directDefenseAwards = false,
             directPalReconciliation = false,
+            factionConsequences = faction_consequence_router ~= nil,
             languageModelAuthority = false,
             PalworldSaveMutation = false,
         },
@@ -445,6 +470,21 @@ local function execute(instance, action, event_id, context)
             p.amount,
             event_id
         )
+    elseif action.kind == "apply_faction_consequence" then
+        return instance.factionConsequenceRouter:dispatch({
+            schemaVersion = "1.0.0",
+            authoritative = true,
+            eventId = "content-consequence:" .. event_id,
+            operationId = "consequence:content:" .. event_id,
+            providerId = "pwft.consequence.content-action.v1",
+            authoritySource = "pwft.content-action-runtime.v1",
+            reasonCode = p.reasonCode,
+            factionId = p.factionId,
+            penalty = p.penalty,
+            contextId = context.sourceId,
+            contentPackId = action.contentPackId,
+            actionId = action.actionId,
+        })
     elseif action.kind == "join_human_faction" then
         return instance.factionApi:join_human(p.factionId, event_id)
     elseif action.kind == "clear_affiliation_hostility" then
@@ -610,6 +650,7 @@ function ContentActionRuntime:status()
         registeredActionsOnly = true,
         questStructuredResultBinding = true,
         playerConfirmationForIrreversibleActions = true,
+        factionConsequences = self.factionConsequenceRouter ~= nil,
         modelMayDispatch = false,
         PalworldSaveMutation = false,
     }

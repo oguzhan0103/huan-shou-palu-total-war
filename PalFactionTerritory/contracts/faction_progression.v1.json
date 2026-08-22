@@ -276,7 +276,33 @@
       "maximumPenaltyPerEvent": 300,
       "humanOnly": true,
       "authority": "pwft.faction-consequence.v1",
-      "storyContentIncluded": false
+      "storyContentIncluded": false,
+      "routingPolicy": {
+        "schemaVersion": "1.0.0",
+        "eventSchemaVersion": "1.0.0",
+        "exactActorAndClassRequired": true,
+        "nativeConfirmationRequired": true,
+        "worldGenerationRequiredForActorEvents": true,
+        "modelDispatchAllowed": false,
+        "arbitraryClientDispatchAllowed": false,
+        "providers": [
+          {
+            "id": "pwft.consequence.native-actor.v1",
+            "authoritySource": "pwft.native-faction-consequence.v1",
+            "reasonCodes": ["friendly-fire", "civilian-harm"]
+          },
+          {
+            "id": "pwft.consequence.content-action.v1",
+            "authoritySource": "pwft.content-action-runtime.v1",
+            "reasonCodes": ["contract-breach", "mission-failure"]
+          },
+          {
+            "id": "pwft.consequence.economy-war.v1",
+            "authoritySource": "pwft.faction-economy-war.v1",
+            "reasonCodes": ["war-consequence"]
+          }
+        ]
+      }
     },
     "pal_reconciliation": {
       "enabled": true,

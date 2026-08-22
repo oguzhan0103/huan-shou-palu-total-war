@@ -11,7 +11,7 @@ return {
         ["faction_economy.v1.json"] = "55cd5db5a55cfcdd043cb870e0cf305dc0ce45bebc2198aceb9d61265d876d34",
         ["faction_economy_shops.v1.json"] = "32d67b2613b2dbc9d0bbe8473bc12b27749dd1ddbb635d9d251f6aec3877d8c5",
         ["pal_reconciliation.v1.json"] = "312a14163d9a6e2f21acc1ab5c9d15b4585a6dd8880f7386891c9dde77a66065",
-        ["faction_progression.v1.json"] = "11c3b04a25526d41ac11aec4249f59943b3dce3db031fb3a511ec15c30130287",
+        ["faction_progression.v1.json"] = "8a2a9468b39faf7b8b4ff7171872f42774b141faf80dcea33cd1f59a7ff5d8d9",
         ["territory_assignments.v1.json"] = "0b4542014338178ab311f73a876dea640a1d393e9cd68801b3c852e2849e0f7b",
         ["fast_travel_territories.v1.json"] = "a2945338ca661ef001b1603a077209f06efae5fad2b25a43d432acde9419dbf4",
         ["island_territories.v2.json"] = "2a24d45822234f9064cdaee26c56423ab59cf074a54e780ce7aa79be1eb39e27",
@@ -1915,7 +1915,41 @@ return {
                 ["maximumPenaltyPerEvent"] = 300,
                 ["humanOnly"] = true,
                 ["authority"] = "pwft.faction-consequence.v1",
-                ["storyContentIncluded"] = false
+                ["storyContentIncluded"] = false,
+                ["routingPolicy"] = {
+                    ["schemaVersion"] = "1.0.0",
+                    ["eventSchemaVersion"] = "1.0.0",
+                    ["exactActorAndClassRequired"] = true,
+                    ["nativeConfirmationRequired"] = true,
+                    ["worldGenerationRequiredForActorEvents"] = true,
+                    ["modelDispatchAllowed"] = false,
+                    ["arbitraryClientDispatchAllowed"] = false,
+                    ["providers"] = {
+                        {
+                            ["id"] = "pwft.consequence.native-actor.v1",
+                            ["authoritySource"] = "pwft.native-faction-consequence.v1",
+                            ["reasonCodes"] = {
+                                "friendly-fire",
+                                "civilian-harm"
+                            }
+                        },
+                        {
+                            ["id"] = "pwft.consequence.content-action.v1",
+                            ["authoritySource"] = "pwft.content-action-runtime.v1",
+                            ["reasonCodes"] = {
+                                "contract-breach",
+                                "mission-failure"
+                            }
+                        },
+                        {
+                            ["id"] = "pwft.consequence.economy-war.v1",
+                            ["authoritySource"] = "pwft.faction-economy-war.v1",
+                            ["reasonCodes"] = {
+                                "war-consequence"
+                            }
+                        }
+                    }
+                }
             },
             ["pal_reconciliation"] = {
                 ["enabled"] = true,
