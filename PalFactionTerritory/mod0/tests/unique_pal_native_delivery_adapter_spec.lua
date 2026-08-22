@@ -107,14 +107,13 @@ manager.NPCAIControllerBaseClass = controller_class
 local spawn_requests = {}
 local spawned_handles = {}
 function manager:SpawnNPCForServer(spawn_info, callback)
-    assert(type(callback) == "function")
+    assert(callback == nil)
     table.insert(spawn_requests, spawn_info)
     local handle = make_handle(
         #spawn_requests,
         nil
     )
     table.insert(spawned_handles, handle)
-    callback(handle:GetIndividualID())
     return handle
 end
 

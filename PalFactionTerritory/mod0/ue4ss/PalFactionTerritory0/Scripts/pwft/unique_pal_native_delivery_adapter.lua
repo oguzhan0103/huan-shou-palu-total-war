@@ -498,7 +498,11 @@ function UniquePalNativeDeliveryAdapter:create_individual(
             Yaw = 0,
             Squad = nil,
         },
-        function() end
+        -- UE4SS 3.0.1 cannot marshal a Lua closure into the native
+        -- FPalSpawnedCharacterDelegate parameter.  The native raid route on
+        -- this same build proves that SpawnNPCForServer accepts a nil
+        -- delegate and still returns the stable individual handle we need.
+        nil
     )
     if not is_valid_object(handle) then
         self.failureCount = self.failureCount + 1
