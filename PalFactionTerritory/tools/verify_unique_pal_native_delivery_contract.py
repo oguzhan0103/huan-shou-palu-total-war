@@ -20,7 +20,7 @@ def require(condition: bool, message: str) -> None:
 
 def main() -> int:
     evidence = json.loads(EVIDENCE_PATH.read_text(encoding="utf-8"))
-    require(evidence["schemaVersion"] == "1.0.0", "evidence schema drifted")
+    require(evidence["schemaVersion"] == "1.1.0", "evidence schema drifted")
     require(evidence["steamBuildId"] == "24575825", "Build ID drifted")
     source = evidence["source"]
     require(source["bytes"] == 46_370_831, "ObjectDump byte count drifted")
@@ -61,10 +61,10 @@ def main() -> int:
             "live storage object-chain proof is missing")
     require(runtime["capacityRead"] is True,
             "live capacity proof is missing")
-    require(runtime["palCaptureSuccessCall"] is False,
-            "capture was claimed before live proof")
-    require(runtime["postCaptureExactIndividualReadback"] is False,
-            "delivery readback was claimed before live proof")
+    require(runtime["palCaptureSuccessCall"] is True,
+            "live capture acceptance proof is missing")
+    require(runtime["postCaptureExactIndividualReadback"] is True,
+            "exact-individual delivery readback proof is missing")
     probe = runtime["readOnlyProbe"]
     require(
         probe["worldGeneration"] == 4
@@ -81,6 +81,38 @@ def main() -> int:
         == "A1D5A0C6DAF47BEE4892D2155D3126898973FF56AB20C0A7BFDA1B02B0D25A11",
         "live probe source-log identity drifted",
     )
+    acceptance = runtime["mutatingLiveAcceptance"]
+    require(
+        acceptance["worldName"] == "oguzhan"
+        and acceptance["worldId"] == "E0D5ECDC46B379829F8F31A729ACFD92"
+        and acceptance["worldGeneration"] == 4
+        and acceptance["speciesId"] == "Anubis"
+        and acceptance["deliveryId"] == "qa.native-pal-delivery.g4.r1"
+        and acceptance["individualKey"]
+        == "pal-00000000000000000000000000000001-8E0F25AB4226BF458C679D91DC9EE50C"
+        and acceptance["identityAttemptCount"] == 1
+        and acceptance["captureAttemptCount"] == 1
+        and acceptance["storageReadbackAttemptCount"] == 1
+        and acceptance["result"] == "native-pal-delivery-live-test-verified"
+        and acceptance["sameIndividualReadBack"] is True
+        and acceptance["directContainerMutation"] is False
+        and acceptance["callbackExceptionAfterMainWorldReady"] is False,
+        "mutating live-acceptance result drifted",
+    )
+    require(
+        acceptance["sourceLogBytesAfterExit"] == 315_873
+        and acceptance["sourceLogSha256AfterExit"]
+        == "3574D89EB7A345F3E8F43E538ACD0432493195EF149B2ED5FEF854A421C9938A",
+        "live acceptance source-log identity drifted",
+    )
+    require(
+        acceptance["preflightSnapshotFileCount"] == 363
+        and acceptance["restoredFileCount"] == 363
+        and acceptance["restoredHashMismatchCount"] == 0
+        and acceptance["qaConfigRestoredDisabled"] is True
+        and acceptance["formalRuntimeRedeployedAndAudited"] is True,
+        "save/config restoration evidence drifted",
+    )
 
     development = evidence["developmentStatus"]
     require(
@@ -90,7 +122,7 @@ def main() -> int:
         and development["productionBridgeBindingRegistered"] is False
         and development["mutatingDeliveryDefaultEnabled"] is False
         and development["directContainerMutationImplemented"] is False
-        and development["captureAndExactReadbackLiveAccepted"] is False,
+        and development["captureAndExactReadbackLiveAccepted"] is True,
         "native delivery development/live-acceptance boundary drifted",
     )
 
@@ -99,13 +131,19 @@ def main() -> int:
             "current-build signature evidence missing")
     require(conclusion["readOnlyProbeAllowed"] is True,
             "read-only probe must remain allowed")
-    require(conclusion["nativeCaptureDeliveryActivationAllowed"] is False,
-            "native delivery was activated before live acceptance")
+    require(conclusion["nativeCaptureDeliveryActivationAllowed"] is True,
+            "accepted native delivery route was disabled")
+    require(conclusion["productionBridgeBindingRegistered"] is False,
+            "production binding was claimed without a content binding")
+    require(conclusion["formalConfigDefaultEnabled"] is False,
+            "QA delivery must remain disabled in formal config")
+    require(conclusion["saveMutatingAcceptanceTestCompletedUnderUserAuthorization"] is True,
+            "authorized mutating acceptance was not recorded")
     require(conclusion["directContainerMutationAllowed"] is False,
             "direct container mutation must stay forbidden")
     require(conclusion["saveMutatingAcceptanceTestAllowedByThisEvidence"] is False,
             "signature inventory cannot authorize a save mutation")
-    print("PASS unique-Pal native delivery current-build contract: signatures=yes, runtime storage=yes, capture=no")
+    print("PASS unique-Pal native delivery current-build contract: signatures=yes, runtime storage=yes, capture=yes, exact-readback=yes, production-binding=no")
     return 0
 
 

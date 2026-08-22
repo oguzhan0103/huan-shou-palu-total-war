@@ -63,9 +63,10 @@
   版本化合同与测试。赎金支付已新增原生 ItemShop 服务器购买回执桥，只接受 Core 报价
   与确切 offer/provider/binding/generation/shop/product/持有势力/金额/数量/route 全字段
   匹配，并强制商业好感奖励为 0；不直接改金币。Pal 交付也已补容量预检、服务端创建／
-  捕获、唯一个体键、仓库回读、幂等重试和卸载回滚的事务桥。正式赎金商品行和当前 Build
-  原生交付适配器仍均为 0；真实 spawner、Actor、城市锚点、袭击、商品和交付路线尚未完成
-  部署实机，不能写成玩家可见完整闭环。详见 `docs/63_唯一帕鲁商会赎金原生购买桥纯开发验收_2026-08-22.md`
+  捕获、唯一个体键、仓库回读、幂等重试和卸载回滚的事务桥。Build 24575825 已在受控世界
+  实机完成一次 Anubis 服务端创建、异步 identity、原生捕获和同一 `PalInstanceID` 仓库回读；
+  正式 QA 开关和存档均已恢复。正式赎金商品行和 P2 生产 target binding 仍为 0；真实城市、
+  袭击和支付→交付组合尚未完成实机，不能写成玩家可见完整闭环。详见 `docs/63_唯一帕鲁商会赎金原生购买桥纯开发验收_2026-08-22.md`
   与 `docs/64_唯一帕鲁原生交付事务桥纯开发验收_2026-08-22.md`。
 - 外接势力操作台已纳入 Core source-only 发布白名单；开发者先在兄弟目录 `PalAgentDialogue` 执行 `cargo build --release`，再运行 `companion/start-companion.cmd`。独立分发时也可用 `PAL_AGENT_EXECUTABLE` 与 `PAL_AGENT_CHARACTER_PACK` 指向已审计的本地 sidecar 与角色包。
 
@@ -77,7 +78,7 @@ Cooked 势力面板和自定义商店所需的三个 PAK，因此不能单独还
 
 UE 5.1.1、VS 2022、Palworld Modding Kit、Palworld 专用 UE4SS、PalSchema、FModel 和 UAssetGUI 已就位。PMK 编辑器现可编译并保存本 Mod 的 LogicMod/UMG 资产；势力 UI 仍遵守“无标题界面自动生成、无 Lua 动态 WidgetTree、无存档写入”的安全边界。
 
-历史 Build 24370881 证据继续只作历史参考，Build 24467282 的机制实机证据保留为对应版本的历史验收。当前 Build 24575825 已完成源码部署、安装审计和玩家护卫最终生命周期验收；测试结束后恢复正式安全配置，并从测试前快照恢复受保护存档为 377/377 文件、0 哈希差异。
+历史 Build 24370881 证据继续只作历史参考，Build 24467282 的机制实机证据保留为对应版本的历史验收。当前 Build 24575825 已完成源码部署、安装审计、玩家护卫最终生命周期验收和唯一 Pal 单只原生交付验收；最近一次测试结束后恢复正式安全配置，并从测试前快照恢复受保护存档为 363/363 文件、0 哈希差异。
 
 犯罪提示 UI 暂不接入。证据显示 `WBP_Crime_Found` 与 `CrimeIds`、`DT_UI_Common_Text`、犯罪音效和 HUD 状态耦合；在无法确认只复用展示层而不触发犯罪／通缉状态前，不为入境提示调用它。
 
