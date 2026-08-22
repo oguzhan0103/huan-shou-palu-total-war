@@ -29,8 +29,18 @@ local status = router:status()
 assert(status.apiVersion == "1.0.0")
 assert(status.providerCount == 3 and status.reasonRouteCount == 5)
 assert(status.maximumPenaltyPerEvent == 300)
+assert(status.nextEventSequence == 0)
 assert(status.modelMayDispatch == false)
 assert(status.PalworldSaveMutation == false)
+
+local allocated_one = router:allocate_event_identity("spec.native")
+local allocated_two = router:allocate_event_identity("spec.native")
+assert(allocated_one.eventId == "spec.native:000000000001")
+assert(allocated_one.operationId
+    == "consequence:spec.native:000000000001")
+assert(allocated_two.nativeEventId
+    == "native:spec.native:000000000002")
+assert(router:status().nextEventSequence == 2)
 
 assert(api:join_human(rayne, "spec.consequence.join").ok)
 assert(api:award_task(rayne, 300, "spec.consequence.rank.1").ok)
@@ -191,6 +201,7 @@ assert(snapshot.factionConsequences.processedEvents
 local restored = progression:restore_snapshot(snapshot)
 assert(restored.ok)
 assert(router:status().activeBindingCount == 0)
+assert(router:status().nextEventSequence == 2)
 assert(router:event_status(content_event.eventId).outcome.applied == -100)
 local restored_duplicate = router:dispatch(content_event)
 assert(restored_duplicate.ok and restored_duplicate.reason

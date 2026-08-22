@@ -83,6 +83,7 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "commerce_bridge.lua",
         SCRIPTS_ROOT / "pwft" / "faction_api.lua",
         SCRIPTS_ROOT / "pwft" / "faction_consequence_router.lua",
+        SCRIPTS_ROOT / "pwft" / "faction_consequence_native_binding.lua",
         SCRIPTS_ROOT / "pwft" / "faction_commerce.lua",
         SCRIPTS_ROOT / "pwft" / "faction_defense.lua",
         SCRIPTS_ROOT / "pwft" / "faction_economy.lua",
@@ -119,6 +120,7 @@ def main() -> int:
         PROJECT_ROOT / "mod0" / "tests" / "policy_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_api_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_consequence_router_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "faction_consequence_native_binding_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "commerce_bridge_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_commerce_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_economy_spec.lua",
@@ -184,6 +186,10 @@ def main() -> int:
         / "evidence"
         / "contracts"
         / "pal-raid-result-adapter-build24467282.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "contracts"
+        / "faction-consequence-native-damage-build24370881.json",
         PROJECT_ROOT / "contracts" / "faction_commerce.v1.json",
         PROJECT_ROOT / "contracts" / "faction_economy.v1.json",
         PROJECT_ROOT / "contracts" / "faction_economy_shops.v1.json",
@@ -238,6 +244,14 @@ def main() -> int:
     progression = json.loads(
         (PROJECT_ROOT / "contracts" / "faction_progression.v1.json").read_text(encoding="utf-8")
     )
+    native_damage_evidence = json.loads(
+        (
+            PROJECT_ROOT
+            / "evidence"
+            / "contracts"
+            / "faction-consequence-native-damage-build24370881.json"
+        ).read_text(encoding="utf-8")
+    )
     unique_pal_boss_provider = json.loads(
         (PROJECT_ROOT / "contracts" / "unique_pal_boss_provider.v1.json").read_text(
             encoding="utf-8"
@@ -277,6 +291,37 @@ def main() -> int:
     require(
         progression["baselineStatus"] == "user_confirmed_mechanics_baseline_2026-07-28",
         "faction progression baseline not active",
+    )
+    native_damage = progression["reputationSources"]["consequence"][
+        "routingPolicy"
+    ]["nativeDamageBinding"]
+    require(
+        native_damage["sourceBuildId"] == "24370881"
+        and native_damage["currentHostBuildId"] == "24575825"
+        and native_damage["settlementEnabled"] is False
+        and native_damage["probeEnabled"] is True,
+        "unverified current-build damage settlement must remain probe-only",
+    )
+    require(
+        native_damage["hookPath"]
+        == "/Script/Pal.PalCharacterParameterComponent:OnDamage"
+        and native_damage["damageResultStruct"]
+        == "/Script/Pal.PalDamageResult"
+        and native_damage["attackerField"] == "Attacker"
+        and native_damage["defenderField"] == "Defender"
+        and native_damage["actualDamageField"] == "ActualDamage",
+        "native damage callback contract drifted",
+    )
+    require(
+        native_damage["sourceObjectDumpSha256"]
+        == native_damage_evidence["source"]["objectDumpSha256"]
+        and native_damage_evidence["source"]["steamBuildId"]
+        == native_damage["sourceBuildId"]
+        and native_damage_evidence["runtimePolicy"][
+            "currentBuildSettlementEnabled"
+        ]
+        is False,
+        "native damage evidence provenance or fail-closed gate drifted",
     )
     require(
         unique_pal_boss_provider["schemaVersion"] == "1.0.0"
@@ -715,6 +760,9 @@ def main() -> int:
     faction_consequence_router_text = (
         SCRIPTS_ROOT / "pwft" / "faction_consequence_router.lua"
     ).read_text(encoding="utf-8")
+    faction_consequence_native_binding_text = (
+        SCRIPTS_ROOT / "pwft" / "faction_consequence_native_binding.lua"
+    ).read_text(encoding="utf-8")
     content_action_runtime_text = (
         SCRIPTS_ROOT / "pwft" / "content_action_runtime.lua"
     ).read_text(encoding="utf-8")
@@ -1057,6 +1105,35 @@ def main() -> int:
         and "on_faction_consequence_recorded" in runtime_text
         and "FACTION_CONSEQUENCE_ROUTER_READY" in runtime_text,
         "authoritative faction-consequence router runtime lifecycle is incomplete",
+    )
+    require(
+        "FactionConsequenceNativeBinding.create" in runtime_text
+        and "_G.PWFT_FACTION_CONSEQUENCE_NATIVE_BINDING_V1" in runtime_text
+        and "factionConsequenceNativeBinding:unbind_world" in runtime_text
+        and "FACTION_CONSEQUENCE_NATIVE_READY" in runtime_text,
+        "native faction-consequence binding runtime lifecycle is incomplete",
+    )
+    require(
+        "/Script/Pal.PalCharacterParameterComponent:OnDamage"
+        in faction_consequence_native_binding_text
+        and "self.policy.attackerField"
+        in faction_consequence_native_binding_text
+        and "self.policy.defenderField"
+        in faction_consequence_native_binding_text
+        and "self.policy.actualDamageField"
+        in faction_consequence_native_binding_text
+        and "native-consequence-settlement-gated"
+        in faction_consequence_native_binding_text,
+        "native damage probe or current-build settlement gate is incomplete",
+    )
+    require(
+        "targetsByActor[defender]"
+        in faction_consequence_native_binding_text
+        and "attacker ~= local_player"
+        in faction_consequence_native_binding_text
+        and "broadActorScan = false"
+        in faction_consequence_native_binding_text,
+        "native damage exact-target or direct-player safety gate is incomplete",
     )
     require(
         "exactActorAndClassBinding = true" in faction_consequence_router_text

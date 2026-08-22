@@ -39,8 +39,10 @@ Mod 0 现在同时承载势力地图、地名颜色、敌区传送限制、雷�
 - 降到领队以下会通过统一变更回调撤回现役玩家护卫；内容包可用任务模板 `1.1` 声明人类势力、最低身份和最低好感门槛，失去权限时只暂停并保留任务进度，恢复资格后继续。
 - 提供安全的 Mod 自有 JSON 旁路持久化设施；可靠世界／玩家身份确认后启用，身份
   未就绪时失败关闭，不写 Palworld 世界存档。
+- 提供 `PalCharacterParameterComponent:OnDamage` 的精确目标伤害探针：只处理已登记 Defender、匹配组件 Owner、直接本地玩家和正 `ActualDamage`；同目标 5 秒去抖。当前证据来自旧 Build 24370881，Build 24575825 正式扣分保持关闭。
 - 提供版本化公共接口，供后续粉丝任务、剧情、UI 和生成适配器调用：
   `_G.PWFT_FACTION_API_V1`、`_G.PWFT_FACTION_CONSEQUENCE_API_V1`、
+  `_G.PWFT_FACTION_CONSEQUENCE_NATIVE_BINDING_V1`、
   `_G.PWFT_COMMERCE_API_V1`、
   `_G.PWFT_ECONOMY_API_V1`、`_G.PWFT_ECONOMY_SHOP_API_V1`、
   `_G.PWFT_JOIN_API_V1`、
@@ -67,6 +69,7 @@ Mod 0 现在同时承载势力地图、地名颜色、敌区传送限制、雷�
 - `enableSaveWrites = false`
 - 势力进度已有版本化快照和主文件/临时文件/备份回退设施；在拿到可靠的世界/玩家身份键前保持 `enabled = false`。
 - 势力进度 sidecar 载荷从 `1.0` 自动迁移到 `1.1`，保留未知扩展状态；任意控制台、客户端和 Ollama 文本均不能直接施加好感变更，旧 `pwft.progress grant` 已失败关闭。
+- 原生伤害适配器不扫描世界且只接受同一 UObject 引用。当前 `probeEnabled=true`、`settlementEnabled=false`；旧 Build Hook 注册成功或离线测试通过都不能替代 Build 24575825 的伤害来源实机确认。
 - `nativeEconomyMerchantSpawnEnabled = true`；`FTPoint90` 泰拉瑞亚密域小岛已锁定为中立“商人商会”并从势力着色/敌对传送限制中剥离。七柜台商品资产、原生商店绑定、交互、生成、正式根坐标和朝向均已实机验收。正式运行时会在玩家接近商会时生成七柜台，离开较远后统一回收；`Ctrl+F9` 集中测试开关仍默认关闭。
 - 原生 ItemShop 可以表达商品、售价与库存，但不能覆盖玩家出售价格；需求品奖励只在
   服务器出售请求与真实背包复制确认后结算，不伪造采购金币补差。
@@ -83,7 +86,7 @@ Mod 0 现在同时承载势力地图、地名颜色、敌区传送限制、雷�
 ## 下一道门槛
 
 1. 商人商会 1.0 已完成；队形、朝向、自由漫步和采购金币补差不作为当前门槛。
-2. 好感下降、身份降级、权限回收和三类权威后果 provider 已完成纯开发和自动测试；下一道对应门槛是核验 Build 24575825 真实伤害来源并绑定精确伤害 Hook，然后经用户授权验证旧 sidecar 迁移、护卫撤回、任务暂停/恢复、NPC/商人/UI 刷新实机闭环。
+2. 好感下降、身份降级、权限回收、三类权威后果 provider 与原生伤害 probe-only 适配器已完成纯开发和自动测试；下一道对应门槛是核验 Build 24575825 当前 Hook 与真实伤害来源，保持无扣分探针先验收，再经用户授权打开并验证旧 sidecar 迁移、护卫撤回、任务暂停/恢复、NPC/商人/UI 刷新实机闭环。
 3. 唯一性帕鲁状态机、P1 Boss Provider 和 P2 世界效果／战争／赎回 Provider 已完成纯源码和自动测试；真实 species、Boss Actor、spawner、替换槽位、城市锚点、商会柜台、袭击、支付、Pal 交付与平衡数值仍须内容证据和实机授权。
 4. 不以离线 PASS 代替实机结论；正式剧情、代表和精确 Actor 继续由内容包提供。
 

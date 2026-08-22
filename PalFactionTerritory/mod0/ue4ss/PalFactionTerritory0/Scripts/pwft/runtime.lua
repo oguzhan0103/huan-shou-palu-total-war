@@ -18,6 +18,8 @@ local EndingRuntime = require("pwft.ending_runtime")
 local FactionApi = require("pwft.faction_api")
 local FactionConsequenceRouter =
     require("pwft.faction_consequence_router")
+local FactionConsequenceNativeBinding =
+    require("pwft.faction_consequence_native_binding")
 local FactionCommerce = require("pwft.faction_commerce")
 local FactionDefense = require("pwft.faction_defense")
 local FactionEconomy = require("pwft.faction_economy")
@@ -4419,7 +4421,10 @@ local function register_runtime_probes(config, registry, policy, state)
     if (config.factionCommerce.economyMerchantPresence.enabled == true
         or config.palReconciliation.agentBridge.enabled == true
         or config.factionNpcAttitudes ~= nil
-        or config.npcLeaderGuards ~= nil)
+        or config.npcLeaderGuards ~= nil
+        or registry.progression.contract.reputationSources
+            .consequence.routingPolicy.nativeDamageBinding
+            .probeEnabled == true)
         and type(RegisterLoadMapPreHook) == "function" then
         local load_map_pre_callback = function()
             state.nativeWorldGeneration =
@@ -4440,6 +4445,11 @@ local function register_runtime_probes(config, registry, policy, state)
             end
             if state.uniquePalWorldEffectBus ~= nil then
                 state.uniquePalWorldEffectBus:unbind_world(
+                    "runtime-world-unloading"
+                )
+            end
+            if state.factionConsequenceNativeBinding ~= nil then
+                state.factionConsequenceNativeBinding:unbind_world(
                     "runtime-world-unloading"
                 )
             end
@@ -4692,6 +4702,10 @@ function Runtime.start(config, registry, policy)
             factionConsequences = state.factionConsequenceRouter
                     and state.factionConsequenceRouter:status()
                 or nil,
+            factionConsequenceNativeBinding =
+                state.factionConsequenceNativeBinding
+                    and state.factionConsequenceNativeBinding:status()
+                or nil,
             endingEffectProviderBus = state.endingEffectProviderBus
                     and state.endingEffectProviderBus:status()
                 or nil,
@@ -4875,6 +4889,22 @@ function Runtime.start(config, registry, policy)
         )
     _G.PWFT_FACTION_CONSEQUENCE_API_V1 =
         state.factionConsequenceRouter
+    state.factionConsequenceNativeBinding =
+        FactionConsequenceNativeBinding.create(
+            state.factionConsequenceRouter,
+            {
+                logger = log,
+                localPlayerActor = function()
+                    local _, _, _, pawn =
+                        find_local_player_transform()
+                    return pawn
+                end,
+            }
+        )
+    state.factionConsequenceNativeBindingStart =
+        state.factionConsequenceNativeBinding:start()
+    _G.PWFT_FACTION_CONSEQUENCE_NATIVE_BINDING_V1 =
+        state.factionConsequenceNativeBinding
     state.factionResourceLedger = FactionResourceLedger.create(
         state.factionProgression,
         registry.economy,
@@ -5152,6 +5182,8 @@ function Runtime.start(config, registry, policy)
             contentActionRuntime = state.contentActionRuntime,
             factionResourceLedger = state.factionResourceLedger,
             factionEconomyWar = state.factionEconomyWar,
+            factionConsequenceNativeBinding =
+                state.factionConsequenceNativeBinding,
             strategicWorldNativeBus = state.strategicWorldNativeBus,
             uniquePalCampaign = state.uniquePalCampaign,
             uniquePalBossProviderBus =
@@ -5632,6 +5664,24 @@ function Runtime.start(config, registry, policy)
         tostring(consequence_status.exactActorAndClassBinding),
         tostring(consequence_status.nativeConfirmationRequired),
         tostring(consequence_status.modelMayDispatch)
+    ))
+    local native_consequence_status =
+        state.factionConsequenceNativeBinding:status()
+    log(string.format(
+        "FACTION_CONSEQUENCE_NATIVE_READY api=%s hook=%s probe=%s settlement=%s sourceBuild=%s hostBuild=%s currentSignature=%s registered=%d observed=%d settled=%d broadScan=%s saveWrites=false gate=%s",
+        native_consequence_status.apiVersion,
+        tostring(native_consequence_status.hookReady),
+        tostring(native_consequence_status.probeEnabled),
+        tostring(native_consequence_status.settlementEnabled),
+        native_consequence_status.sourceBuildId,
+        native_consequence_status.currentHostBuildId,
+        tostring(native_consequence_status
+            .currentHostSignatureVerified),
+        native_consequence_status.registeredActorCount,
+        native_consequence_status.observedCount,
+        native_consequence_status.settledCount,
+        tostring(native_consequence_status.broadActorScan),
+        native_consequence_status.settlementGate
     ))
     local pal_reconciliation_status =
         state.palReconciliation:status()

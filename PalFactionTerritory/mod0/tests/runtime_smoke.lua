@@ -156,6 +156,40 @@ assert(
         .nativeConfirmationRequired == true
 )
 assert(state.factionConsequenceRouter:status().modelMayDispatch == false)
+assert(
+    _G.PWFT_FACTION_CONSEQUENCE_NATIVE_BINDING_V1
+        == state.factionConsequenceNativeBinding
+)
+assert(state.factionConsequenceNativeBindingStart.ok == true)
+assert(
+    state.factionConsequenceNativeBinding:status().hookReady
+        == true
+)
+assert(
+    state.factionConsequenceNativeBinding:status().sourceBuildId
+        == "24370881"
+)
+assert(
+    state.factionConsequenceNativeBinding:status()
+        .currentHostBuildId == "24575825"
+)
+assert(
+    state.factionConsequenceNativeBinding:status()
+        .currentHostSignatureVerified == false
+)
+assert(
+    state.factionConsequenceNativeBinding:status()
+        .settlementEnabled == false
+)
+assert(
+    state.factionConsequenceNativeBinding:status().broadActorScan
+        == false
+)
+assert(
+    hooks[
+        "/Script/Pal.PalCharacterParameterComponent:OnDamage"
+    ] ~= nil
+)
 assert(_G.PWFT_COMPANION_LEDGER_V1 == state.companionLedger)
 assert(
     _G.PWFT_BACKGROUND_RAID_RECORDER_V1

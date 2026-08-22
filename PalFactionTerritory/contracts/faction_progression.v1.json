@@ -285,6 +285,29 @@
         "worldGenerationRequiredForActorEvents": true,
         "modelDispatchAllowed": false,
         "arbitraryClientDispatchAllowed": false,
+        "nativeDamageBinding": {
+          "schemaVersion": "1.0.0",
+          "sourceBuildId": "24370881",
+          "currentHostBuildId": "24575825",
+          "sourceObjectDumpSha256": "D8864A14FB50501EF48477D27A0A6C66ED06C63A5454C2ADD1D82800C67AFE5C",
+          "hookPath": "/Script/Pal.PalCharacterParameterComponent:OnDamage",
+          "damageResultStruct": "/Script/Pal.PalDamageResult",
+          "attackerField": "Attacker",
+          "defenderField": "Defender",
+          "actualDamageField": "ActualDamage",
+          "exactRegisteredDefenderOnly": true,
+          "directLocalPlayerOnly": true,
+          "positiveActualDamageOnly": true,
+          "minimumIntervalSecondsPerTarget": 5,
+          "penaltyByActorRole": {
+            "faction-member": 5,
+            "civilian": 10
+          },
+          "probeEnabled": true,
+          "settlementEnabled": false,
+          "settlementGate": "build-24575825-objectdump-and-live-attribution-required",
+          "storyContentIncluded": false
+        },
         "providers": [
           {
             "id": "pwft.consequence.native-actor.v1",

@@ -82,11 +82,17 @@ local function ensure_state(faction_api)
         progression.state.factionConsequences or {
             schemaVersion = STATE_SCHEMA_VERSION,
             processedEvents = {},
+            nextEventSequence = 0,
         }
     local state = progression.state.factionConsequences
     assert(state.schemaVersion == STATE_SCHEMA_VERSION,
         "unsupported faction consequence state schema")
     state.processedEvents = state.processedEvents or {}
+    state.nextEventSequence = state.nextEventSequence or 0
+    assert(type(state.nextEventSequence) == "number"
+        and state.nextEventSequence >= 0
+        and state.nextEventSequence == math.floor(state.nextEventSequence),
+        "faction consequence event sequence is invalid")
     return state
 end
 
@@ -378,6 +384,20 @@ function FactionConsequenceRouter:bind_actor(definition)
     })
 end
 
+function FactionConsequenceRouter:allocate_event_identity(namespace)
+    namespace = require_text(namespace,
+        "faction consequence event namespace")
+    self.state.nextEventSequence = self.state.nextEventSequence + 1
+    local suffix = string.format("%012d", self.state.nextEventSequence)
+    local event_id = namespace .. ":" .. suffix
+    return {
+        eventId = event_id,
+        operationId = "consequence:" .. event_id,
+        nativeEventId = "native:" .. event_id,
+        sequence = self.state.nextEventSequence,
+    }
+end
+
 function FactionConsequenceRouter:unbind_actor(binding_id, actor_ref)
     require_text(binding_id, "actor consequence binding ID")
     local binding = self.bindings[binding_id]
@@ -525,6 +545,7 @@ function FactionConsequenceRouter:status()
         reasonRouteCount = count(self.reasonOwners),
         activeBindingCount = count(self.bindings),
         processedEventCount = count(self.state.processedEvents),
+        nextEventSequence = self.state.nextEventSequence,
         worldGeneration = self.worldGeneration,
         maximumPenaltyPerEvent = self.maximumPenaltyPerEvent,
         acceptedCount = self.acceptedCount,

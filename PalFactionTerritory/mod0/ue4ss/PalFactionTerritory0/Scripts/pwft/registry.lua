@@ -11,7 +11,7 @@ return {
         ["faction_economy.v1.json"] = "55cd5db5a55cfcdd043cb870e0cf305dc0ce45bebc2198aceb9d61265d876d34",
         ["faction_economy_shops.v1.json"] = "32d67b2613b2dbc9d0bbe8473bc12b27749dd1ddbb635d9d251f6aec3877d8c5",
         ["pal_reconciliation.v1.json"] = "312a14163d9a6e2f21acc1ab5c9d15b4585a6dd8880f7386891c9dde77a66065",
-        ["faction_progression.v1.json"] = "8a2a9468b39faf7b8b4ff7171872f42774b141faf80dcea33cd1f59a7ff5d8d9",
+        ["faction_progression.v1.json"] = "b9c5954e92702e828fa63fc5223af38c62642f2993fe15af0626dcc8a9999fca",
         ["territory_assignments.v1.json"] = "0b4542014338178ab311f73a876dea640a1d393e9cd68801b3c852e2849e0f7b",
         ["fast_travel_territories.v1.json"] = "a2945338ca661ef001b1603a077209f06efae5fad2b25a43d432acde9419dbf4",
         ["island_territories.v2.json"] = "2a24d45822234f9064cdaee26c56423ab59cf074a54e780ce7aa79be1eb39e27",
@@ -1924,6 +1924,29 @@ return {
                     ["worldGenerationRequiredForActorEvents"] = true,
                     ["modelDispatchAllowed"] = false,
                     ["arbitraryClientDispatchAllowed"] = false,
+                    ["nativeDamageBinding"] = {
+                        ["schemaVersion"] = "1.0.0",
+                        ["sourceBuildId"] = "24370881",
+                        ["currentHostBuildId"] = "24575825",
+                        ["sourceObjectDumpSha256"] = "D8864A14FB50501EF48477D27A0A6C66ED06C63A5454C2ADD1D82800C67AFE5C",
+                        ["hookPath"] = "/Script/Pal.PalCharacterParameterComponent:OnDamage",
+                        ["damageResultStruct"] = "/Script/Pal.PalDamageResult",
+                        ["attackerField"] = "Attacker",
+                        ["defenderField"] = "Defender",
+                        ["actualDamageField"] = "ActualDamage",
+                        ["exactRegisteredDefenderOnly"] = true,
+                        ["directLocalPlayerOnly"] = true,
+                        ["positiveActualDamageOnly"] = true,
+                        ["minimumIntervalSecondsPerTarget"] = 5,
+                        ["penaltyByActorRole"] = {
+                            ["faction-member"] = 5,
+                            ["civilian"] = 10
+                        },
+                        ["probeEnabled"] = true,
+                        ["settlementEnabled"] = false,
+                        ["settlementGate"] = "build-24575825-objectdump-and-live-attribution-required",
+                        ["storyContentIncluded"] = false
+                    },
                     ["providers"] = {
                         {
                             ["id"] = "pwft.consequence.native-actor.v1",
