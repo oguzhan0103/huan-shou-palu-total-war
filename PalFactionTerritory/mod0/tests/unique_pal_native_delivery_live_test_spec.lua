@@ -32,6 +32,14 @@ function adapter:preflight(request)
 end
 function adapter:create_individual(request)
     calls.create = calls.create + 1
+    if calls.create == 1 or self.forceIdentityPending == true then
+        return {
+            ok = false,
+            reason = "identity-not-ready",
+            retryable = true,
+            nativeDeliveryId = "native." .. request.deliveryId,
+        }
+    end
     return {
         ok = true,
         nativeDeliveryId = "native." .. request.deliveryId,
@@ -97,21 +105,24 @@ local live = LiveTest.create(adapter, {
 local started = live:start(generation)
 assert(started.ok)
 assert(calls.bind == 1 and calls.preflight == 1 and calls.create == 1)
+assert(live:status().stage == "identity-pending")
 assert(#queued == 1)
 assert(live:start(generation).reason
     == "native-pal-delivery-live-test-already-running")
 
--- Actor pending, then capture accepted with storage pending, then exact
--- readback succeeds. No phase can recreate or recapture the individual.
+-- Identity pending resolves against the original spawn, then the actor is
+-- pending, capture is accepted with storage pending, and exact readback
+-- succeeds. No phase can respawn or recapture the individual.
 table.remove(queued, 1)()
 assert(calls.capture == 1 and calls.verify == 0)
+assert(calls.create == 2)
 assert(#queued == 1)
 table.remove(queued, 1)()
 assert(calls.capture == 2 and calls.verify == 1)
 assert(#queued == 1)
 table.remove(queued, 1)()
 assert(calls.capture == 2 and calls.verify == 2)
-assert(calls.create == 1)
+assert(calls.create == 2)
 assert(#queued == 0)
 local status = live:status()
 assert(status.running == false)
@@ -131,6 +142,7 @@ assert(live:status().stage == "idle")
 queued = {}
 calls.capture = 0
 calls.verify = 0
+adapter.forceIdentityPending = true
 local pending = LiveTest.create(adapter, {
     enabled = true,
     buildId = "24575825",
@@ -141,7 +153,7 @@ local pending = LiveTest.create(adapter, {
     end,
 })
 assert(pending:start(generation).ok)
-assert(pending:status().stage == "created")
+assert(pending:status().stage == "identity-pending")
 local pending_unbind = pending:unbind_world("spec-pending-unload")
 assert(pending_unbind.ok)
 assert(calls.rollback == 1)
@@ -150,6 +162,7 @@ assert(calls.unbind == 2)
 local stale = table.remove(queued, 1)()
 assert(stale.ok == false)
 assert(stale.reason == "native-pal-delivery-live-test-not-running")
+adapter.forceIdentityPending = false
 
 -- Full storage fails before creation, and the harness honestly reports it.
 local full_adapter = {}
@@ -182,4 +195,4 @@ assert(full_result.ok == false)
 assert(full_result.reason == "native-pal-storage-full")
 assert(full:status().failureCount == 1)
 
-print("PASS unique-Pal native delivery live-test harness requires explicit QA enablement, retries actor/capture/readback without duplication, proves exact identity, rolls back only pre-capture work, and fails closed on full storage")
+print("PASS unique-Pal native delivery live-test harness requires explicit QA enablement, resolves asynchronous identity and retries actor/capture/readback without duplication, proves exact identity, rolls back only pre-capture work, and fails closed on full storage")

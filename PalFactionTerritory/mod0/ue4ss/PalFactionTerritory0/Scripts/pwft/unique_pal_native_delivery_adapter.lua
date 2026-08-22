@@ -418,6 +418,39 @@ function UniquePalNativeDeliveryAdapter:create_individual(
     local existing = self.recordsByCoreDeliveryId[
         validated.deliveryId]
     if existing ~= nil then
+        if existing.individualKey == nil then
+            local pending_key, pending_error = individual_key(
+                existing.handle
+            )
+            if pending_key == nil then
+                self.lastError =
+                    "native-pal-individual-id-not-ready:"
+                    .. tostring(pending_error)
+                return result(false, self.lastError, {
+                    nativeDeliveryId = existing.nativeDeliveryId,
+                    individualKey = nil,
+                    serverAuthoritativeSpawn = true,
+                    retryable = true,
+                    idempotent = true,
+                })
+            end
+            existing.individualKey = pending_key
+            self.lastError = nil
+            self:_log(string.format(
+                "IDENTITY_READY delivery=%s species=%s individual=%s generation=%d capture=false",
+                validated.deliveryId,
+                validated.speciesId,
+                pending_key,
+                validated.worldGeneration
+            ))
+            return result(true,
+                "native-pal-individual-identity-ready", {
+                nativeDeliveryId = existing.nativeDeliveryId,
+                individualKey = pending_key,
+                serverAuthoritativeSpawn = true,
+                idempotent = true,
+            })
+        end
         return result(true,
             "native-pal-individual-already-created", {
             nativeDeliveryId = existing.nativeDeliveryId,
@@ -512,22 +545,12 @@ function UniquePalNativeDeliveryAdapter:create_individual(
             .. tostring(spawn_error)
         return result(false, self.lastError, { retryable = true })
     end
-    local key, key_error = individual_key(handle)
-    if key == nil then
-        local actor = safe_call(handle, "TryGetIndividualActor")
-        if is_valid_object(actor) then
-            safe_call(actor, "K2_DestroyActor")
-        end
-        self.failureCount = self.failureCount + 1
-        self.lastError = key_error
-        return result(false, key_error, { retryable = false })
-    end
     local native_delivery_id =
         "pwft.native-pal-delivery." .. validated.deliveryId
     local record = {
         coreDeliveryId = validated.deliveryId,
         nativeDeliveryId = native_delivery_id,
-        individualKey = key,
+        individualKey = nil,
         speciesId = validated.speciesId,
         worldGeneration = validated.worldGeneration,
         handle = handle,
@@ -536,9 +559,30 @@ function UniquePalNativeDeliveryAdapter:create_individual(
         captureAccepted = false,
         verified = false,
     }
+    -- SpawnNPCForServer is asynchronous on Build 24575825.  Retain the
+    -- authoritative handle before reading its identity so a retry resolves
+    -- this exact spawn instead of creating a duplicate Pal.
     self.recordsByCoreDeliveryId[validated.deliveryId] = record
     self.recordsByNativeDeliveryId[native_delivery_id] = record
     self.createCount = self.createCount + 1
+    local key, key_error = individual_key(handle)
+    if key == nil then
+        self.lastError = "native-pal-individual-id-not-ready:"
+            .. tostring(key_error)
+        self:_log(string.format(
+            "INDIVIDUAL_SPAWNED_IDENTITY_PENDING delivery=%s species=%s generation=%d capture=false",
+            validated.deliveryId,
+            validated.speciesId,
+            validated.worldGeneration
+        ))
+        return result(false, self.lastError, {
+            nativeDeliveryId = native_delivery_id,
+            individualKey = nil,
+            serverAuthoritativeSpawn = true,
+            retryable = true,
+        })
+    end
+    record.individualKey = key
     self.lastError = nil
     self:_log(string.format(
         "INDIVIDUAL_CREATED delivery=%s species=%s individual=%s generation=%d capture=false",

@@ -125,6 +125,38 @@ function UniquePalNativeDeliveryLiveTest:_process()
             retryable = false,
         })
     end
+    if record.stage == "identity-pending" then
+        local created = self.adapter:create_individual(
+            record.request,
+            record.preflight
+        )
+        if created.ok ~= true then
+            record.lastError = created.reason
+            if created.retryable == false then
+                return self:_finish(false, created.reason, {
+                    retryable = false,
+                })
+            end
+            self:_schedule()
+            return created
+        end
+        if created.nativeDeliveryId ~= record.nativeDeliveryId
+            or created.individualKey == nil then
+            return self:_finish(false,
+                "native-pal-delivery-live-test-identity-mismatch", {
+                retryable = false,
+            })
+        end
+        record.individualKey = created.individualKey
+        record.stage = "created"
+        record.lastError = nil
+        self:_log(string.format(
+            "IDENTITY_READY delivery=%s individual=%s attempt=%d",
+            record.request.deliveryId,
+            record.individualKey,
+            record.attemptCount
+        ))
+    end
     if record.stage == "created" then
         local captured = self.adapter:commit_capture(
             record.request,
@@ -226,18 +258,23 @@ function UniquePalNativeDeliveryLiveTest:start(world_generation)
         request,
         preflight
     )
-    if created.ok ~= true then
+    local stage = "created"
+    if created.ok ~= true
+        and (created.retryable == false
+            or created.nativeDeliveryId == nil) then
         return self:_finish(false,
             created.reason
                 or "native-pal-delivery-live-test-create-failed", {
             retryable = created.retryable ~= false,
         })
     end
+    if created.ok ~= true then stage = "identity-pending" end
     self.active = {
         request = request,
+        preflight = preflight,
         nativeDeliveryId = created.nativeDeliveryId,
         individualKey = created.individualKey,
-        stage = "created",
+        stage = stage,
         attemptCount = 0,
         running = true,
         lastError = nil,
@@ -248,7 +285,7 @@ function UniquePalNativeDeliveryLiveTest:start(world_generation)
         "STARTED delivery=%s species=%s individual=%s generation=%d mutation=true",
         request.deliveryId,
         request.speciesId,
-        created.individualKey,
+        tostring(created.individualKey or "pending"),
         world_generation
     ))
     self:_schedule()
@@ -257,6 +294,7 @@ function UniquePalNativeDeliveryLiveTest:start(world_generation)
         deliveryId = request.deliveryId,
         nativeDeliveryId = created.nativeDeliveryId,
         individualKey = created.individualKey,
+        stage = stage,
     })
 end
 
@@ -264,7 +302,8 @@ function UniquePalNativeDeliveryLiveTest:unbind_world(reason)
     local record = self.active
     local rollback = nil
     if record ~= nil
-        and record.stage == "created"
+        and (record.stage == "identity-pending"
+            or record.stage == "created")
         and record.nativeDeliveryId ~= nil then
         rollback = self.adapter:rollback(
             record.request,

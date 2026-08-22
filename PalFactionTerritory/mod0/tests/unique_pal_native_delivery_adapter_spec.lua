@@ -115,6 +115,10 @@ function manager:SpawnNPCForServer(spawn_info, ...)
         #spawn_requests,
         nil
     )
+    if self.deferNextIdentity == true then
+        handle.individualId = nil
+        self.deferNextIdentity = false
+    end
     table.insert(spawned_handles, handle)
     return handle
 end
@@ -356,6 +360,42 @@ local full = adapter:preflight(full_request)
 assert(full.ok and full.capacityAvailable == false)
 storage.emptyPage = 4
 
+-- Build 24575825 can return the authoritative spawn handle before its
+-- FPalInstanceID fields are populated. Retrying the same delivery must resolve
+-- that retained handle and must never issue a second SpawnNPCForServer call.
+manager.deferNextIdentity = true
+local delayed_request = request("spec.delivery.delayed-identity")
+delayed_request.worldGeneration = adapter:status().worldGeneration
+local delayed_preflight = adapter:preflight(delayed_request)
+local spawn_count_before_delayed = #spawn_requests
+local delayed_pending = adapter:create_individual(
+    delayed_request,
+    delayed_preflight
+)
+assert(delayed_pending.ok == false)
+assert(delayed_pending.retryable == true)
+assert(delayed_pending.nativeDeliveryId
+    == "pwft.native-pal-delivery.spec.delivery.delayed-identity")
+assert(delayed_pending.individualKey == nil)
+assert(#spawn_requests == spawn_count_before_delayed + 1)
+local delayed_handle = spawned_handles[#spawned_handles]
+local delayed_seed = #spawn_requests
+delayed_handle.individualId = {
+    PlayerUId = guid(delayed_seed),
+    InstanceId = guid(delayed_seed + 100),
+}
+local delayed_ready = adapter:create_individual(
+    delayed_request,
+    delayed_preflight
+)
+assert(delayed_ready.ok == true)
+assert(delayed_ready.idempotent == true)
+assert(delayed_ready.nativeDeliveryId
+    == delayed_pending.nativeDeliveryId)
+assert(string.match(delayed_ready.individualKey,
+    "^pal%-%x+%-%x+$") ~= nil)
+assert(#spawn_requests == spawn_count_before_delayed + 1)
+
 local missing_controller = NativeDeliveryAdapter.create({
     buildId = BUILD_ID,
     objectDumpSha256 = DUMP_SHA,
@@ -382,4 +422,4 @@ assert(status.capabilities.directContainerMutation == false)
 assert(status.capabilities.PalworldSaveMutation == false)
 assert(direct_mutation_count == 0)
 
-print("PASS unique-Pal native delivery adapter defaults mutation off, preflights capacity, spawns once through PalNPCManager, captures once through PalUtility, verifies the exact PalInstanceID by storage readback, rolls back only uncommitted actors, and clears world-scoped UObjects")
+print("PASS unique-Pal native delivery adapter defaults mutation off, preflights capacity, retains asynchronous spawn identity without duplication, captures once through PalUtility, verifies the exact PalInstanceID by storage readback, rolls back only uncommitted actors, and clears world-scoped UObjects")
