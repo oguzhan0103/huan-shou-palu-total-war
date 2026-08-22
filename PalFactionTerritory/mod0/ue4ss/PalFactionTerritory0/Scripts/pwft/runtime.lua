@@ -86,6 +86,8 @@ local UniquePalWorldEffectBus =
     require("pwft.unique_pal_world_effect_bus")
 local UniquePalNativeDeliveryBridge =
     require("pwft.unique_pal_native_delivery_bridge")
+local UniquePalNativeDeliveryProbe =
+    require("pwft.unique_pal_native_delivery_probe")
 local UniquePalRansomShopBridge =
     require("pwft.unique_pal_ransom_shop_bridge")
 local WorldBalance = require("pwft.world_balance")
@@ -4271,6 +4273,63 @@ local function begin_progression_identity_probe(config, state)
     )
 end
 
+local function begin_unique_pal_native_delivery_probe(config, state)
+    local probe_config = config.uniquePalNativeDeliveryProbe
+    local probe = state.uniquePalNativeDeliveryProbe
+    if probe_config.enabled ~= true then
+        log("UNIQUE_PAL_NATIVE_DELIVERY_PROBE_DISABLED config=false")
+        return false
+    end
+    if type(ExecuteWithDelay) ~= "function" then
+        log("UNIQUE_PAL_NATIVE_DELIVERY_PROBE_UNAVAILABLE ExecuteWithDelay missing")
+        return false
+    end
+    local generation = state.nativeWorldGeneration
+    probe:bind_world(generation)
+    for attempt, delay_ms in ipairs(probe_config.retryDelaysMs) do
+        local attempt_number = attempt
+        local attempt_delay_ms = delay_ms
+        local callback = function()
+            local current = probe:status()
+            if current.worldBound ~= true
+                or current.worldGeneration ~= generation then
+                log(string.format(
+                    "UNIQUE_PAL_NATIVE_DELIVERY_PROBE_STALE attempt=%d requestedGeneration=%d currentGeneration=%d",
+                    attempt_number,
+                    generation,
+                    current.worldGeneration
+                ))
+                return
+            end
+            if current.successCount > 0
+                and current.lastResult ~= nil
+                and current.lastResult.worldGeneration == generation then
+                return
+            end
+            local outcome = probe:probe(generation)
+            log(string.format(
+                "UNIQUE_PAL_NATIVE_DELIVERY_PROBE_RESULT attempt=%d ok=%s reason=%s generation=%d readOnly=true mutation=false",
+                attempt_number,
+                tostring(outcome.ok == true),
+                tostring(outcome.reason),
+                generation
+            ))
+        end
+        state.callbacks[
+            "uniquePalNativeDeliveryProbe" .. attempt_number
+        ] =
+            callback
+        ExecuteWithDelay(attempt_delay_ms, callback)
+    end
+    log(string.format(
+        "UNIQUE_PAL_NATIVE_DELIVERY_PROBE_SCHEDULED generation=%d attempts=%d build=%s readOnly=true",
+        generation,
+        #probe_config.retryDelaysMs,
+        probe_config.buildId
+    ))
+    return true
+end
+
 local function register_runtime_probes(config, registry, policy, state)
     -- Map-body polling runs after this setup.  Retain the exact startup inputs
     -- so that the delayed map-loaded callback can install the proper warning
@@ -4424,6 +4483,7 @@ local function register_runtime_probes(config, registry, policy, state)
             .nativeRaidResultBindingEnabled == true
     if (config.factionCommerce.economyMerchantPresence.enabled == true
         or config.palReconciliation.agentBridge.enabled == true
+        or config.uniquePalNativeDeliveryProbe.enabled == true
         or config.factionNpcAttitudes ~= nil
         or config.npcLeaderGuards ~= nil
         or registry.progression.contract.reputationSources
@@ -4459,6 +4519,11 @@ local function register_runtime_probes(config, registry, policy, state)
                     )
                 end
                 state.uniquePalWorldEffectBus:unbind_world(
+                    "runtime-world-unloading"
+                )
+            end
+            if state.uniquePalNativeDeliveryProbe ~= nil then
+                state.uniquePalNativeDeliveryProbe:unbind_world(
                     "runtime-world-unloading"
                 )
             end
@@ -4501,6 +4566,7 @@ local function register_runtime_probes(config, registry, policy, state)
     if (config.enableTowerBindingProbe
         or identity_probe_enabled
         or native_raid_hook_retry_enabled
+        or config.uniquePalNativeDeliveryProbe.enabled == true
         or (config.factionCommerce.economyMerchantPresence
             .enabled == true)
         or config.palReconciliation.agentBridge.enabled == true
@@ -4538,6 +4604,9 @@ local function register_runtime_probes(config, registry, policy, state)
             if identity_probe_enabled then
                 begin_progression_identity_probe(config, state)
             end
+            if config.uniquePalNativeDeliveryProbe.enabled == true then
+                begin_unique_pal_native_delivery_probe(config, state)
+            end
             if not identity_probe_enabled then
                 log(
                     "MAIN_WORLD_SERVICES_DEFERRED reason=identity-probe-disabled"
@@ -4547,9 +4616,10 @@ local function register_runtime_probes(config, registry, policy, state)
         state.callbacks.loadMapPost = load_map_post_callback
         RegisterLoadMapPostHook(load_map_post_callback)
         log(string.format(
-            "WORLD_LOAD_CALLBACK_READY towerProbe=%s towerDelayMs=10000 progressionIdentityProbe=%s merchantPresence=%s readOnly=true",
+            "WORLD_LOAD_CALLBACK_READY towerProbe=%s towerDelayMs=10000 progressionIdentityProbe=%s nativeDeliveryProbe=%s merchantPresence=%s readOnly=true",
             tostring(config.enableTowerBindingProbe),
             tostring(identity_probe_enabled),
+            tostring(config.uniquePalNativeDeliveryProbe.enabled == true),
             tostring(config.factionCommerce
                 .economyMerchantPresence.enabled == true)
         ))
@@ -4564,6 +4634,12 @@ function Runtime.start(config, registry, policy)
     assert(type(config.rayneMerchant) == "table", "rayne merchant must be explicitly configured")
     assert(type(config.settlementRaid) == "table", "settlement raid must be explicitly configured")
     assert(type(config.factionProgression) == "table", "faction progression must be explicitly configured")
+    assert(type(config.uniquePalNativeDeliveryProbe) == "table", "unique-Pal native delivery probe must be explicitly configured")
+    assert(type(config.uniquePalNativeDeliveryProbe.enabled) == "boolean", "unique-Pal native delivery probe flag is required")
+    assert(config.uniquePalNativeDeliveryProbe.readOnly == true, "unique-Pal native delivery probe must remain read-only")
+    assert(config.uniquePalNativeDeliveryProbe.buildId == config.expectedSteamBuildId, "unique-Pal native delivery probe Build ID drifted")
+    assert(type(config.uniquePalNativeDeliveryProbe.objectDumpSha256) == "string" and #config.uniquePalNativeDeliveryProbe.objectDumpSha256 == 64, "unique-Pal native delivery probe ObjectDump hash is required")
+    assert(type(config.uniquePalNativeDeliveryProbe.retryDelaysMs) == "table" and #config.uniquePalNativeDeliveryProbe.retryDelaysMs > 0, "unique-Pal native delivery probe retry delays are required")
     assert(config.factionProgression.enabled == true, "faction progression core must be enabled")
     assert(type(config.palReconciliation) == "table", "Pal reconciliation must be explicitly configured")
     assert(config.palReconciliation.enabled == true, "Pal reconciliation core must be enabled")
@@ -5121,6 +5197,14 @@ function Runtime.start(config, registry, policy)
                 end,
             }
         )
+    state.uniquePalNativeDeliveryProbe =
+        UniquePalNativeDeliveryProbe.create({
+            buildId = config.uniquePalNativeDeliveryProbe.buildId,
+            objectDumpSha256 = config.uniquePalNativeDeliveryProbe
+                .objectDumpSha256,
+            readOnly = config.uniquePalNativeDeliveryProbe.readOnly,
+            logger = log,
+        })
     state.uniquePalRansomShopBridge =
         UniquePalRansomShopBridge.create(
             state.uniquePalWorldEffectBus,
@@ -5195,6 +5279,8 @@ function Runtime.start(config, registry, policy)
         state.uniquePalWorldEffectBus
     _G.PWFT_UNIQUE_PAL_NATIVE_DELIVERY_BRIDGE_V1 =
         state.uniquePalNativeDeliveryBridge
+    _G.PWFT_UNIQUE_PAL_NATIVE_DELIVERY_PROBE_V1 =
+        state.uniquePalNativeDeliveryProbe
     _G.PWFT_UNIQUE_PAL_RANSOM_SHOP_BRIDGE_V1 =
         state.uniquePalRansomShopBridge
     _G.PWFT_ENDING_EFFECT_PROVIDER_BUS_V1 =
@@ -5861,6 +5947,8 @@ function Runtime.start(config, registry, policy)
         state.uniquePalWorldEffectBus:status()
     local unique_pal_native_delivery_status =
         state.uniquePalNativeDeliveryBridge:status()
+    local unique_pal_native_delivery_probe_status =
+        state.uniquePalNativeDeliveryProbe:status()
     local unique_pal_ransom_shop_status =
         state.uniquePalRansomShopBridge:status()
     local content_pack_status = state.contentPackRegistry:status()
@@ -5983,6 +6071,15 @@ function Runtime.start(config, registry, policy)
             .exactIndividualIdentityRequired),
         tostring(unique_pal_native_delivery_status.directContainerMutation),
         tostring(unique_pal_native_delivery_status.debugCaptureApiAllowed)
+    ))
+    log(string.format(
+        "UNIQUE_PAL_NATIVE_DELIVERY_PROBE_READY api=%s enabled=%s build=%s attempts=%d successes=%d readOnly=%s create=false capture=false directContainerMutation=false saveWrites=false",
+        unique_pal_native_delivery_probe_status.apiVersion,
+        tostring(config.uniquePalNativeDeliveryProbe.enabled == true),
+        unique_pal_native_delivery_probe_status.buildId,
+        unique_pal_native_delivery_probe_status.attemptCount,
+        unique_pal_native_delivery_probe_status.successCount,
+        tostring(unique_pal_native_delivery_probe_status.readOnly)
     ))
     log(string.format(
         "UNIQUE_PAL_RANSOM_SHOP_READY api=%s open=%d settled=%d confirmed=%d rejected=%d route=%s reputation=%d directCurrencyMutation=%s palDelivery=%s saveWrites=false",

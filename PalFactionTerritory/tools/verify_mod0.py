@@ -114,6 +114,8 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "unique_pal_boss_provider_bus.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_world_effect_bus.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_bridge.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_adapter.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_probe.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_ransom_shop_bridge.lua",
         SCRIPTS_ROOT / "pwft" / "runtime.lua",
         SCRIPTS_ROOT / "pwft" / "settlement_raid.lua",
@@ -152,6 +154,8 @@ def main() -> int:
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_boss_provider_bus_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_world_effect_bus_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_bridge_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_adapter_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_probe_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_ransom_shop_bridge_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "ending_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "content_pack_author_sdk_e2e_spec.lua",
@@ -199,6 +203,10 @@ def main() -> int:
         / "evidence"
         / "contracts"
         / "unique-pal-native-assets-build24575825.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "contracts"
+        / "unique-pal-native-delivery-build24575825.json",
         PROJECT_ROOT / "contracts" / "faction_commerce.v1.json",
         PROJECT_ROOT / "contracts" / "faction_economy.v1.json",
         PROJECT_ROOT / "contracts" / "faction_economy_shops.v1.json",
@@ -206,6 +214,7 @@ def main() -> int:
         PROJECT_ROOT / "tools" / "verify_faction_economy_shops.py",
         PROJECT_ROOT / "tools" / "verify_pal_raid_result_adapter_contract.py",
         PROJECT_ROOT / "tools" / "verify_unique_pal_native_assets.py",
+        PROJECT_ROOT / "tools" / "verify_unique_pal_native_delivery_contract.py",
         PROJECT_ROOT / "scripts" / "build-faction-economy-shops.ps1",
         PROJECT_ROOT / "evidence" / "asset_json" / "DT_PalMonsterParameter.mapped.json",
         HUMAN_PARAMETER_ASSET,
@@ -248,6 +257,14 @@ def main() -> int:
         [
             sys.executable,
             str(PROJECT_ROOT / "tools" / "verify_unique_pal_native_assets.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_unique_pal_native_delivery_contract.py"),
         ],
         cwd=PROJECT_ROOT,
         check=True,
@@ -945,6 +962,9 @@ def main() -> int:
     unique_pal_native_delivery_text = (
         SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_bridge.lua"
     ).read_text(encoding="utf-8")
+    unique_pal_native_delivery_adapter_text = (
+        SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_adapter.lua"
+    ).read_text(encoding="utf-8")
     unique_pal_ransom_shop_text = (
         SCRIPTS_ROOT / "pwft" / "unique_pal_ransom_shop_bridge.lua"
     ).read_text(encoding="utf-8")
@@ -1360,6 +1380,31 @@ def main() -> int:
         and "debugCaptureApiAllowed = false"
         in unique_pal_native_delivery_text,
         "P2 native Pal delivery transaction bridge gates are incomplete",
+    )
+    require(
+        "options.allowMutatingDelivery == true"
+        in unique_pal_native_delivery_adapter_text
+        and "GetPageIndexExistEmptySlot"
+        in unique_pal_native_delivery_adapter_text
+        and "SpawnNPCForServer"
+        in unique_pal_native_delivery_adapter_text
+        and "GetIndividualID"
+        in unique_pal_native_delivery_adapter_text
+        and "PalCaptureSuccess"
+        in unique_pal_native_delivery_adapter_text
+        and "FindByHandle"
+        in unique_pal_native_delivery_adapter_text
+        and "native-pal-storage-individual-mismatch"
+        in unique_pal_native_delivery_adapter_text
+        and "directContainerMutation = false"
+        in unique_pal_native_delivery_adapter_text
+        and "PalworldSaveMutation = false"
+        in unique_pal_native_delivery_adapter_text,
+        "P2 current-build native Pal delivery adapter gates are incomplete",
+    )
+    require(
+        "unique_pal_native_delivery_adapter" not in runtime_text,
+        "unaccepted native Pal capture adapter must not be runtime-registered",
     )
     require(
         "UniquePalNativeDeliveryBridge.create" in runtime_text

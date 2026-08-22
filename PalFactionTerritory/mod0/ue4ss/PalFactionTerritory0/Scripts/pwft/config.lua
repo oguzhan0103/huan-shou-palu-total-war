@@ -4,6 +4,23 @@ return {
     expectedSteamBuildId = "24575825",
     defaultMapMode = "Original",
 
+    -- Build 24575825 exposes the complete reflected storage/capture route.
+    -- This probe is intentionally disabled in production. QA may enable it
+    -- to read the local Pal storage object chain and capacity only; it never
+    -- creates a Pal, calls PalCaptureSuccess, or mutates a container/save.
+    uniquePalNativeDeliveryProbe = {
+        enabled = false,
+        readOnly = true,
+        buildId = "24575825",
+        objectDumpSha256 =
+            "3e84e8a6936b7d1c33de6cfc034c4a200655a3e762cbc2ec4c6a57516476ec78",
+        retryDelaysMs = {
+            1500,
+            5000,
+            12000,
+        },
+    },
+
     -- The progression core owns reputation, independent human memberships,
     -- ranks, commerce caps, guard eligibility, and ending gates. Runtime
     -- Reputation is authoritative in a Mod-owned external sidecar.  The
