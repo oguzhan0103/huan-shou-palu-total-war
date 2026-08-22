@@ -2849,8 +2849,9 @@ local function activate_in_game_world_services(
         return
     end
 
-    ExecuteWithDelay(10000, function()
-        ExecuteInGameThread(function()
+    state.callbacks.mainWorldPostloadProbes =
+        state.callbacks.mainWorldPostloadProbes or {}
+    local game_thread_callback = function()
             if state.inGameWorldReady ~= true
                 or state.inGameWorldGeneration ~= generation
                 or state.nativeWorldGeneration ~= generation then
@@ -2888,8 +2889,19 @@ local function activate_in_game_world_services(
                     config.rayneMerchant.spawnDelayMs
                 )
             end
-        end)
-    end)
+    end
+    local delayed_callback = function()
+        ExecuteInGameThread(game_thread_callback)
+    end
+    -- UE4SS' callback registry does not keep an independently sufficient Lua
+    -- reference on this build. Keep both hops alive for the process lifetime;
+    -- otherwise the 10-second probe can finish and remove EngineTick with
+    -- "Ref was not function", disabling every later keybind and timer.
+    state.callbacks.mainWorldPostloadProbes[generation] = {
+        delayed = delayed_callback,
+        gameThread = game_thread_callback,
+    }
+    ExecuteWithDelay(10000, delayed_callback)
     log(string.format(
         "MAIN_WORLD_POSTLOAD_PROBE_SCHEDULED generation=%d delayMs=10000 source=%s",
         generation,

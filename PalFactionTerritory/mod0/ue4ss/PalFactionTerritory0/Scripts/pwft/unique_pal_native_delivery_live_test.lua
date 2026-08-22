@@ -46,6 +46,7 @@ function UniquePalNativeDeliveryLiveTest.create(adapter, options)
         successCount = 0,
         failureCount = 0,
         rollbackCount = 0,
+        retainedScheduledCallbacks = {},
         lastResult = nil,
         lastError = nil,
     }, { __index = UniquePalNativeDeliveryLiveTest })
@@ -86,10 +87,12 @@ end
 function UniquePalNativeDeliveryLiveTest:_schedule()
     local record = self.active
     if record == nil or record.running ~= true then return false end
+    local callback = function() return self:_process() end
+    table.insert(self.retainedScheduledCallbacks, callback)
     local accepted, schedule_error = pcall(
         self.schedule,
         self.retryDelayMs,
-        function() return self:_process() end
+        callback
     )
     if not accepted or schedule_error == false then
         self:_finish(false,

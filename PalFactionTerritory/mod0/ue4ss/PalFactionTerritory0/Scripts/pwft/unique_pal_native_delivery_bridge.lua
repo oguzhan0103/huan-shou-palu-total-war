@@ -134,6 +134,7 @@ function UniquePalNativeDeliveryBridge.create(world_effect_bus, options)
         verificationPendingCount = 0,
         rollbackCount = 0,
         worldUnbindCount = 0,
+        retainedScheduledCallbacks = {},
         lastError = nil,
     }, { __index = UniquePalNativeDeliveryBridge })
 end
@@ -228,13 +229,18 @@ function UniquePalNativeDeliveryBridge:_schedule(record, delay_ms)
         return false
     end
     record.scheduled = true
+    local callback = function()
+        record.scheduled = false
+        self:process_pending(record.deliveryId)
+    end
+    -- Retain every one-shot callback on the long-lived bridge.  Records are
+    -- cleared on world unload while UE4SS may still own a delayed callback;
+    -- dropping the last Lua reference can invalidate the global EngineTick.
+    table.insert(self.retainedScheduledCallbacks, callback)
     local scheduled, accepted = pcall(
         self.schedule,
         delay_ms or self.retryDelayMs,
-        function()
-            record.scheduled = false
-            self:process_pending(record.deliveryId)
-        end
+        callback
     )
     if not scheduled or accepted == false then
         record.scheduled = false

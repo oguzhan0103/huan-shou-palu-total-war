@@ -114,8 +114,13 @@ function adapter:rollback(request, native_delivery_id, individual_key)
     return { ok = true, rolledBack = true }
 end
 
+local scheduled_callbacks = {}
 local bridge = NativeDeliveryBridge.create(bus, {
     maxAutomaticAttempts = 3,
+    schedule = function(_, callback)
+        table.insert(scheduled_callbacks, callback)
+        return true
+    end,
 })
 local definition = {
     bindingId = native_binding_id,
@@ -170,6 +175,9 @@ local accepted = bridge:handle_delivery(payload(delivery_id), context)
 assert(accepted.ok and accepted.accepted == true)
 assert(accepted.individualKey == delivery_id .. ":individual")
 assert(preflight_count == 1 and create_count == 1)
+assert(#bridge.retainedScheduledCallbacks == 1)
+assert(scheduled_callbacks[1]
+    == bridge.retainedScheduledCallbacks[1])
 deliveries[delivery_id].status = "awaiting-confirmation"
 deliveries[delivery_id].providerRequestId = accepted.requestId
 deliveries[delivery_id].providerIndividualKey = accepted.individualKey
