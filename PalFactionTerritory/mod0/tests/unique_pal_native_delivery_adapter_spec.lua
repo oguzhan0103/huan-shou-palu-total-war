@@ -106,7 +106,9 @@ local manager = valid_object("pal-npc-manager")
 manager.NPCAIControllerBaseClass = controller_class
 local spawn_requests = {}
 local spawned_handles = {}
-function manager:SpawnNPCForServer(spawn_info, callback)
+function manager:SpawnNPCForServer(spawn_info, ...)
+    assert(select("#", ...) == 1)
+    local callback = select(1, ...)
     assert(callback == nil)
     table.insert(spawn_requests, spawn_info)
     local handle = make_handle(

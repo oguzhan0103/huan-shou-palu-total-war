@@ -43,11 +43,13 @@ local function safe_call(object, method_name, ...)
     if not is_valid_object(object) then
         return nil, "object-unavailable"
     end
-    local arguments = { ... }
+    -- Preserve trailing nil values because UE4SS counts every reflected
+    -- UFunction parameter, including an explicitly empty delegate.
+    local arguments = table.pack(...)
     local ok, value = pcall(function()
         local method = object[method_name]
         if method == nil then error("method-unavailable") end
-        return method(object, table.unpack(arguments))
+        return method(object, table.unpack(arguments, 1, arguments.n))
     end)
     if not ok then return nil, tostring(value) end
     return unwrap(value), nil
