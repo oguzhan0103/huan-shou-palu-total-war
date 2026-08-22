@@ -4869,7 +4869,8 @@ function Runtime.start(config, registry, policy)
                     .. tostring(background_flush_reason)
             )
         end
-        return state.companionLedger:publish({
+        local published, detail, projection =
+            state.companionLedger:publish_public({
             releaseId = config.releaseId,
             expectedSteamBuildId = config.expectedSteamBuildId,
             reason = reason or "state-refresh",
@@ -4917,10 +4918,48 @@ function Runtime.start(config, registry, policy)
             rewardPolicy = state.rewardPolicy
                     and state.rewardPolicy:status()
                 or nil,
-            backgroundRaids = state.backgroundRaidRecorder:status(),
-        })
+                backgroundRaids = state.backgroundRaidRecorder:status(),
+            })
+        if projection ~= nil and projection.redactedCount > 0 then
+            local first = projection.redactions[1] or {}
+            log(string.format(
+                "COMPANION_STATE_PUBLIC_PROJECTION redactions=%d reason=%s firstPath=%s firstReason=%s",
+                projection.redactedCount,
+                tostring(reason or "state-refresh"),
+                tostring(first.path or "none"),
+                tostring(first.reason or "none")
+            ))
+        end
+        return published, detail
     end
     state.publishCompanionState = publish_companion_state
+
+    local function record_companion_event(event, context)
+        if state.companionLedger == nil
+            or not state.companionLedger:status().active then
+            return false, "companion-profile-not-active"
+        end
+        local recorded, detail, projection =
+            state.companionLedger:record_public(event)
+        if not recorded then
+            log(string.format(
+                "COMPANION_EVENT_DEFERRED context=%s reason=%s",
+                tostring(context or "unknown"),
+                tostring(detail)
+            ))
+        elseif projection ~= nil
+            and projection.redactedCount > 0 then
+            local first = projection.redactions[1] or {}
+            log(string.format(
+                "COMPANION_EVENT_PUBLIC_PROJECTION context=%s redactions=%d firstPath=%s firstReason=%s",
+                tostring(context or "unknown"),
+                projection.redactedCount,
+                tostring(first.path or "none"),
+                tostring(first.reason or "none")
+            ))
+        end
+        return recorded, detail, projection
+    end
 
     local function on_faction_state_changed(
         faction_id,
@@ -4987,12 +5026,12 @@ function Runtime.start(config, registry, policy)
             end
             if state.companionLedger ~= nil
                 and state.companionLedger:status().active then
-                state.companionLedger:record({
+                record_companion_event({
                     type = "progression-changed",
                     factionId = faction_id,
                     outcome = outcome,
                     faction = faction_status,
-                })
+                }, "progression-changed")
                 publish_companion_state("progression-changed")
             end
             if state.rayneMerchant ~= nil
@@ -5073,12 +5112,12 @@ function Runtime.start(config, registry, policy)
         end
         if state.companionLedger ~= nil
             and state.companionLedger:status().active then
-            state.companionLedger:record({
+            record_companion_event({
                 type = "faction-consequence-recorded",
                 factionId = faction_id,
                 outcome = outcome,
                 faction = faction_status,
-            })
+            }, "faction-consequence-recorded")
             publish_companion_state("faction-consequence-recorded")
         end
     end
@@ -5682,14 +5721,10 @@ function Runtime.start(config, registry, policy)
                 end
                 if state.companionLedger ~= nil
                     and state.companionLedger:status().active then
-                    local recorded, record_reason =
-                        state.companionLedger:record(event)
-                    if not recorded then
-                        log(
-                            "COMPANION_COMMERCE_EVENT_DEFERRED stage=record reason="
-                                .. tostring(record_reason)
-                        )
-                    end
+                    record_companion_event(
+                        event,
+                        "commerce-" .. tostring(event.type or "unknown")
+                    )
                     local published, publish_reason =
                         publish_companion_state("commerce-event")
                     if not published then
@@ -5920,11 +5955,11 @@ function Runtime.start(config, registry, policy)
                     .. tostring(background_flush_reason)
             )
         end
-        state.companionLedger:record({
+        record_companion_event({
             type = "progression-sidecar-ready",
             restoreSource = restore_source,
             revision = state.factionProgression:status().revision,
-        })
+        }, "progression-sidecar-ready")
         publish_companion_state("identity-ready")
         if state.factionMerchantRuntime ~= nil then
             state.factionMerchantRuntime:refresh_relations()

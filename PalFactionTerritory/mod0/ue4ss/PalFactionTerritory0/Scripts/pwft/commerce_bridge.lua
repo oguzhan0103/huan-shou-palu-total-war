@@ -26,6 +26,36 @@ local function copy(value)
     return result
 end
 
+-- Runtime vendor metadata may acquire UE4SS callbacks or wrapped native
+-- objects after registration.  Those values are useful to the in-process
+-- bridge, but they must never cross the external companion JSON boundary.
+-- Keep the internal copy above intact and emit only the documented public
+-- merchant fields.
+local function public_vendor_metadata(metadata)
+    metadata = type(metadata) == "table" and metadata or {}
+    local projected = {}
+    local fields = {
+        "mode",
+        "commercialTruce",
+        "merchantOrganisationId",
+        "representedFactionId",
+        "economyCatalogBinding",
+        "source",
+    }
+    for _, field in ipairs(fields) do
+        local value = metadata[field]
+        local value_type = type(value)
+        if value_type == "string" or value_type == "boolean"
+            or (value_type == "number"
+                and value == value
+                and value ~= math.huge
+                and value ~= -math.huge) then
+            projected[field] = value
+        end
+    end
+    return projected
+end
+
 local function safe_unwrap(value)
     if value == nil then
         return nil
@@ -456,7 +486,7 @@ function CommerceBridge:register_vendor_actor(
         type = "merchant-registered",
         factionId = faction_id,
         vendorKey = key,
-        metadata = copy(metadata or {}),
+        metadata = public_vendor_metadata(metadata),
     })
     return true, key
 end

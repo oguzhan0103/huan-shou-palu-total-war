@@ -6,6 +6,7 @@ package.path = table.concat({
 local Registry = require("pwft.registry")
 local FactionCommerce = require("pwft.faction_commerce")
 local CommerceBridge = require("pwft.commerce_bridge")
+local Json = require("pwft.json")
 
 local awards = {}
 local faction_api = {
@@ -77,8 +78,19 @@ assert(bridge:register_vendor_actor(
     {
         mode = "fixed-market",
         commercialTruce = true,
+        representedFactionId = "pwft.faction.rayne_syndicate",
+        runtimeCallback = function()
+            return "internal-only"
+        end,
     }
 ))
+assert(events[1].type == "merchant-registered")
+assert(events[1].metadata.mode == "fixed-market")
+assert(events[1].metadata.commercialTruce == true)
+assert(events[1].metadata.representedFactionId
+    == "pwft.faction.rayne_syndicate")
+assert(events[1].metadata.runtimeCallback == nil)
+assert(pcall(Json.encode, events[1]))
 assert(bridge:on_shop_setup(component, actor))
 local requested, pending = bridge:on_buy_request(
     component,

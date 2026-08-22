@@ -225,6 +225,7 @@ def main() -> int:
         PROJECT_ROOT / "tools" / "verify_progression_sidecar_live_evidence.py",
         PROJECT_ROOT / "tools" / "verify_world_level_live_evidence.py",
         PROJECT_ROOT / "tools" / "verify_pal_faction_rage_live_evidence.py",
+        PROJECT_ROOT / "tools" / "verify_companion_commerce_live_evidence.py",
         PROJECT_ROOT
         / "evidence"
         / "live-tests"
@@ -239,6 +240,11 @@ def main() -> int:
         / "evidence"
         / "live-tests"
         / "build24575825-20260823-pal-faction-rage"
+        / "verification.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "live-tests"
+        / "build24575825-20260823-companion-commerce"
         / "verification.json",
         PROJECT_ROOT / "scripts" / "build-faction-economy-shops.ps1",
         PROJECT_ROOT / "evidence" / "asset_json" / "DT_PalMonsterParameter.mapped.json",
@@ -322,6 +328,14 @@ def main() -> int:
         [
             sys.executable,
             str(PROJECT_ROOT / "tools" / "verify_pal_faction_rage_live_evidence.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_companion_commerce_live_evidence.py"),
         ],
         cwd=PROJECT_ROOT,
         check=True,
