@@ -62,9 +62,11 @@
   保卫请求／权威胜负、Core 精确赎金报价、原生支付确认和失败可重试的 Pal 交付均有
   版本化合同与测试。赎金支付已新增原生 ItemShop 服务器购买回执桥，只接受 Core 报价
   与确切 offer/provider/binding/generation/shop/product/持有势力/金额/数量/route 全字段
-  匹配，并强制商业好感奖励为 0；不直接改金币。正式赎金商品行仍为 0，Pal 实际交付
-  仍是独立待绑定步骤；真实 spawner、Actor、城市锚点、袭击、商品和交付路线尚未完成
-  部署实机，不能写成玩家可见完整闭环。详见 `docs/63_唯一帕鲁商会赎金原生购买桥纯开发验收_2026-08-22.md`。
+  匹配，并强制商业好感奖励为 0；不直接改金币。Pal 交付也已补容量预检、服务端创建／
+  捕获、唯一个体键、仓库回读、幂等重试和卸载回滚的事务桥。正式赎金商品行和当前 Build
+  原生交付适配器仍均为 0；真实 spawner、Actor、城市锚点、袭击、商品和交付路线尚未完成
+  部署实机，不能写成玩家可见完整闭环。详见 `docs/63_唯一帕鲁商会赎金原生购买桥纯开发验收_2026-08-22.md`
+  与 `docs/64_唯一帕鲁原生交付事务桥纯开发验收_2026-08-22.md`。
 - 外接势力操作台已纳入 Core source-only 发布白名单；开发者先在兄弟目录 `PalAgentDialogue` 执行 `cargo build --release`，再运行 `companion/start-companion.cmd`。独立分发时也可用 `PAL_AGENT_EXECUTABLE` 与 `PAL_AGENT_CHARACTER_PACK` 指向已审计的本地 sidecar 与角色包。
 
 ## 当前边界
@@ -144,3 +146,4 @@ python .\tools\verify_pal_raid_result_adapter_contract.py
 49. `docs/61_Build24575825原生伤害探针与失败关闭接线_2026-08-22.md`
 50. `docs/62_唯一帕鲁P1P2本地绑定证据盘点_2026-08-22.md`
 51. `docs/63_唯一帕鲁商会赎金原生购买桥纯开发验收_2026-08-22.md`
+52. `docs/64_唯一帕鲁原生交付事务桥纯开发验收_2026-08-22.md`

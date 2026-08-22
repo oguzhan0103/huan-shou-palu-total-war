@@ -153,6 +153,7 @@ local function handler(payload, context)
         preserveBuildings = payload.preserveBuildings,
         cleanupActorBindings = payload.cleanupActorBindings,
         nativeRoutes = payload.nativeRoutes,
+        speciesId = payload.speciesId,
     }
     if payload.deliveryKind == "pal-delivery"
         and fail_pal_delivery_once then
@@ -188,6 +189,7 @@ local function handler(payload, context)
             accepted = true,
             deliveryId = payload.deliveryId,
             requestId = payload.deliveryId .. ":native-pal-delivery",
+            individualKey = payload.deliveryId .. ":individual",
             reason = "spec-pal-delivery-requested",
         }
     end
@@ -401,6 +403,8 @@ local pending_pal_delivery = bus:delivery_status(pal_delivery_id)
 assert(pending_pal_delivery.status == "awaiting-confirmation")
 assert(pending_pal_delivery.providerRequestId
     == pal_delivery_id .. ":native-pal-delivery")
+assert(pending_pal_delivery.providerIndividualKey
+    == pal_delivery_id .. ":individual")
 local pal_delivery_callback = {
     callbackId = "spec.unique-pal.effects.pal.delivery.confirm.1",
     providerId = provider.providerId,
@@ -409,10 +413,30 @@ local pal_delivery_callback = {
     worldGeneration = generation,
     deliveryId = pal_delivery_id,
     nativeDeliveryId = pending_pal_delivery.providerRequestId,
+    nativeIndividualKey = pending_pal_delivery.providerIndividualKey,
     palDeliveryKey = pidf_binding.nativeRoutes.palDeliveryKey,
     uniquePalId = offered.offer.uniquePalId,
+    speciesId = "Alpaca",
     playerId = player_id,
 }
+local wrong_individual = {}
+for key, value in pairs(pal_delivery_callback) do
+    wrong_individual[key] = value
+end
+wrong_individual.callbackId =
+    "spec.unique-pal.effects.pal.delivery.confirm.wrong-individual"
+wrong_individual.nativeIndividualKey = "spec:wrong-individual"
+assert(bus:confirm_pal_delivery(wrong_individual).reason
+    == "unique-pal-native-delivery-callback-rejected")
+local wrong_species = {}
+for key, value in pairs(pal_delivery_callback) do
+    wrong_species[key] = value
+end
+wrong_species.callbackId =
+    "spec.unique-pal.effects.pal.delivery.confirm.wrong-species"
+wrong_species.speciesId = "SheepBall"
+assert(bus:confirm_pal_delivery(wrong_species).reason
+    == "unique-pal-native-delivery-species-rejected")
 local pal_delivered = bus:confirm_pal_delivery(pal_delivery_callback)
 assert(pal_delivered.ok and pal_delivered.reason
     == "unique-pal-native-delivery-confirmed")
@@ -443,6 +467,7 @@ for _, delivery in ipairs(deliveries) do
     elseif delivery.deliveryKind == "pal-delivery" then
         assert(delivery.nativeRoutes.palDeliveryKey
             == pidf_binding.nativeRoutes.palDeliveryKey)
+        assert(delivery.speciesId == "Alpaca")
     end
 end
 for _, kind in ipairs({

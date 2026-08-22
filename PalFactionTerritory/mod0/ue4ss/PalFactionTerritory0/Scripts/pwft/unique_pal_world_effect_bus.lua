@@ -434,13 +434,19 @@ local function make_payload(instance, delivery, binding)
     local event = delivery.sourceEvent
     local war = event.warId
         and instance.campaign:war_status(event.warId) or nil
+    local unique_pal_id = event.uniquePalId or (war and war.uniquePalId)
+    local campaign = unique_pal_id
+        and instance.campaign:campaign_status(unique_pal_id) or nil
     local payload = {
         schemaVersion = "1.0.0",
         deliveryId = delivery.deliveryId,
         deliveryKind = delivery.deliveryKind,
         sourceEventType = event.type,
         targetKey = delivery.targetKey,
-        uniquePalId = event.uniquePalId or (war and war.uniquePalId),
+        uniquePalId = unique_pal_id,
+        speciesId = campaign and campaign.definition
+            and campaign.definition.boss
+            and campaign.definition.boss.speciesId or nil,
         warId = event.warId,
         resolutionId = event.resolutionId,
         transactionId = event.transactionId,
@@ -574,6 +580,7 @@ local function apply_delivery(instance, delivery)
         delivery.providerReason = response.reason
         delivery.providerRequestId = response.requestId
             or response.nativeRaidId or response.nativeOfferId
+        delivery.providerIndividualKey = response.individualKey
         delivery.appliedGeneration = instance.worldGeneration
         if delivery.status == "awaiting-confirmation" then
             delivery.requestedGeneration = instance.worldGeneration
@@ -616,12 +623,14 @@ local function callback_signature(input, kind)
         tostring(input.nativeOfferId),
         tostring(input.deliveryId),
         tostring(input.nativeDeliveryId),
+        tostring(input.nativeIndividualKey),
         tostring(input.defenseRaidKey),
         tostring(input.backgroundWarResolverKey),
         tostring(input.ransomPaymentKey),
         tostring(input.palDeliveryKey),
         tostring(input.playerId),
         tostring(input.uniquePalId),
+        tostring(input.speciesId),
         tostring(input.currency),
         tostring(input.amount),
         tostring(input.paid),
@@ -1122,6 +1131,9 @@ function UniquePalWorldEffectBus:confirm_pal_delivery(input)
     local event = delivery.sourceEvent
     if delivery.status ~= "awaiting-confirmation"
         or delivery.providerRequestId ~= input.nativeDeliveryId
+        or (delivery.providerIndividualKey ~= nil
+            and delivery.providerIndividualKey
+                ~= input.nativeIndividualKey)
         or delivery.requestedGeneration ~= input.worldGeneration then
         return result(false, "unique-pal-native-delivery-callback-rejected")
     end
@@ -1134,6 +1146,12 @@ function UniquePalWorldEffectBus:confirm_pal_delivery(input)
         return result(false, "unique-pal-native-delivery-identity-rejected")
     end
     local campaign = self.campaign:campaign_status(input.uniquePalId)
+    local expected_species = campaign and campaign.definition
+        and campaign.definition.boss
+        and campaign.definition.boss.speciesId or nil
+    if input.speciesId ~= nil and input.speciesId ~= expected_species then
+        return result(false, "unique-pal-native-delivery-species-rejected")
+    end
     if campaign == nil or campaign.owner == nil
         or campaign.owner.kind ~= "player"
         or campaign.owner.id ~= input.playerId then
@@ -1148,7 +1166,9 @@ function UniquePalWorldEffectBus:confirm_pal_delivery(input)
         "unique-pal-native-delivery-confirmed", {
             deliveryId = delivery.deliveryId,
             nativeDeliveryId = input.nativeDeliveryId,
+            nativeIndividualKey = input.nativeIndividualKey,
             uniquePalId = input.uniquePalId,
+            speciesId = expected_species,
             playerId = input.playerId,
         })
     return commit_callback(self, callback_id, signature, response)

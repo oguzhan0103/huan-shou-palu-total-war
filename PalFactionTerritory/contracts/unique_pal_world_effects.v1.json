@@ -106,6 +106,33 @@
     "worldUnloadClearsTransientOffers": true,
     "currentNativeProductBindings": 0
   },
+  "palDeliveryBridgePolicy": {
+    "bridgeApi": "PWFT_UNIQUE_PAL_NATIVE_DELIVERY_BRIDGE_V1",
+    "route": "verified-server-spawn-capture-storage-readback",
+    "exactMatchFields": [
+      "deliveryId",
+      "providerId",
+      "bindingId",
+      "worldGeneration",
+      "nativeDeliveryId",
+      "nativeIndividualKey",
+      "palDeliveryKey",
+      "uniquePalId",
+      "speciesId",
+      "playerId"
+    ],
+    "storageCapacityPreflightRequired": true,
+    "stableIndividualIdentityRequired": true,
+    "serverAuthoritativeSpawnRequired": true,
+    "serverAuthoritativeCaptureRequired": true,
+    "postCaptureStorageReadbackRequired": true,
+    "retryCannotCreateOrCaptureTwice": true,
+    "worldUnloadRollsBackUncommittedCreations": true,
+    "directContainerMutation": false,
+    "debugCaptureApiAllowed": false,
+    "currentNativeBindings": 0,
+    "currentBuildRouteStatus": "candidate-route-current-build-signature-and-live-storage-readback-pending"
+  },
   "callbackPolicy": {
     "kinds": [
       "background-war",
@@ -141,7 +168,7 @@
     "backgroundWarPresentationAndResult": "contract-ready-real-provider-pending",
     "playerDefenseRaidAndResult": "contract-ready-real-provider-pending",
     "ransomPayment": "native-itemshop-bridge-offline-verified-product-binding-pending",
-    "palDelivery": "contract-ready-real-provider-pending",
+    "palDelivery": "transaction-bridge-offline-verified-native-binding-pending",
     "liveAcceptance": "not-run"
   }
 }

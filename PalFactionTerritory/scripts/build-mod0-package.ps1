@@ -159,6 +159,7 @@ try {
         "Mods/PalFactionTerritory0/Scripts/pwft/unique_pal_campaign.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/unique_pal_boss_provider_bus.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/unique_pal_world_effect_bus.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/unique_pal_native_delivery_bridge.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/unique_pal_ransom_shop_bridge.lua",
         "AuthorSDK/contracts/content_pack.v1.json",
         "AuthorSDK/contracts/content_bundle.v1.json",

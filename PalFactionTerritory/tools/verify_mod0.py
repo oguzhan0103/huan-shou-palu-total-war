@@ -113,6 +113,7 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "unique_pal_campaign.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_boss_provider_bus.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_world_effect_bus.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_bridge.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_ransom_shop_bridge.lua",
         SCRIPTS_ROOT / "pwft" / "runtime.lua",
         SCRIPTS_ROOT / "pwft" / "settlement_raid.lua",
@@ -150,6 +151,7 @@ def main() -> int:
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_campaign_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_boss_provider_bus_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_world_effect_bus_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_bridge_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_ransom_shop_bridge_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "ending_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "content_pack_author_sdk_e2e_spec.lua",
@@ -477,6 +479,27 @@ def main() -> int:
         ]
         == 0,
         "P2 native ransom shop route must remain exact, zero-reputation, and unbound",
+    )
+    pal_delivery_bridge_policy = unique_pal_world_effects[
+        "palDeliveryBridgePolicy"
+    ]
+    require(
+        pal_delivery_bridge_policy["bridgeApi"]
+        == "PWFT_UNIQUE_PAL_NATIVE_DELIVERY_BRIDGE_V1"
+        and pal_delivery_bridge_policy["route"]
+        == "verified-server-spawn-capture-storage-readback"
+        and pal_delivery_bridge_policy["storageCapacityPreflightRequired"]
+        is True
+        and pal_delivery_bridge_policy["stableIndividualIdentityRequired"]
+        is True
+        and pal_delivery_bridge_policy["postCaptureStorageReadbackRequired"]
+        is True
+        and pal_delivery_bridge_policy["retryCannotCreateOrCaptureTwice"]
+        is True
+        and pal_delivery_bridge_policy["directContainerMutation"] is False
+        and pal_delivery_bridge_policy["debugCaptureApiAllowed"] is False
+        and pal_delivery_bridge_policy["currentNativeBindings"] == 0,
+        "P2 native Pal delivery transaction bridge safety gates drifted",
     )
     require(len(progression["humanFactionIds"]) == 7, "expected 7 human progression factions")
     require(len(progression["palFactionIds"]) == 5, "expected 5 Pal progression factions")
@@ -919,6 +942,9 @@ def main() -> int:
     unique_pal_world_effect_text = (
         SCRIPTS_ROOT / "pwft" / "unique_pal_world_effect_bus.lua"
     ).read_text(encoding="utf-8")
+    unique_pal_native_delivery_text = (
+        SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_bridge.lua"
+    ).read_text(encoding="utf-8")
     unique_pal_ransom_shop_text = (
         SCRIPTS_ROOT / "pwft" / "unique_pal_ransom_shop_bridge.lua"
     ).read_text(encoding="utf-8")
@@ -1321,6 +1347,25 @@ def main() -> int:
         and "palDeliveryIncluded = false"
         in unique_pal_ransom_shop_text,
         "P2 native ransom shop bridge safety gates are incomplete",
+    )
+    require(
+        "capacityPreflight" in unique_pal_native_delivery_text
+        and "stableIndividualIdentity" in unique_pal_native_delivery_text
+        and "serverAuthoritativeSpawn" in unique_pal_native_delivery_text
+        and "serverAuthoritativeCapture" in unique_pal_native_delivery_text
+        and "verify_storage" in unique_pal_native_delivery_text
+        and "nativeIndividualKey" in unique_pal_native_delivery_text
+        and "directContainerMutation = false"
+        in unique_pal_native_delivery_text
+        and "debugCaptureApiAllowed = false"
+        in unique_pal_native_delivery_text,
+        "P2 native Pal delivery transaction bridge gates are incomplete",
+    )
+    require(
+        "UniquePalNativeDeliveryBridge.create" in runtime_text
+        and "PWFT_UNIQUE_PAL_NATIVE_DELIVERY_BRIDGE_V1" in runtime_text
+        and "uniquePalNativeDeliveryBridge:unbind_world" in runtime_text,
+        "P2 native Pal delivery bridge runtime lifecycle is incomplete",
     )
     require(
         "UniquePalRansomShopBridge.create" in runtime_text

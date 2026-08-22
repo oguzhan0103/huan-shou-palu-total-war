@@ -84,6 +84,8 @@ local UniquePalBossProviderBus =
     require("pwft.unique_pal_boss_provider_bus")
 local UniquePalWorldEffectBus =
     require("pwft.unique_pal_world_effect_bus")
+local UniquePalNativeDeliveryBridge =
+    require("pwft.unique_pal_native_delivery_bridge")
 local UniquePalRansomShopBridge =
     require("pwft.unique_pal_ransom_shop_bridge")
 local WorldBalance = require("pwft.world_balance")
@@ -4446,6 +4448,11 @@ local function register_runtime_probes(config, registry, policy, state)
                 )
             end
             if state.uniquePalWorldEffectBus ~= nil then
+                if state.uniquePalNativeDeliveryBridge ~= nil then
+                    state.uniquePalNativeDeliveryBridge:unbind_world(
+                        "runtime-world-unloading"
+                    )
+                end
                 if state.uniquePalRansomShopBridge ~= nil then
                     state.uniquePalRansomShopBridge:unbind_world(
                         "runtime-world-unloading"
@@ -4705,6 +4712,10 @@ function Runtime.start(config, registry, policy)
                 or nil,
             uniquePalWorldEffectBus = state.uniquePalWorldEffectBus
                     and state.uniquePalWorldEffectBus:status()
+                or nil,
+            uniquePalNativeDeliveryBridge =
+                state.uniquePalNativeDeliveryBridge
+                    and state.uniquePalNativeDeliveryBridge:status()
                 or nil,
             factionConsequences = state.factionConsequenceRouter
                     and state.factionConsequenceRouter:status()
@@ -5096,6 +5107,20 @@ function Runtime.start(config, registry, policy)
                 end,
             }
         )
+    state.uniquePalNativeDeliveryBridge =
+        UniquePalNativeDeliveryBridge.create(
+            state.uniquePalWorldEffectBus,
+            {
+                logger = log,
+                schedule = function(delay_ms, callback)
+                    if type(ExecuteWithDelay) ~= "function" then
+                        return false
+                    end
+                    ExecuteWithDelay(delay_ms, callback)
+                    return true
+                end,
+            }
+        )
     state.uniquePalRansomShopBridge =
         UniquePalRansomShopBridge.create(
             state.uniquePalWorldEffectBus,
@@ -5168,6 +5193,8 @@ function Runtime.start(config, registry, policy)
         state.uniquePalBossProviderBus
     _G.PWFT_UNIQUE_PAL_WORLD_EFFECT_BUS_V1 =
         state.uniquePalWorldEffectBus
+    _G.PWFT_UNIQUE_PAL_NATIVE_DELIVERY_BRIDGE_V1 =
+        state.uniquePalNativeDeliveryBridge
     _G.PWFT_UNIQUE_PAL_RANSOM_SHOP_BRIDGE_V1 =
         state.uniquePalRansomShopBridge
     _G.PWFT_ENDING_EFFECT_PROVIDER_BUS_V1 =
@@ -5204,6 +5231,8 @@ function Runtime.start(config, registry, policy)
                 state.uniquePalBossProviderBus,
             uniquePalWorldEffectBus =
                 state.uniquePalWorldEffectBus,
+            uniquePalNativeDeliveryBridge =
+                state.uniquePalNativeDeliveryBridge,
             uniquePalRansomShopBridge =
                 state.uniquePalRansomShopBridge,
             endingEffectProviderBus = state.endingEffectProviderBus,
@@ -5830,6 +5859,8 @@ function Runtime.start(config, registry, policy)
         state.uniquePalBossProviderBus:status()
     local unique_pal_world_effect_status =
         state.uniquePalWorldEffectBus:status()
+    local unique_pal_native_delivery_status =
+        state.uniquePalNativeDeliveryBridge:status()
     local unique_pal_ransom_shop_status =
         state.uniquePalRansomShopBridge:status()
     local content_pack_status = state.contentPackRegistry:status()
@@ -5937,6 +5968,21 @@ function Runtime.start(config, registry, policy)
         tostring(unique_pal_world_effect_status.exactBoundActorsOnly),
         tostring(unique_pal_world_effect_status.broadActorScan),
         tostring(unique_pal_world_effect_status.modelAuthority)
+    ))
+    log(string.format(
+        "UNIQUE_PAL_NATIVE_DELIVERY_READY api=%s bindings=%d pending=%d applied=%d accepted=%d confirmed=%d rejected=%d route=%s exactIndividual=%s directContainerMutation=%s debugCapture=%s saveWrites=false",
+        unique_pal_native_delivery_status.apiVersion,
+        unique_pal_native_delivery_status.bindingCount,
+        unique_pal_native_delivery_status.pendingDeliveryCount,
+        unique_pal_native_delivery_status.appliedDeliveryCount,
+        unique_pal_native_delivery_status.acceptedDeliveryCount,
+        unique_pal_native_delivery_status.confirmedDeliveryCount,
+        unique_pal_native_delivery_status.rejectedDeliveryCount,
+        unique_pal_native_delivery_status.route,
+        tostring(unique_pal_native_delivery_status
+            .exactIndividualIdentityRequired),
+        tostring(unique_pal_native_delivery_status.directContainerMutation),
+        tostring(unique_pal_native_delivery_status.debugCaptureApiAllowed)
     ))
     log(string.format(
         "UNIQUE_PAL_RANSOM_SHOP_READY api=%s open=%d settled=%d confirmed=%d rejected=%d route=%s reputation=%d directCurrencyMutation=%s palDelivery=%s saveWrites=false",
