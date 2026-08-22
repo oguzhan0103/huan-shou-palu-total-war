@@ -12,7 +12,7 @@ $ConfigSource = Join-Path $ProjectRoot "mod0\ue4ss\PalFactionTerritory0\Scripts\
 $MainSource = Join-Path $ProjectRoot "mod0\ue4ss\PalFactionTerritory0\Scripts\main.lua"
 $StateReadme = Join-Path $ProjectRoot "mod0\ue4ss\PalFactionTerritory0\State\README.txt"
 $EvidenceRoot = Join-Path $ProjectRoot "evidence\contracts"
-$EvidencePath = Join-Path $EvidenceRoot "progression-profile-identity-build24467282.json"
+$EvidencePath = Join-Path $EvidenceRoot "progression-profile-identity-build24575825.json"
 
 foreach ($Path in @(
     $ObjectDump,
@@ -29,8 +29,8 @@ foreach ($Path in @(
 }
 
 $ManifestText = Get-Content -LiteralPath $AppManifest -Raw -Encoding utf8
-if ($ManifestText -notmatch '"buildid"\s+"24467282"') {
-    throw "Steam appmanifest does not target Build 24467282"
+if ($ManifestText -notmatch '"buildid"\s+"24575825"') {
+    throw "Steam appmanifest does not target Build 24575825"
 }
 
 $DumpRequirements = @(
@@ -109,7 +109,7 @@ New-Item -ItemType Directory -Path $EvidenceRoot -Force | Out-Null
 [ordered]@{
     schemaVersion = "1.0.0"
     verifiedAt = (Get-Date).ToString("o")
-    gameBuild = "24467282"
+    gameBuild = "24575825"
     result = "PASS"
     mode = "read-only-world-player-profile-identity-with-external-ledger"
     worldIdentityRoute = "PalUtility.GetPalGameStateInGame -> PalGameStateInGame.GetWorldSaveDirectoryName"
@@ -155,5 +155,5 @@ New-Item -ItemType Directory -Path $EvidenceRoot -Force | Out-Null
 } | ConvertTo-Json -Depth 6 |
     Set-Content -LiteralPath $EvidencePath -Encoding utf8
 
-Write-Host "PASS progression profile identity and external ledger contract (Build 24467282)"
+Write-Host "PASS progression profile identity and external ledger contract (Build 24575825)"
 Write-Host "Evidence: $EvidencePath"

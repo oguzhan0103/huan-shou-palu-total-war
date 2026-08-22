@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "1.0.0",
+  "result": "PASS",
+  "gameBuild": "24575825",
+  "gameVersion": "1.0.3.101283",
+  "testDate": "2026-08-22",
+  "profile": {
+    "worldGuid": "E0D5ECDC46B379829F8F31A729ACFD92",
+    "playerGuid": "00000000000000000000000000000001",
+    "profileKey": "world-E0D5ECDC46B379829F8F31A729ACFD92.player-00000000000000000000000000000001",
+    "revision": 2
+  },
+  "restartAcceptance": {
+    "fullProcessRestarts": 2,
+    "identityReadyReasons": [
+      "active:primary",
+      "active:primary"
+    ],
+    "durableStateDiffCount": 0,
+    "allowedRuntimeRebindDiffs": [
+      {
+        "path": "payload.uniquePalBossProviderBus.worldGeneration",
+        "from": 12,
+        "to": 13
+      },
+      {
+        "path": "payload.uniquePalWorldEffectBus.worldGeneration",
+        "from": 12,
+        "to": 13
+      }
+    ]
+  },
+  "backupRecovery": {
+    "primaryBeforeSha256": "14F7B79328D43164B7E29B5A0F583D17993056B9B8C01EBE708355B546329C08",
+    "backupBeforeSha256": "4FBF4E795EB65B25BBAA2FE9A5F862DB5C7D7B2BBAE77370C0F239BBF4DBFA8E",
+    "injectedCorruptPrimarySha256": "7E6BDBD7169096F9A14FBCA86D5B15D5D688AD0A2B123C37C1DA810748BD048A",
+    "identityReadyReason": "active:backup",
+    "recoveredPrimarySha256": "0A4B9E0628E9356657327178865C99DE156168CF5794A95B66A14E46B11332C5",
+    "recoveredRevision": 2,
+    "blockedRecoveryCount": 0,
+    "regeneratedPrimaryValid": true,
+    "backupRotatedToInjectedCorruption": true
+  },
+  "worldIsolation": {
+    "distinctProfiles": 2,
+    "otherWorldGuid": "4FE1A0C043EB923765F15D9352622D63",
+    "otherProfileRevision": 0,
+    "profileFilenameSeparation": true
+  },
+  "restore": {
+    "result": "PASS",
+    "gameRunning": false,
+    "saveFiles": 56,
+    "saveDiffCount": 0,
+    "levelSha256": "2579FDAF631690AB6D8AB7E9097881CB9DC365DA116D022D1BC182E58CEA9C69",
+    "levelMetaSha256": "4839CC7D8C52E31D511A05F3C817F80F1C6BC64154F6854C1940A6FA9CF5A1FF",
+    "stateFiles": 12,
+    "stateDiffCount": 0,
+    "progressionPrimarySha256": "82FF9E7E77231328EC79DD97CCABA230D8F1AD8482D7A7F9CB3AC3F14A35E3DD",
+    "progressionBackupSha256": "65EFD10E4B77DD377BA00AF1D926CCB8D48D9A96E570F2052D0E6D89FE3B09BA"
+  },
+  "evidenceBoundary": {
+    "rawStateAndLogsPrivate": true,
+    "palworldSaveWritesEnabled": false,
+    "userAcceptance": "not-performed"
+  }
+}

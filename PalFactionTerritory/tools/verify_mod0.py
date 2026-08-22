@@ -222,6 +222,12 @@ def main() -> int:
         PROJECT_ROOT / "tools" / "verify_unique_pal_native_assets.py",
         PROJECT_ROOT / "tools" / "verify_unique_pal_native_delivery_contract.py",
         PROJECT_ROOT / "tools" / "verify_unique_pal_delivery_production_contract.py",
+        PROJECT_ROOT / "tools" / "verify_progression_sidecar_live_evidence.py",
+        PROJECT_ROOT
+        / "evidence"
+        / "live-tests"
+        / "build24575825-20260822-progression-sidecar"
+        / "verification.json",
         PROJECT_ROOT / "scripts" / "build-faction-economy-shops.ps1",
         PROJECT_ROOT / "evidence" / "asset_json" / "DT_PalMonsterParameter.mapped.json",
         HUMAN_PARAMETER_ASSET,
@@ -280,6 +286,14 @@ def main() -> int:
         [
             sys.executable,
             str(PROJECT_ROOT / "tools" / "verify_unique_pal_delivery_production_contract.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_progression_sidecar_live_evidence.py"),
         ],
         cwd=PROJECT_ROOT,
         check=True,
