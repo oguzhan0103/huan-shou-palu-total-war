@@ -4,6 +4,11 @@ local IslandMask = require("pwft.pal_faction_island_mask")
 local PREFIX = "[PalFactionTerritory0][WorldBalance]"
 local PREDATOR_SPAWNED_CHARACTER_TYPE = 8
 
+local UEHelpers = nil
+pcall(function()
+    UEHelpers = require("UEHelpers")
+end)
+
 local function log(message)
     print(string.format("%s %s\n", PREFIX, tostring(message)))
 end
@@ -70,9 +75,12 @@ local function safe_call(object, method_name, ...)
     if not is_valid_object(object) then
         return false, nil
     end
-    local arguments = { ... }
+    local arguments = table.pack(...)
     local ok, value = pcall(function()
-        return object[method_name](object, table.unpack(arguments))
+        return object[method_name](
+            object,
+            table.unpack(arguments, 1, arguments.n)
+        )
     end)
     return ok, value
 end
@@ -83,6 +91,15 @@ local function safe_assign(object, property_name, value)
     end
     return pcall(function()
         object[property_name] = value
+    end)
+end
+
+local function safe_struct_assign(value, property_name, assigned_value)
+    if value == nil then
+        return false
+    end
+    return pcall(function()
+        value[property_name] = assigned_value
     end)
 end
 
@@ -130,12 +147,125 @@ local function is_pal_actor(actor)
     return safe_property(static_component, "IsPal") == true, static_component
 end
 
-local function method_is_true(object, method_name)
+local method_is_true
+local parse_group_type
+local level_group_is_world_managed
+local is_level_managed_pal
+local is_standalone_enemy_pal
+
+local function read_level_state(component, individual)
+    local component_ok, component_effective = safe_call(component, "GetLevel")
+    local individual_ok, individual_effective = safe_call(individual, "GetLevel")
+    local override_ok, override = safe_call(individual, "GetOverrideLevel")
+    local effective = component_ok and component_effective or individual_effective
+    return {
+        effective = (component_ok or individual_ok) and tonumber(effective) or nil,
+        componentEffective = component_ok and tonumber(component_effective) or nil,
+        individualEffective = individual_ok and tonumber(individual_effective) or nil,
+        override = override_ok and tonumber(override) or nil,
+        isOverride = method_is_true(individual, "IsOverrideLevel"),
+    }
+end
+
+local function static_flag_is_true(component, property_name, method_name)
+    if safe_property(component, property_name) == true then
+        return true
+    end
+    return method_name ~= nil and method_is_true(component, method_name)
+end
+
+local function classify_level_target(actor, component, individual)
+    local full_name = safe_full_name(actor)
+    local lower_name = string.lower(full_name)
+    if is_player_character(actor) then
+        return "player-character", "player-character"
+    end
+
+    local is_pal, static_component = is_pal_actor(actor)
+    local is_boss = is_valid_object(static_component) and (
+        static_flag_is_true(static_component, "IsBoss_Database", "IsBossPal_Database")
+        or static_flag_is_true(static_component, "IsTowerBoss_Database", "IsTowerBossPal")
+        or static_flag_is_true(static_component, "IsRaidBoss_Database", "IsRaidBossPal")
+        or static_flag_is_true(static_component, "IsPredatorBoss_Database", "IsPredatorBossPal")
+    )
+    if is_pal then
+        local level_managed, reason = is_level_managed_pal(component, individual)
+        if not level_managed then
+            return "pal-owned-or-friendly", reason
+        end
+        return is_boss and "pal-boss" or "pal-world", "eligible"
+    end
+
+    if string.find(lower_name, "merchant", 1, true) ~= nil
+        or string.find(lower_name, "trader", 1, true) ~= nil
+        or string.find(lower_name, "salesperson", 1, true) ~= nil
+        or string.find(lower_name, "shop", 1, true) ~= nil then
+        return "npc-merchant", "eligible"
+    end
+    if is_boss then
+        return "npc-boss", "eligible"
+    end
+    local group_type = parse_group_type(individual)
+    if group_type == 5 or group_type == 6 then
+        return "npc-hostile", "eligible"
+    end
+    return "npc-friendly", "eligible"
+end
+
+local function record_level_observation(instance, actor, category, outcome)
+    local actor_name = safe_full_name(actor)
+    local observation_key = actor_name .. "|" .. category .. "|" .. outcome
+    if instance.levelObservations[observation_key] == true then
+        return false
+    end
+    instance.levelObservations[observation_key] = true
+    instance.levelCategoryCounts[category] =
+        (instance.levelCategoryCounts[category] or 0) + 1
+    instance.levelOutcomeCounts[outcome] =
+        (instance.levelOutcomeCounts[outcome] or 0) + 1
+    return true
+end
+
+local function log_level_detail(instance, message)
+    if instance.levelDetailLogCount >= instance.config.maxDetailLogCount then
+        return
+    end
+    instance.levelDetailLogCount = instance.levelDetailLogCount + 1
+    log(message)
+end
+
+local function write_runtime_level_once(instance, actor, individual)
+    local actor_name = safe_full_name(actor)
+    if instance.levelWriteActors[actor_name] == true then
+        return true, "already-written"
+    end
+    instance.levelWriteActors[actor_name] = true
+
+    -- Build 24575825 exposes SaveParameter.Level as a reflected ByteProperty.
+    -- SetOverrideLevel alone remains a flag after native initialization, while
+    -- the exact eligible actor's SaveParameter is the value read by GetLevel.
+    -- This event-scoped write never scans or touches player-owned parameters.
+    local save_parameter = safe_property(individual, "SaveParameter")
+    if save_parameter == nil then
+        return false, "save-parameter-unavailable"
+    end
+    if not safe_struct_assign(
+        save_parameter,
+        "Level",
+        instance.config.targetLevel
+    ) then
+        return false, "save-parameter-level-write-failed"
+    end
+    instance.levelWriteCount = instance.levelWriteCount + 1
+    return true, "save-parameter-level-written"
+end
+
+method_is_true = function(object, method_name)
     local ok, value = safe_call(object, method_name)
     return ok and value == true
 end
 
-local function parse_group_type(individual)
+parse_group_type = function(individual)
     local ok, value = safe_call(individual, "GetGroupType")
     if not ok then
         return nil
@@ -172,7 +302,41 @@ local function parse_group_type(individual)
     return nil
 end
 
-local function is_standalone_enemy_pal(component, individual)
+level_group_is_world_managed = function(group_type)
+    -- Native initialization reports ordinary wild Pals as Undefined (0)
+    -- before their final group is assigned. B1 must accept that event while
+    -- still protecting both guild-backed player Pal representations.
+    return group_type == 0
+        or group_type == 1
+        or group_type == 2
+        or group_type == 5
+        or group_type == 6
+end
+
+is_level_managed_pal = function(component, individual)
+    if method_is_true(component, "IsPlayersOtomo")
+        or method_is_true(component, "IsOtomo")
+        or method_is_true(component, "IsInactiveOtomo")
+        or method_is_true(component, "IsAssignedToAnyWork") then
+        return false, "owned-or-worker"
+    end
+
+    if is_valid_object(safe_property(component, "Trainer"))
+        or is_valid_object(safe_property(component, "NPCSpawnedOtomoTrainer")) then
+        return false, "trainer-owned"
+    end
+
+    local group_type = parse_group_type(individual)
+    if level_group_is_world_managed(group_type) then
+        return true, "world-managed-group:" .. tostring(group_type)
+    end
+    if group_type == 3 or group_type == 4 then
+        return false, "player-guild-group:" .. tostring(group_type)
+    end
+    return false, "group-unavailable:" .. tostring(group_type)
+end
+
+is_standalone_enemy_pal = function(component, individual)
     if method_is_true(component, "IsPlayersOtomo")
         or method_is_true(component, "IsOtomo")
         or method_is_true(component, "IsInactiveOtomo")
@@ -212,43 +376,123 @@ local function apply_level(instance, actor, component, individual)
     if instance.config.levelOverride.enabled ~= true then
         return false, "disabled"
     end
-    if is_player_character(actor) then
-        return false, "player-character"
-    end
-    local is_pal = is_pal_actor(actor)
-    if is_pal then
-        local standalone, standalone_reason =
-            is_standalone_enemy_pal(component, individual)
-        if not standalone then
-            return false, standalone_reason
-        end
-    end
     if not is_valid_object(individual) then
         return false, "individual-unavailable"
+    end
+
+    local category, eligibility =
+        classify_level_target(actor, component, individual)
+    if eligibility ~= "eligible" then
+        local level = read_level_state(component, individual)
+        if record_level_observation(
+            instance,
+            actor,
+            category,
+            "excluded:" .. eligibility
+        ) then
+            log_level_detail(instance, string.format(
+                "LEVEL_OVERRIDE_EXCLUDED actor=%s category=%s reason=%s effective=%s componentEffective=%s individualEffective=%s override=%s source=%s",
+                safe_full_name(actor),
+                category,
+                eligibility,
+                tostring(level.effective),
+                tostring(level.componentEffective),
+                tostring(level.individualEffective),
+                tostring(level.override),
+                tostring(instance.lastApplySource)
+            ))
+        end
+        return false, eligibility
     end
 
     local already_override = method_is_true(individual, "IsOverrideLevel")
     local level_ok, current_override = safe_call(individual, "GetOverrideLevel")
     if already_override and level_ok and tonumber(current_override) == instance.config.targetLevel then
+        local level = read_level_state(component, individual)
+        if level.effective ~= instance.config.targetLevel
+            and instance.lastApplySource == "native-initialize-post" then
+            local write_ok, write_reason =
+                write_runtime_level_once(instance, actor, individual)
+            level = read_level_state(component, individual)
+            log_level_detail(instance, string.format(
+                "LEVEL_OVERRIDE_NATIVE_LEVEL_WRITE actor=%s category=%s written=%s reason=%s componentEffective=%s individualEffective=%s override=%s source=%s count=%d",
+                safe_full_name(actor),
+                category,
+                tostring(write_ok == true),
+                tostring(write_reason),
+                tostring(level.componentEffective),
+                tostring(level.individualEffective),
+                tostring(level.override),
+                tostring(instance.lastApplySource),
+                instance.levelWriteCount
+            ))
+        end
+        local verified = level.effective == instance.config.targetLevel
+        local outcome = verified and "verified" or "override-only"
+        if record_level_observation(instance, actor, category, outcome) then
+            if verified then
+                instance.levelVerifiedCount = instance.levelVerifiedCount + 1
+            end
+            local marker = verified
+                and "LEVEL_OVERRIDE_VERIFIED"
+                or "LEVEL_OVERRIDE_READBACK_PENDING"
+            log_level_detail(instance, string.format(
+                "%s actor=%s category=%s target=%d effective=%s componentEffective=%s individualEffective=%s override=%s source=%s",
+                marker,
+                safe_full_name(actor),
+                category,
+                instance.config.targetLevel,
+                tostring(level.effective),
+                tostring(level.componentEffective),
+                tostring(level.individualEffective),
+                tostring(level.override),
+                tostring(instance.lastApplySource)
+            ))
+        end
         return true, "already-applied"
     end
 
-    local ok = safe_call(individual, "SetOverrideLevel", instance.config.targetLevel)
-    if ok then
+    local before = read_level_state(component, individual)
+    local override_ok = safe_call(
+        individual,
+        "SetOverrideLevel",
+        instance.config.targetLevel
+    )
+    local write_ok = true
+    local write_reason = "effective-level-already-target"
+    if before.effective ~= instance.config.targetLevel then
+        write_ok, write_reason =
+            write_runtime_level_once(instance, actor, individual)
+    end
+    if override_ok and write_ok then
         instance.levelAppliedCount = instance.levelAppliedCount + 1
-        if instance.levelDetailLogCount < instance.config.maxDetailLogCount then
-            instance.levelDetailLogCount = instance.levelDetailLogCount + 1
-            log(string.format(
-                "LEVEL_OVERRIDE_APPLIED actor=%s target=%d source=%s count=%d",
+        if record_level_observation(instance, actor, category, "applied") then
+            local after = read_level_state(component, individual)
+            log_level_detail(instance, string.format(
+                "LEVEL_OVERRIDE_APPLIED actor=%s category=%s target=%d beforeEffective=%s beforeComponentEffective=%s beforeIndividualEffective=%s beforeOverride=%s afterEffective=%s afterComponentEffective=%s afterIndividualEffective=%s afterOverride=%s nativeLevelWrite=%s writeReason=%s source=%s count=%d",
                 safe_full_name(actor),
+                category,
                 instance.config.targetLevel,
+                tostring(before.effective),
+                tostring(before.componentEffective),
+                tostring(before.individualEffective),
+                tostring(before.override),
+                tostring(after.effective),
+                tostring(after.componentEffective),
+                tostring(after.individualEffective),
+                tostring(after.override),
+                tostring(write_ok == true),
+                tostring(write_reason),
                 tostring(instance.lastApplySource or "native-initialize"),
                 instance.levelAppliedCount
             ))
         end
         return true, "applied"
     end
-    return false, "SetOverrideLevel-failed"
+    if not override_ok then
+        return false, "SetOverrideLevel-failed"
+    end
+    return false, write_reason
 end
 
 local function apply_pal_faction_rage(instance, actor, component, individual)
@@ -324,10 +568,6 @@ local function apply_actor(instance, actor, hinted_component, source)
     if not is_valid_object(actor) then
         return false
     end
-    if is_player_character(actor) then
-        return false
-    end
-
     local component = hinted_component
     if not is_valid_object(component) then
         component = get_component(actor)
@@ -340,10 +580,194 @@ local function apply_actor(instance, actor, hinted_component, source)
         return false
     end
 
+    instance.lastApplySource = source
     apply_level(instance, actor, component, individual)
     apply_pal_faction_rage(instance, actor, component, individual)
-    instance.lastApplySource = source
     return true
+end
+
+local function sorted_count_text(counts)
+    local keys = {}
+    for key in pairs(counts) do
+        table.insert(keys, key)
+    end
+    table.sort(keys)
+    local values = {}
+    for _, key in ipairs(keys) do
+        table.insert(values, key .. ":" .. tostring(counts[key]))
+    end
+    return table.concat(values, ",")
+end
+
+local function emit_level_audit_summary(instance, source)
+    log(string.format(
+        "LEVEL_AUDIT_SUMMARY source=%s applied=%d verified=%d categories=%s outcomes=%s broadScan=false rageApplied=%d",
+        tostring(source),
+        instance.levelAppliedCount,
+        instance.levelVerifiedCount,
+        sorted_count_text(instance.levelCategoryCounts),
+        sorted_count_text(instance.levelOutcomeCounts),
+        instance.rageAppliedCount
+    ))
+end
+
+local function make_name(value)
+    if type(FName) == "function" then
+        local ok, name = pcall(FName, value)
+        if ok and name ~= nil then
+            return name
+        end
+    end
+    if type(StaticFindObject) == "function" then
+        local ok, library = pcall(
+            StaticFindObject,
+            "/Script/Engine.Default__KismetStringLibrary"
+        )
+        if ok and is_valid_object(library) then
+            local converted, name = safe_call(library, "Conv_StringToName", value)
+            if converted then
+                return name
+            end
+        end
+    end
+    return value
+end
+
+local function resolve_local_controller()
+    if UEHelpers ~= nil
+        and type(UEHelpers.GetPlayerController) == "function" then
+        local ok, controller = pcall(function()
+            return UEHelpers.GetPlayerController()
+        end)
+        if ok and is_valid_object(controller) then
+            return controller
+        end
+    end
+    if type(FindFirstOf) == "function" then
+        for _, class_name in ipairs({
+            "PalPlayerController",
+            "PalPlayerController_C",
+        }) do
+            local ok, controller = pcall(FindFirstOf, class_name)
+            if ok and is_valid_object(controller) then
+                return controller
+            end
+        end
+    end
+    return nil
+end
+
+local function spawn_boss_probe(instance)
+    local probe = instance.config.liveAudit.bossProbe
+    local controller = resolve_local_controller()
+    if not is_valid_object(controller) then
+        log("LEVEL_BOSS_PROBE_FAILED reason=local-player-controller-unavailable")
+        return
+    end
+    local player = safe_property(controller, "Pawn")
+    if not is_valid_object(player) then
+        player = safe_property(controller, "AcknowledgedPawn")
+    end
+    if not is_valid_object(player) then
+        local player_ok
+        player_ok, player = safe_call(controller, "K2_GetPawn")
+        if not player_ok then
+            player = nil
+        end
+    end
+    if not is_valid_object(player) then
+        log("LEVEL_BOSS_PROBE_FAILED reason=local-player-character-unavailable")
+        return
+    end
+    local utility = nil
+    if type(StaticFindObject) == "function" then
+        local ok, value = pcall(
+            StaticFindObject,
+            "/Script/Pal.Default__PalUtility"
+        )
+        if ok and is_valid_object(value) then
+            utility = value
+        end
+    end
+    local manager_ok, manager = safe_call(utility, "GetNPCManager", controller)
+    if not manager_ok or not is_valid_object(manager) then
+        log("LEVEL_BOSS_PROBE_FAILED reason=npc-manager-unavailable")
+        return
+    end
+    local controller_class = safe_property(manager, "NPCAIControllerBaseClass")
+    local location_ok, location = safe_call(player, "K2_GetActorLocation")
+    if not is_valid_object(controller_class) or not location_ok or location == nil then
+        log("LEVEL_BOSS_PROBE_FAILED reason=spawn-context-unavailable")
+        return
+    end
+    local offset = probe.spawnOffset
+    local spawn_location = {
+        X = (tonumber(safe_property(location, "X")) or 0) + offset.X,
+        Y = (tonumber(safe_property(location, "Y")) or 0) + offset.Y,
+        Z = (tonumber(safe_property(location, "Z")) or 0) + offset.Z,
+    }
+    local handle_ok, handle = safe_call(
+        manager,
+        "SpawnNPCForServer",
+        {
+            ControllerClass = controller_class,
+            CharacterID = make_name(probe.characterId),
+            Level = probe.spawnLevel,
+            Location = spawn_location,
+            Yaw = 0,
+            Squad = nil,
+        },
+        nil
+    )
+    if not handle_ok or not is_valid_object(handle) then
+        log("LEVEL_BOSS_PROBE_FAILED reason=native-spawn-not-accepted")
+        return
+    end
+    instance.bossProbeHandle = handle
+    log(string.format(
+        "LEVEL_BOSS_PROBE_SPAWN_ACCEPTED character=%s requestedLevel=%d targetLevel=%d saveWrites=false",
+        probe.characterId,
+        probe.spawnLevel,
+        instance.config.targetLevel
+    ))
+    local observe_callback = function()
+        local actor_ok, actor = safe_call(handle, "TryGetIndividualActor")
+        if not actor_ok or not is_valid_object(actor) then
+            log("LEVEL_BOSS_PROBE_OBSERVE_PENDING actor=unavailable")
+            return
+        end
+        local component = get_component(actor)
+        local individual = get_individual_parameter(component)
+        local level = read_level_state(component, individual)
+        local category = classify_level_target(actor, component, individual)
+        log(string.format(
+            "LEVEL_BOSS_PROBE_OBSERVED actor=%s category=%s effective=%s componentEffective=%s individualEffective=%s override=%s target=%d",
+            safe_full_name(actor),
+            tostring(category),
+            tostring(level.effective),
+            tostring(level.componentEffective),
+            tostring(level.individualEffective),
+            tostring(level.override),
+            instance.config.targetLevel
+        ))
+    end
+    table.insert(instance.callbacks, observe_callback)
+    ExecuteWithDelay(1000, observe_callback)
+
+    local cleanup_callback = function()
+        local actor_ok, actor = safe_call(handle, "TryGetIndividualActor")
+        local destroyed = false
+        if actor_ok and is_valid_object(actor) then
+            destroyed = safe_call(actor, "K2_DestroyActor")
+        end
+        instance.bossProbeHandle = nil
+        log(string.format(
+            "LEVEL_BOSS_PROBE_CLEANUP destroyed=%s saveWrites=false",
+            tostring(destroyed == true)
+        ))
+    end
+    table.insert(instance.callbacks, cleanup_callback)
+    ExecuteWithDelay(probe.cleanupDelayMs, cleanup_callback)
 end
 
 local function schedule_actor_reapply(instance, actor, component, delay_ms, source)
@@ -453,6 +877,8 @@ function WorldBalance.start(config)
     assert(type(config.levelOverride) == "table", "level-override configuration is required")
     assert(type(config.palFactionRage) == "table", "Pal-faction rage configuration is required")
     assert(type(config.loadedActorReconcile) == "table", "loaded-actor reconciliation configuration is required")
+    assert(type(config.liveAudit) == "table", "world-balance live-audit configuration is required")
+    assert(type(config.liveAudit.enabled) == "boolean", "world-balance live-audit gate is required")
     assert(config.palFactionRage.hpMultiplier == 2.0, "Pal-faction HP multiplier must be 2.0")
     assert(config.palFactionRage.damageMultiplier == 2.0, "Pal-faction damage multiplier must be 2.0")
     assert(
@@ -465,7 +891,13 @@ function WorldBalance.start(config)
         callbacks = {},
         hookIds = {},
         rageActors = {},
+        levelObservations = {},
+        levelCategoryCounts = {},
+        levelOutcomeCounts = {},
+        levelWriteActors = {},
         levelAppliedCount = 0,
+        levelVerifiedCount = 0,
+        levelWriteCount = 0,
         levelDetailLogCount = 0,
         rageAppliedCount = 0,
         rageDetailLogCount = 0,
@@ -523,12 +955,63 @@ function WorldBalance.start(config)
         RegisterLoadMapPostHook(load_map_callback)
     end
 
+    local live_audit = config.liveAudit
+    if live_audit.enabled == true then
+        local schedule_audit_summaries = function(source)
+            for index, delay_ms in ipairs(live_audit.summaryDelaysMs) do
+                local summary_callback = function()
+                    emit_level_audit_summary(
+                        instance,
+                        source .. "-delay-" .. tostring(index)
+                    )
+                end
+                table.insert(instance.callbacks, summary_callback)
+                ExecuteWithDelay(delay_ms, summary_callback)
+            end
+        end
+        schedule_audit_summaries("startup")
+        if type(RegisterLoadMapPostHook) == "function" then
+            local audit_load_map_callback = function()
+                log("LEVEL_AUDIT_LOAD_MAP_READY broadScan=false")
+                schedule_audit_summaries("world-load")
+            end
+            instance.auditLoadMapCallback = audit_load_map_callback
+            table.insert(instance.callbacks, audit_load_map_callback)
+            RegisterLoadMapPostHook(audit_load_map_callback)
+        end
+        local boss_probe = live_audit.bossProbe
+        if boss_probe.enabled == true
+            and type(RegisterKeyBind) == "function"
+            and type(Key) == "table"
+            and Key[boss_probe.key] ~= nil then
+            local boss_callback = function()
+                if type(ExecuteInGameThread) == "function" then
+                    ExecuteInGameThread(function()
+                        spawn_boss_probe(instance)
+                    end)
+                else
+                    spawn_boss_probe(instance)
+                end
+            end
+            table.insert(instance.callbacks, boss_callback)
+            RegisterKeyBind(Key[boss_probe.key], boss_callback)
+            log(string.format(
+                "LEVEL_BOSS_PROBE_READY key=%s character=%s requestedLevel=%d cleanupMs=%d qaOnly=true saveWrites=false",
+                boss_probe.key,
+                boss_probe.characterId,
+                boss_probe.spawnLevel,
+                boss_probe.cleanupDelayMs
+            ))
+        end
+    end
+
     log(string.format(
-        "READY targetLevel=%d levelEnabled=%s rageEnabled=%s loadedActorReconcile=%s palFactionIslands=%d predatorType=%d hpRate=%.2f damageRate=%.2f noTick=true",
+        "READY targetLevel=%d levelEnabled=%s rageEnabled=%s loadedActorReconcile=%s liveAudit=%s palFactionIslands=%d predatorType=%d hpRate=%.2f damageRate=%.2f noTick=true",
         config.targetLevel,
         tostring(config.levelOverride.enabled == true),
         tostring(config.palFactionRage.enabled == true),
         tostring(reconcile.enabled == true),
+        tostring(live_audit.enabled == true),
         #IslandMask.islands,
         PREDATOR_SPAWNED_CHARACTER_TYPE,
         config.palFactionRage.hpMultiplier,
@@ -539,5 +1022,6 @@ end
 
 WorldBalance.classify_world = IslandMask.classify_world
 WorldBalance.islandMask = IslandMask
+WorldBalance.level_group_is_world_managed = level_group_is_world_managed
 
 return WorldBalance

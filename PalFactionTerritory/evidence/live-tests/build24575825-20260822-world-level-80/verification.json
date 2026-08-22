@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "1.0.0",
+  "result": "PASS",
+  "gameBuild": "24575825",
+  "gameVersion": "1.0.3.101283",
+  "testDate": "2026-08-22",
+  "acceptanceGate": "B1-world-level-80",
+  "staging": {
+    "targetLevel": 80,
+    "levelOverride": true,
+    "liveAudit": true,
+    "bossProbe": true,
+    "palFactionRage": false,
+    "loadedActorReconcile": false,
+    "broadActorScan": false
+  },
+  "implementation": {
+    "route": "native-character-initialization-events-only",
+    "runtimeProperty": "PalIndividualCharacterParameter.SaveParameter.Level",
+    "overrideMethod": "SetOverrideLevel",
+    "eventScopedExactTarget": true,
+    "postHookRegistered": false,
+    "playerAndOwnedExclusionBeforeWrite": true
+  },
+  "finalRound": {
+    "result": "PASS",
+    "applied": 35,
+    "verified": 35,
+    "categories": {
+      "palWorld": 22,
+      "palBoss": 1,
+      "npcFriendly": 9,
+      "npcMerchant": 3
+    },
+    "readback": {
+      "effective": 80,
+      "componentEffective": 80,
+      "individualEffective": 80,
+      "override": 80
+    },
+    "excluded": {
+      "playerCharacter": 1,
+      "playerLevel": 29,
+      "ownedOrWorker": 5,
+      "playerGuildGroup4": 14
+    },
+    "bossProbe": {
+      "characterId": "Boss_Anubis",
+      "requestedLevel": 1,
+      "observedClass": "BP_Anubis_MiddleBoss_C",
+      "observedLevel": 80,
+      "cleanupDelayMs": 15000,
+      "destroyed": true,
+      "saveWritesFlag": false
+    },
+    "fastTravelStreaming": {
+      "destination": "Small Settlement",
+      "newWildTargetsVerified": true,
+      "friendlyTargetsVerified": true,
+      "merchantTargetsVerified": true
+    },
+    "broadScanFalseObservations": 4,
+    "newCrashCount": 0,
+    "rawLogSha256": "EACBA1CEBCE57469C04D637A36EC03E2DDB292A4893EED4C6AB610C234038E45"
+  },
+  "rejectedRounds": [
+    {
+      "round": 1,
+      "reason": "world GroupType 0 was incorrectly excluded"
+    },
+    {
+      "round": 2,
+      "reason": "Boss controller unavailable and layered native readback incomplete"
+    },
+    {
+      "round": 3,
+      "reason": "unsafe UE4SS Lua pre-plus-post hook crashed and was removed"
+    },
+    {
+      "round": 4,
+      "reason": "override reached 80 while component and individual levels remained native 1-3"
+    }
+  ],
+  "restore": {
+    "result": "PASS",
+    "gameRunning": false,
+    "saveFiles": 383,
+    "saveDiffCount": 0,
+    "levelSha256": "2579FDAF631690AB6D8AB7E9097881CB9DC365DA116D022D1BC182E58CEA9C69",
+    "levelMetaSha256": "4839CC7D8C52E31D511A05F3C817F80F1C6BC64154F6854C1940A6FA9CF5A1FF",
+    "stateFiles": 12,
+    "stateDiffCount": 0,
+    "formalDeploymentFiles": 76,
+    "formalRiskGatesDisabled": true
+  },
+  "evidenceBoundary": {
+    "rawLogsCrashesAndSavesPrivate": true,
+    "runtimeCharacterSaveParameterLevelMutation": true,
+    "directFilesystemSaveWrite": false,
+    "palworldSaveSnapshotRestored": true,
+    "userAcceptance": "not-performed",
+    "b2Accepted": false
+  }
+}

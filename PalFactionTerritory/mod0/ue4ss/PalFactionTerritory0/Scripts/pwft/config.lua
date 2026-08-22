@@ -488,14 +488,35 @@ return {
     },
 
     -- Post-game world normalization is split into independent, fail-closed
-    -- capabilities. No level, EXP, faction, HP, damage, or capture value is
-    -- written into a save parameter. Keep every capability disabled until its
-    -- own live-test phase is explicitly authorized.
+    -- capabilities. B1 changes only the exact eligible runtime character's
+    -- reflected SaveParameter.Level during its native initialization event;
+    -- it never scans loaded actors and never touches player/player-owned
+    -- parameters. That runtime value can be included by Palworld's later
+    -- autosave, so every capability remains disabled until its own live-test
+    -- phase is explicitly authorized and protected by a full save snapshot.
     worldBalance = {
         enabled = true,
         targetLevel = 80,
         initializationReapplyDelayMs = 100,
         maxDetailLogCount = 24,
+        -- Readback-only live acceptance support. Formal source and release
+        -- installs keep this disabled. A staging script may enable it after a
+        -- full snapshot so initialization events can prove the effective
+        -- level without a FindAllOf world scan. The optional Boss probe uses
+        -- the native NPC manager and destroys its one transient actor.
+        liveAudit = {
+            enabled = false,
+            summaryDelaysMs = { 2000, 8000, 20000 },
+            bossProbe = {
+                enabled = false,
+                key = "F8",
+                characterId = "Boss_Anubis",
+                spawnLevel = 1,
+                cleanupDelayMs = 15000,
+                spawnOffset = { X = 800, Y = 0, Z = 80 },
+                saveWrites = false,
+            },
+        },
         levelOverride = {
             enabled = false,
             mode = "native-character-initialization-events-only",

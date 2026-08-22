@@ -1816,6 +1816,45 @@ def main() -> int:
         "WorldBalance.has_enabled_feature" in world_balance_text,
         "world-balance feature gate helper missing",
     )
+    require(
+        "liveAudit = {" in config_text
+        and 'characterId = "Boss_Anubis"' in config_text
+        and "saveWrites = false" in config_text,
+        "default-off world-level live audit and transient Boss probe missing",
+    )
+    require(
+        "LEVEL_OVERRIDE_VERIFIED" in world_balance_text
+        and "LEVEL_AUDIT_SUMMARY" in world_balance_text
+        and "LEVEL_AUDIT_LOAD_MAP_READY" in world_balance_text
+        and "broadScan=false" in world_balance_text,
+        "event-driven world-level effective readback evidence missing",
+    )
+    require(
+        "level_group_is_world_managed" in world_balance_text
+        and "group_type == 0" in world_balance_text
+        and "player-guild-group:" in world_balance_text,
+        "B1 wild-Pal initialization eligibility and player-guild exclusion missing",
+    )
+    require(
+        "RegisterKeyBind(Key[boss_probe.key], boss_callback)" in world_balance_text
+        and "key=Ctrl+%s" not in world_balance_text,
+        "B1 transient Boss probe must use its unmodified QA hotkey",
+    )
+    require(
+        'require("UEHelpers")' in world_balance_text
+        and 'FindFirstOf, class_name' in world_balance_text
+        and 'safe_property(controller, "AcknowledgedPawn")' in world_balance_text,
+        "B1 transient Boss probe local-player resolution fallback missing",
+    )
+    require(
+        'safe_property(individual, "SaveParameter")' in world_balance_text
+        and 'safe_struct_assign(' in world_balance_text
+        and '"Level",' in world_balance_text
+        and "levelWriteActors" in world_balance_text
+        and 'instance.lastApplySource == "native-initialize-post"' in world_balance_text
+        and "RegisterHook(path, callback, post_callback)" not in world_balance_text,
+        "B1 level override must use one bounded eligible-actor native Level write without unsafe post hooks",
+    )
     require("RegisterLoop" not in world_balance_text, "world balance must not use a permanent loop")
     require("RegisterHook" in world_balance_text, "character initialization hook missing")
     require('Mask.textureSize = 1024' in pal_mask_text, "Pal-faction mask projection size mismatch")

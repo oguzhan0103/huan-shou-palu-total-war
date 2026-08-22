@@ -11,6 +11,10 @@ local Mask = WorldBalance.islandMask
 assert(Config.worldBalance.enabled == true)
 assert(Config.worldBalance.targetLevel == 80)
 assert(Config.worldBalance.levelOverride.enabled == false)
+assert(Config.worldBalance.liveAudit.enabled == false)
+assert(Config.worldBalance.liveAudit.bossProbe.enabled == false)
+assert(Config.worldBalance.liveAudit.bossProbe.characterId == "Boss_Anubis")
+assert(Config.worldBalance.liveAudit.bossProbe.saveWrites == false)
 assert(Config.worldBalance.palFactionRage.enabled == false)
 assert(Config.worldBalance.palFactionRage.makeUncapturable == true)
 assert(Config.worldBalance.palFactionRage.hpMultiplier == 2.0)
@@ -35,6 +39,18 @@ assert(WorldBalance.has_enabled_feature(level_only) == true)
 level_only.levelOverride.enabled = false
 level_only.palFactionRage.enabled = true
 assert(WorldBalance.has_enabled_feature(level_only) == true)
+
+-- B1 level management is deliberately broader than B2 rage targeting:
+-- ordinary wild Pals are group 0 during native initialization, while groups
+-- 3/4 remain protected player-guild representations.
+assert(WorldBalance.level_group_is_world_managed(0) == true)
+assert(WorldBalance.level_group_is_world_managed(1) == true)
+assert(WorldBalance.level_group_is_world_managed(2) == true)
+assert(WorldBalance.level_group_is_world_managed(5) == true)
+assert(WorldBalance.level_group_is_world_managed(6) == true)
+assert(WorldBalance.level_group_is_world_managed(3) == false)
+assert(WorldBalance.level_group_is_world_managed(4) == false)
+assert(WorldBalance.level_group_is_world_managed(nil) == false)
 
 assert(Mask.textureSize == 1024)
 assert(#Mask.islands == 5)
