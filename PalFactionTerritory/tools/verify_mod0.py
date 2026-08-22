@@ -109,6 +109,8 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "quest_runtime.lua",
         SCRIPTS_ROOT / "pwft" / "strategic_world.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_campaign.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_boss_provider_bus.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_world_effect_bus.lua",
         SCRIPTS_ROOT / "pwft" / "runtime.lua",
         SCRIPTS_ROOT / "pwft" / "settlement_raid.lua",
         SCRIPTS_ROOT / "pwft" / "world_balance.lua",
@@ -141,6 +143,8 @@ def main() -> int:
         PROJECT_ROOT / "mod0" / "tests" / "quest_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "strategic_world_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_campaign_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_boss_provider_bus_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_world_effect_bus_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "ending_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "content_pack_author_sdk_e2e_spec.lua",
         PROJECT_ROOT / "examples" / "minimal-content-pack" / "README.md",
@@ -171,6 +175,8 @@ def main() -> int:
         PROJECT_ROOT / "contracts" / "content_bundle.v1.json",
         PROJECT_ROOT / "contracts" / "strategic_world.v1.json",
         PROJECT_ROOT / "contracts" / "unique_pal_campaign.v1.json",
+        PROJECT_ROOT / "contracts" / "unique_pal_boss_provider.v1.json",
+        PROJECT_ROOT / "contracts" / "unique_pal_world_effects.v1.json",
         PROJECT_ROOT / "contracts" / "ending_routes.v1.json",
         PROJECT_ROOT
         / "evidence"
@@ -230,6 +236,16 @@ def main() -> int:
     progression = json.loads(
         (PROJECT_ROOT / "contracts" / "faction_progression.v1.json").read_text(encoding="utf-8")
     )
+    unique_pal_boss_provider = json.loads(
+        (PROJECT_ROOT / "contracts" / "unique_pal_boss_provider.v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    unique_pal_world_effects = json.loads(
+        (PROJECT_ROOT / "contracts" / "unique_pal_world_effects.v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
     pal_reconciliation = json.loads(
         (PROJECT_ROOT / "contracts" / "pal_reconciliation.v1.json").read_text(encoding="utf-8")
     )
@@ -259,6 +275,68 @@ def main() -> int:
     require(
         progression["baselineStatus"] == "user_confirmed_mechanics_baseline_2026-07-28",
         "faction progression baseline not active",
+    )
+    require(
+        unique_pal_boss_provider["schemaVersion"] == "1.0.0"
+        and unique_pal_boss_provider["providerApi"]
+        == "PWFT_UNIQUE_PAL_BOSS_PROVIDER_BUS_V1",
+        "P1 unique-Pal Boss provider contract is missing",
+    )
+    require(
+        unique_pal_boss_provider["bossWhitelistPolicy"]["nonUniqueSpeciesSuppressed"]
+        is True
+        and unique_pal_boss_provider["bindingPolicy"][
+            "unknownSpeciesActorOrSlotFailsClosed"
+        ]
+        is True,
+        "P1 Boss whitelist and verified binding policy must fail closed",
+    )
+    require(
+        unique_pal_boss_provider["raidSlabBalancePolicy"][
+            "captureAllowedMustRemainTrue"
+        ]
+        is True
+        and unique_pal_boss_provider["defeatPolicy"][
+            "ownerRemainsWildOrUnclaimed"
+        ]
+        is True,
+        "P1 Boss balance or non-transfer defeat policy drifted",
+    )
+    require(
+        unique_pal_world_effects["schemaVersion"] == "1.0.0"
+        and unique_pal_world_effects["providerApi"]
+        == "PWFT_UNIQUE_PAL_WORLD_EFFECT_BUS_V1",
+        "P2 unique-Pal world-effect provider contract is missing",
+    )
+    require(
+        unique_pal_world_effects["extinctionPolicy"][
+            "loadedActorCleanupExactBindingsOnly"
+        ]
+        is True
+        and unique_pal_world_effects["extinctionPolicy"][
+            "broadActorScanAllowed"
+        ]
+        is False
+        and unique_pal_world_effects["extinctionPolicy"][
+            "buildingsPreserved"
+        ]
+        is True,
+        "P2 extinction cleanup and empty-city policy must remain exact and reversible",
+    )
+    require(
+        unique_pal_world_effects["ransomPolicy"][
+            "exactCurrencyAndAmountRequired"
+        ]
+        is True
+        and unique_pal_world_effects["ransomPolicy"][
+            "failedPalDeliveryRemainsRetryable"
+        ]
+        is True
+        and unique_pal_world_effects["warPolicy"]["backgroundWar"][
+            "modelMayDecideResult"
+        ]
+        is False,
+        "P2 ransom delivery or war authority boundary drifted",
     )
     require(len(progression["humanFactionIds"]) == 7, "expected 7 human progression factions")
     require(len(progression["palFactionIds"]) == 5, "expected 5 Pal progression factions")
@@ -461,8 +539,63 @@ def main() -> int:
         "Leader must unlock player guards",
     )
     require(
-        progression["designPolicy"]["reputationDecreaseEnabled"] is False,
-        "reputation decrease must remain outside the current phase",
+        progression["schemaVersion"] == "1.1.0"
+        and progression["designPolicy"]["reputationDecreaseEnabled"] is True,
+        "P0 signed reputation contract must be enabled",
+    )
+    mutation_policy = progression["reputationMutationPolicy"]
+    require(
+        mutation_policy["schemaVersion"] == "1.0.0"
+        and mutation_policy["humanFactionsOnly"] is True
+        and mutation_policy["palFactionDecreaseAllowed"] is False,
+        "reputation decrease must remain human-faction-only",
+    )
+    require(
+        mutation_policy["minimumReputation"] == -1200
+        and mutation_policy["maximumReputation"] == 1200
+        and mutation_policy["operationIdRequired"] is True
+        and mutation_policy["operationSignatureRequired"] is True
+        and mutation_policy["idempotencyConflictPolicy"] == "reject",
+        "reputation bounds or idempotency contract drifted",
+    )
+    require(
+        mutation_policy["arbitraryClientMutationAllowed"] is False
+        and mutation_policy["ollamaMutationAllowed"] is False,
+        "client and Ollama reputation mutation must remain forbidden",
+    )
+    require(
+        [authority["id"] for authority in mutation_policy["authorities"]]
+        == [
+            "pwft.task-award.v1",
+            "pwft.defense-award.v1",
+            "pwft.commerce-award.v1",
+            "pwft.faction-consequence.v1",
+        ],
+        "authoritative reputation producer list drifted",
+    )
+    require(
+        progression["membershipPolicy"]["retainJoinedMembershipAtZero"] is True
+        and progression["membershipPolicy"]["retainJoinedMembershipBelowZero"] is True
+        and progression["relationPolicy"]["joinedHumanHostileRelation"] == "Hostile"
+        and progression["rankPolicy"]["automaticDemotion"] is True,
+        "membership retention or automatic demotion policy drifted",
+    )
+    require(
+        progression["guardPolicy"]["revokeWhenRankLosesAccess"] is True,
+        "guard permission revocation policy is missing",
+    )
+    require(
+        progression["reputationSources"]["commerce"]["totalCapPerWindow"] == 20
+        and progression["reputationSources"]["commerce"]["negativeRecoveryCapPerWindow"] == 20
+        and progression["reputationSources"]["commerce"]["nonNegativeCapPerWindow"] == 20,
+        "accepted commerce 20-point total window cap drifted",
+    )
+    require(
+        progression["reputationSources"]["consequence"]["direction"]
+        == "negative-only"
+        and progression["reputationSources"]["consequence"]["maximumPenaltyPerEvent"]
+        == 300,
+        "negative consequence source policy drifted",
     )
     require(
         progression["designPolicy"]["palworldSaveMutationAllowed"] is False,
@@ -630,6 +763,12 @@ def main() -> int:
     ).read_text(encoding="utf-8")
     quest_runtime_text = (
         SCRIPTS_ROOT / "pwft" / "quest_runtime.lua"
+    ).read_text(encoding="utf-8")
+    unique_pal_boss_provider_text = (
+        SCRIPTS_ROOT / "pwft" / "unique_pal_boss_provider_bus.lua"
+    ).read_text(encoding="utf-8")
+    unique_pal_world_effect_text = (
+        SCRIPTS_ROOT / "pwft" / "unique_pal_world_effect_bus.lua"
     ).read_text(encoding="utf-8")
     commerce_bridge_text = (SCRIPTS_ROOT / "pwft" / "commerce_bridge.lua").read_text(encoding="utf-8")
     world_balance_text = (SCRIPTS_ROOT / "pwft" / "world_balance.lua").read_text(encoding="utf-8")
@@ -879,7 +1018,11 @@ def main() -> int:
     require("pwft.commerce" in runtime_text, "commerce console diagnostics missing")
     require("FACTION_MERCHANT_RUNTIME_READY" in runtime_text, "merchant runtime readiness log missing")
     require("pwft.progress" in runtime_text, "progression console diagnostics missing")
-    require("grant_reputation" in progression_text, "reputation award API missing")
+    require("grant_reputation" in progression_text, "legacy positive reputation wrapper missing")
+    require("apply_reputation_delta" in progression_text, "unified signed reputation API missing")
+    require("reputation-operation-id-conflict" in progression_text, "reputation signature conflict gate missing")
+    require("processedReputationOperations" in progression_text, "reputation operation signature ledger missing")
+    require("LEGACY_STATE_SCHEMA_VERSION" in progression_text, "progression snapshot migration path missing")
     require("negativeRecoveryCapPerWindow" in progression_text, "commerce recovery cap missing")
     require("nonNegativeCapPerWindow" in progression_text, "friendly commerce cap missing")
     require("apply_commerce_diplomacy_recovery" in progression_text, "automatic commerce diplomacy recovery missing")
@@ -897,8 +1040,58 @@ def main() -> int:
     require("award_task" in faction_api_text, "task content API missing")
     require("award_defense" in faction_api_text, "defense content API missing")
     require("award_commerce" in faction_api_text, "commerce content API missing")
+    require("apply_reputation_delta" in faction_api_text, "authoritative signed reputation content API missing")
+    require("reputationDecrease = true" in faction_api_text, "signed reputation capability missing")
     require("reconcile_pal" in faction_api_text, "Pal reconciliation content API missing")
-    require("eventId" in progression_text, "idempotent reputation event IDs missing")
+    require("operationId" in progression_text, "idempotent reputation operation IDs missing")
+    require("reconcile_entitlement" in faction_guard_text, "guard demotion recall path missing")
+    require("reconcile_all_entitlements" in faction_guard_text, "guard restore reconciliation path missing")
+    require("reconcile_access" in quest_runtime_text, "quest permission reconciliation path missing")
+    require("quest-access-suspended" in quest_runtime_text, "quest access-loss suspension missing")
+    require("PROGRESSION_GRANT_DISABLED" in runtime_text, "arbitrary console reputation grant must remain disabled")
+    require(
+        "UniquePalBossProviderBus.create" in runtime_text
+        and "PWFT_UNIQUE_PAL_BOSS_PROVIDER_BUS_V1" in runtime_text
+        and "uniquePalBossProviderBus:unbind_world" in runtime_text,
+        "P1 unique-Pal Boss provider runtime lifecycle is incomplete",
+    )
+    require(
+        "verified-unique-pal-boss-binding-required"
+        in unique_pal_boss_provider_text
+        and "native-unique-pal-callback-generation-rejected"
+        in unique_pal_boss_provider_text
+        and "replacement-slot" in unique_pal_boss_provider_text,
+        "P1 verified native/replacement binding gates are incomplete",
+    )
+    require(
+        "confirm_spawn" in unique_pal_boss_provider_text
+        and "confirm_defeat" in unique_pal_boss_provider_text
+        and "confirm_capture" in unique_pal_boss_provider_text
+        and "confirm_timeout" in unique_pal_boss_provider_text,
+        "P1 authoritative native callback surface is incomplete",
+    )
+    require(
+        "UniquePalWorldEffectBus.create" in runtime_text
+        and "PWFT_UNIQUE_PAL_WORLD_EFFECT_BUS_V1" in runtime_text
+        and "uniquePalWorldEffectBus:unbind_world" in runtime_text,
+        "P2 unique-Pal world-effect runtime lifecycle is incomplete",
+    )
+    require(
+        "world-spawn-suppression" in unique_pal_world_effect_text
+        and "loaded-actor-cleanup" in unique_pal_world_effect_text
+        and "empty-city" in unique_pal_world_effect_text
+        and "merchant-filter" in unique_pal_world_effect_text
+        and "broadActorScan = false" in unique_pal_world_effect_text,
+        "P2 extinction and exact-cleanup provider outputs are incomplete",
+    )
+    require(
+        "confirm_background_war" in unique_pal_world_effect_text
+        and "confirm_player_defense" in unique_pal_world_effect_text
+        and "confirm_ransom_payment" in unique_pal_world_effect_text
+        and "confirm_pal_delivery" in unique_pal_world_effect_text
+        and "pal-delivery" in unique_pal_world_effect_text,
+        "P2 war, defense, ransom, or Pal-delivery bridge is incomplete",
+    )
     require(
         pal_reconciliation["baselineStatus"]
         == "user_confirmed_token_discourse_mechanics_2026-08-05",

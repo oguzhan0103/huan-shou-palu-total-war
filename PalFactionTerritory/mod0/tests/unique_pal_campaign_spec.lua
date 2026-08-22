@@ -147,10 +147,11 @@ local function create_runtime(snapshot)
 end
 
 local progression, world, campaign, events = create_runtime()
-assert(campaign.version == "1.0.0")
+assert(campaign.version == "1.1.0")
 assert(campaign:status().uniquePalCount == 3)
 assert(campaign:status().destroyedTargetCount == 0)
 assert(campaign.capabilities.uniquePalBossWhitelist)
+assert(campaign.capabilities.authoritativeBossDefeat)
 assert(campaign.capabilities.nativeBossMutation == false)
 assert(campaign.capabilities.PalworldSaveMutation == false)
 

@@ -1,15 +1,62 @@
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "gameBuild": "Steam v1.0.1 / build 24181527",
   "baselineStatus": "user_confirmed_mechanics_baseline_2026-07-28",
   "balanceStatus": "provisional_until_live_balance_review",
   "designPolicy": {
     "multipleHumanMembershipsAllowed": true,
-    "reputationDecreaseEnabled": false,
+    "reputationDecreaseEnabled": true,
     "storyContentIncluded": false,
     "taskContentIncluded": false,
     "modOwnedPersistenceRequired": true,
     "palworldSaveMutationAllowed": false
+  },
+  "reputationMutationPolicy": {
+    "schemaVersion": "1.0.0",
+    "humanFactionsOnly": true,
+    "palFactionDecreaseAllowed": false,
+    "zeroDeltaAllowed": false,
+    "minimumReputation": -1200,
+    "maximumReputation": 1200,
+    "newMutationBoundsPolicy": "clamp",
+    "legacyOutOfBoundsPolicy": "preserve_until_authoritative_mutation",
+    "operationIdRequired": true,
+    "operationSignatureRequired": true,
+    "idempotencyConflictPolicy": "reject",
+    "arbitraryClientMutationAllowed": false,
+    "ollamaMutationAllowed": false,
+    "authorities": [
+      {
+        "id": "pwft.task-award.v1",
+        "directions": ["positive"],
+        "sources": ["task"],
+        "reasonCodes": ["task-completed"]
+      },
+      {
+        "id": "pwft.defense-award.v1",
+        "directions": ["positive"],
+        "sources": ["defense"],
+        "reasonCodes": ["defense-resolved"]
+      },
+      {
+        "id": "pwft.commerce-award.v1",
+        "directions": ["positive"],
+        "sources": ["commerce"],
+        "reasonCodes": ["commerce-confirmed"]
+      },
+      {
+        "id": "pwft.faction-consequence.v1",
+        "directions": ["negative"],
+        "sources": ["consequence"],
+        "reasonCodes": [
+          "friendly-fire",
+          "civilian-harm",
+          "contract-breach",
+          "mission-failure",
+          "war-consequence"
+        ]
+      }
+    ]
   },
   "humanFactionIds": [
     "pwft.faction.rayne_syndicate",
@@ -39,12 +86,15 @@
     "hostileBelowReputation": 0,
     "nonMemberNonHostileRelation": "Friendly",
     "joinedHumanRelation": "Player",
+    "joinedHumanHostileRelation": "Hostile",
     "palNonHostileRelation": "Friendly",
     "palMaximumRelation": "Friendly"
   },
   "membershipPolicy": {
     "joinMinimumReputation": 0,
     "humanOnly": true,
+    "retainJoinedMembershipAtZero": true,
+    "retainJoinedMembershipBelowZero": true,
     "joinOperationProvidedByContent": true,
     "joinDiplomacyEffectsStatus": "runtime_overlay_content_adapter_and_native_presenter_ready",
     "joinDiplomacyEffects": {
@@ -133,6 +183,8 @@
   },
   "rankPolicy": {
     "automaticPromotion": true,
+    "automaticDemotion": true,
+    "minimumJoinedRank": "Member",
     "ranks": [
       {
         "id": "Member",
@@ -168,6 +220,7 @@
       "Lord"
     ],
     "maximumActivePerFaction": 1,
+    "revokeWhenRankLosesAccess": true,
     "providerStatus": "native_blueprint_provider_and_player_entry_ready",
     "controllerClassPath": "/Game/Pal/Blueprint/Controller/NPC/BP_NPCAIController_Visitor_Guardman.BP_NPCAIController_Visitor_Guardman_C",
     "leaderBinding": "VisitorLeader=local-player",
@@ -197,7 +250,8 @@
       "enabled": true,
       "primarySource": false,
       "windowPolicy": "external_window_id",
-      "negativeRecoveryCapPerWindow": 80,
+      "totalCapPerWindow": 20,
+      "negativeRecoveryCapPerWindow": 20,
       "nonNegativeCapPerWindow": 20,
       "canRestoreToNonHostile": true,
       "canReachLordAlone": false,
@@ -214,6 +268,15 @@
         "visitingCaravansWhileHostileAllowed": false,
         "balanceStatus": "provisional_offline_baseline_2026-07-29"
       }
+    },
+    "consequence": {
+      "enabled": true,
+      "primarySource": false,
+      "direction": "negative-only",
+      "maximumPenaltyPerEvent": 300,
+      "humanOnly": true,
+      "authority": "pwft.faction-consequence.v1",
+      "storyContentIncluded": false
     },
     "pal_reconciliation": {
       "enabled": true,

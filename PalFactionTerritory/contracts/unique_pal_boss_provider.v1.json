@@ -1,0 +1,120 @@
+{
+  "schemaVersion": "1.0.0",
+  "apiVersion": "1.0.0",
+  "providerApi": "PWFT_UNIQUE_PAL_BOSS_PROVIDER_BUS_V1",
+  "contentStatus": "provider_ready_verified_native_bindings_required",
+  "storyContentIncluded": false,
+  "providerPolicy": {
+    "configuredTrustedContentModuleActivationOnly": true,
+    "idempotentDeliveryIdsRequired": true,
+    "generationFencedCallbacksRequired": true,
+    "handlersPersisted": false,
+    "bindingsPersisted": false,
+    "modelAuthority": false,
+    "inlineTextAuthority": false
+  },
+  "bossWhitelistPolicy": {
+    "nonUniqueSpeciesSuppressed": true,
+    "uniqueSpeciesRequiresActiveOpeningWindow": true,
+    "uniqueSpeciesRequiresVerifiedBinding": true,
+    "directAssetDeletion": false,
+    "reversibleSpawnerConfigurationOnly": true
+  },
+  "bindingPolicy": {
+    "contentPackBindingStatusMustBe": "bound",
+    "requiredVerifiedFields": [
+      "speciesId",
+      "bossSpawnerKey",
+      "expectedActorClassKey",
+      "PalworldBuildId"
+    ],
+    "routes": {
+      "native-existing": {
+        "nativeBossAvailable": true,
+        "slotMustMatchContentDefinitionWhenPresent": true
+      },
+      "replacement-slot": {
+        "nativeBossAvailable": false,
+        "verifiedSlotIdRequired": true,
+        "slotMustMatchContentDefinition": true
+      }
+    },
+    "unknownSpeciesActorOrSlotFailsClosed": true
+  },
+  "raidSlabBalancePolicy": {
+    "profileId": "raid-slab",
+    "configurableFields": [
+      "level",
+      "healthMultiplier",
+      "damageMultiplier",
+      "damageReductionMultiplier",
+      "statusResistanceMultiplier",
+      "captureDifficultyMultiplier"
+    ],
+    "allNumericValuesMustBePositive": true,
+    "captureAllowedMustRemainTrue": true,
+    "coreDefaultNumbersProvided": false
+  },
+  "nativeDeliveryPolicy": {
+    "kinds": [
+      "announce",
+      "spawn",
+      "open",
+      "close",
+      "cooldown"
+    ],
+    "spawnDeliveryConfirmsRequestAcceptedOnly": true,
+    "spawnCallbackRequiredBeforeCoreOpen": true,
+    "failedDeliveriesRemainRetryable": true,
+    "staleOpeningDeliveriesAreCancelled": true
+  },
+  "callbackPolicy": {
+    "kinds": [
+      "spawn",
+      "defeat",
+      "capture",
+      "timeout"
+    ],
+    "exactChecks": [
+      "providerId",
+      "authoritySource",
+      "bindingId",
+      "uniquePalId",
+      "openingEventId",
+      "speciesId",
+      "bossSpawnerKey",
+      "actorBindingId",
+      "actorClassKey",
+      "worldGeneration"
+    ],
+    "stableCallbackIdsRequired": true,
+    "duplicateSameSignatureIsIdempotent": true,
+    "duplicateChangedSignatureIsConflict": true,
+    "lateGenerationRejected": true
+  },
+  "defeatPolicy": {
+    "closesCurrentOpening": true,
+    "ownerRemainsWildOrUnclaimed": true,
+    "automaticPlayerOwnership": false,
+    "automaticNpcOwnership": false,
+    "nativeCleanupAndCooldownDeliveryRequired": true,
+    "nextScheduleRequired": true
+  },
+  "persistencePolicy": {
+    "serializableProviderDefinitions": true,
+    "deliveryLedger": true,
+    "callbackSignatureLedger": true,
+    "worldGeneration": true,
+    "UObjectReferences": false,
+    "PalworldSaveMutation": false
+  },
+  "currentImplementation": {
+    "providerBus": "implemented-offline-verified",
+    "runtimeAndContentModuleContext": "implemented-offline-verified",
+    "nativeExistingBossBinding": "contract-ready-real-binding-pending",
+    "replacementBossSlotBinding": "contract-ready-real-binding-pending",
+    "nativePresentation": "contract-ready-real-provider-pending",
+    "nativeCallbacks": "contract-ready-real-provider-pending",
+    "liveAcceptance": "not-run"
+  }
+}

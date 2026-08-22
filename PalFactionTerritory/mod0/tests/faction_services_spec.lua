@@ -169,4 +169,37 @@ assert(leader_row.rankId == "Leader")
 assert(leader_row.guard.eligible == true)
 assert(leader_row.guard.providerReady == true)
 
-print("PASS faction UI model, hostile-defense truce, and guard entitlement services")
+recalled = false
+assert(guard:deploy(rayne, "guard-request-004").ok)
+local demotion = api:apply_reputation_delta(
+    rayne,
+    -300,
+    {
+        source = "consequence",
+        operationId = "consequence:guard-demotion:001",
+        authority = "pwft.faction-consequence.v1",
+        reasonCode = "mission-failure",
+    }
+)
+assert(demotion.ok and demotion.demoted == true)
+assert(api:faction_status(rayne).rankId == "CoreMember")
+assert(api:faction_status(rayne).guardAccess == false)
+local revoked = guard:reconcile_entitlement(
+    rayne,
+    "reputation-entitlement-revoked"
+)
+assert(revoked.ok and revoked.revoked == true)
+assert(recalled == true)
+assert(guard:status().activeGuardCount == 0)
+assert(guard:reconcile_entitlement(rayne).reason == "no-active-guard")
+local demoted_row = ui:faction_row(rayne)
+assert(demoted_row.rankId == "CoreMember")
+assert(demoted_row.guard.eligible == false)
+assert(demoted_row.lastReputationChange.reasonCode == "mission-failure")
+
+assert(api:award_task(rayne, 300, "task-guard-repromotion-001").ok)
+assert(api:faction_status(rayne).rankId == "Leader")
+assert(guard:deploy(rayne, "guard-request-005").ok)
+assert(guard:recall(rayne, "test-cleanup").ok)
+
+print("PASS faction UI model, hostile-defense truce, guard demotion recall, and re-promotion")

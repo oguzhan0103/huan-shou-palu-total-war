@@ -1,8 +1,9 @@
 local QuestRuntime = {}
 local QuestObjectiveSchema = require("pwft.quest_objective_schema")
 
-local API_VERSION = "1.0.0"
-local TEMPLATE_SCHEMA_VERSION = "1.0.0"
+local API_VERSION = "1.1.0"
+local TEMPLATE_SCHEMA_VERSION = "1.1.0"
+local LEGACY_TEMPLATE_SCHEMA_VERSION = "1.0.0"
 local STATE_SCHEMA_VERSION = "1.0.0"
 local QUEST_CAPABILITY = "pwft.quest.templates"
 
@@ -142,7 +143,16 @@ local TEMPLATE_FIELDS = {
     titleKey = true,
     summaryKey = true,
     startStageId = true,
+    accessPolicy = true,
     stages = true,
+}
+
+local ACCESS_POLICY_FIELDS = {
+    factionId = true,
+    requiresJoined = true,
+    minimumRankId = true,
+    minimumReputation = true,
+    onAccessLoss = true,
 }
 
 local STAGE_FIELDS = {
@@ -182,9 +192,77 @@ local function public_instance(instance, template)
     return value
 end
 
-local function normalize_template(content_registry, template)
+local function normalize_access_policy(progression, access_policy)
+    if access_policy == nil then
+        return nil
+    end
+    assert_only_fields(
+        access_policy,
+        ACCESS_POLICY_FIELDS,
+        "quest access policy"
+    )
+    local faction_id = validate_token(
+        access_policy.factionId,
+        "quest access faction ID"
+    )
+    local faction = progression:status(faction_id)
+    assert(
+        faction ~= nil and faction.kind == "Human",
+        "quest access policy requires a human faction"
+    )
+    assert(
+        access_policy.requiresJoined == nil
+            or type(access_policy.requiresJoined) == "boolean",
+        "quest access requiresJoined must be boolean"
+    )
+    assert(
+        access_policy.minimumReputation == nil
+            or type(access_policy.minimumReputation) == "number",
+        "quest access minimumReputation must be numeric"
+    )
+    local minimum_rank_id = access_policy.minimumRankId
+    if minimum_rank_id ~= nil then
+        validate_token(minimum_rank_id, "quest access minimum rank ID")
+        assert(
+            progression.rankIndexes[minimum_rank_id] ~= nil,
+            "quest access minimum rank is unknown"
+        )
+    end
+    assert(
+        access_policy.onAccessLoss == "suspend",
+        "quest access loss must suspend rather than delete progress"
+    )
+    assert(
+        access_policy.requiresJoined == true
+            or minimum_rank_id ~= nil
+            or access_policy.minimumReputation ~= nil,
+        "quest access policy must declare a requirement"
+    )
+    return {
+        factionId = faction_id,
+        requiresJoined = access_policy.requiresJoined == true,
+        minimumRankId = minimum_rank_id,
+        minimumReputation = access_policy.minimumReputation,
+        onAccessLoss = "suspend",
+    }
+end
+
+local function normalize_template(
+    progression,
+    content_registry,
+    template
+)
     assert_only_fields(template, TEMPLATE_FIELDS, "quest template")
-    assert(template.schemaVersion == TEMPLATE_SCHEMA_VERSION, "unsupported quest-template schema")
+    assert(
+        template.schemaVersion == TEMPLATE_SCHEMA_VERSION
+            or template.schemaVersion == LEGACY_TEMPLATE_SCHEMA_VERSION,
+        "unsupported quest-template schema"
+    )
+    assert(
+        template.schemaVersion == TEMPLATE_SCHEMA_VERSION
+            or template.accessPolicy == nil,
+        "quest access policy requires quest-template schema 1.1.0"
+    )
     local pack_id = require_non_empty_string(template.contentPackId, "quest content-pack ID")
     local manifest = content_registry:manifest(pack_id)
     assert(manifest ~= nil, "quest content pack is not registered")
@@ -324,13 +402,17 @@ local function normalize_template(content_registry, template)
     end
 
     local normalized = {
-        schemaVersion = TEMPLATE_SCHEMA_VERSION,
+        schemaVersion = template.schemaVersion,
         contentPackId = pack_id,
         contentVersion = manifest.contentVersion,
         templateId = template_id,
         titleKey = localization_key(template.titleKey, "quest title key"),
         summaryKey = localization_key(template.summaryKey, "quest summary key"),
         startStageId = start_stage_id,
+        accessPolicy = normalize_access_policy(
+            progression,
+            template.accessPolicy
+        ),
         stages = stages,
         stageOrder = stage_order,
         objectiveRuleCount = objective_rule_count,
@@ -343,6 +425,7 @@ local function normalize_template(content_registry, template)
         titleKey = normalized.titleKey,
         summaryKey = normalized.summaryKey,
         startStageId = normalized.startStageId,
+        accessPolicy = normalized.accessPolicy,
         stages = template.stages,
     })
     return normalized
@@ -368,6 +451,69 @@ local function ensure_state(progression)
         validate_saved_state(progression.state.contentQuests)
     end
     return progression.state.contentQuests
+end
+
+local function quest_access_status(instance, template)
+    local policy = template and template.accessPolicy or nil
+    if policy == nil then
+        return {
+            eligible = true,
+            reason = "quest-access-unrestricted",
+        }
+    end
+    local faction = instance.progression:status(policy.factionId)
+    if faction == nil or faction.kind ~= "Human" then
+        return {
+            eligible = false,
+            reason = "quest-access-faction-unavailable",
+            factionId = policy.factionId,
+        }
+    end
+    if policy.requiresJoined and not faction.joined then
+        return {
+            eligible = false,
+            reason = "quest-access-membership-required",
+            factionId = policy.factionId,
+            rankId = faction.rankId,
+            reputation = faction.reputation,
+        }
+    end
+    if policy.minimumRankId ~= nil then
+        local current_rank = instance.progression.rankIndexes[
+            faction.rankId
+        ] or 0
+        local required_rank = instance.progression.rankIndexes[
+            policy.minimumRankId
+        ]
+        if current_rank < required_rank then
+            return {
+                eligible = false,
+                reason = "quest-access-rank-too-low",
+                factionId = policy.factionId,
+                requiredRankId = policy.minimumRankId,
+                rankId = faction.rankId,
+                reputation = faction.reputation,
+            }
+        end
+    end
+    if policy.minimumReputation ~= nil
+        and faction.reputation < policy.minimumReputation then
+        return {
+            eligible = false,
+            reason = "quest-access-reputation-too-low",
+            factionId = policy.factionId,
+            requiredReputation = policy.minimumReputation,
+            reputation = faction.reputation,
+            rankId = faction.rankId,
+        }
+    end
+    return {
+        eligible = true,
+        reason = "quest-access-granted",
+        factionId = policy.factionId,
+        rankId = faction.rankId,
+        reputation = faction.reputation,
+    }
 end
 
 local function touch_progression(instance, event)
@@ -409,6 +555,9 @@ function QuestRuntime.create(progression, content_pack_registry, options)
             structuredResults = true,
             idempotentEvents = true,
             objectiveRules = true,
+            factionAccessPolicies = true,
+            accessLossSuspension = true,
+            accessRecovery = true,
             snapshotOwnedByProgression = true,
             authoredStoryContent = false,
             PalworldSaveMutation = false,
@@ -429,13 +578,57 @@ end
 function QuestRuntime:rebind_progression_state()
     local previous_state = self.state
     self.state = ensure_state(self.progression)
+    local reconciliation = self:reconcile_access(nil)
     return result(true, "progression-state-rebound", {
         stateChanged = previous_state ~= self.state,
+        accessReconciliation = reconciliation,
+    })
+end
+
+function QuestRuntime:reconcile_access(faction_id)
+    local checked = 0
+    local suspended = 0
+    local resumed = 0
+    local outcomes = {}
+    for _, quest in pairs(self.state.instances) do
+        local template = self.templates[quest.templateId]
+        local policy = template and template.accessPolicy or nil
+        if quest.state == "active"
+            and policy ~= nil
+            and (faction_id == nil or policy.factionId == faction_id) then
+            checked = checked + 1
+            local access = quest_access_status(self, template)
+            local was_suspended = quest.accessSuspended == true
+            quest.accessSuspended = not access.eligible
+            quest.accessReason = access.reason
+            if quest.accessSuspended and not was_suspended then
+                suspended = suspended + 1
+            elseif not quest.accessSuspended and was_suspended then
+                resumed = resumed + 1
+            end
+            outcomes[#outcomes + 1] = {
+                questInstanceId = quest.questInstanceId,
+                suspended = quest.accessSuspended,
+                access = copy(access),
+            }
+        end
+    end
+    return result(true, "quest-access-reconciled", {
+        factionId = faction_id,
+        checkedCount = checked,
+        suspendedCount = suspended,
+        resumedCount = resumed,
+        outcomes = outcomes,
     })
 end
 
 function QuestRuntime:register_template(template)
-    local ok, normalized_or_error = pcall(normalize_template, self.contentPackRegistry, template)
+    local ok, normalized_or_error = pcall(
+        normalize_template,
+        self.progression,
+        self.contentPackRegistry,
+        template
+    )
     if not ok then
         return result(false, "invalid-quest-template", {
             validationError = tostring(normalized_or_error),
@@ -475,9 +668,11 @@ function QuestRuntime:register_template(template)
 end
 
 function QuestRuntime:active_objective_stages()
+    self:reconcile_access(nil)
     local active = {}
     for _, quest in pairs(self.state.instances) do
-        if quest.state == "active" then
+        if quest.state == "active"
+            and quest.accessSuspended ~= true then
             local template = self.templates[quest.templateId]
             if template ~= nil
                 and template.contentVersion == quest.contentVersion then
@@ -542,6 +737,12 @@ function QuestRuntime:start(template_id, quest_instance_id, event_id, context)
     if template == nil then
         return result(false, "unknown-quest-template")
     end
+    local access = quest_access_status(self, template)
+    if not access.eligible then
+        return result(false, "quest-access-denied", {
+            access = access,
+        })
+    end
     if self.state.instances[quest_instance_id] ~= nil then
         return result(false, "quest-instance-already-exists")
     end
@@ -558,6 +759,8 @@ function QuestRuntime:start(template_id, quest_instance_id, event_id, context)
         history = {},
         startContext = copy(context),
         resolution = nil,
+        accessSuspended = false,
+        accessReason = access.reason,
     }
     self.state.instances[quest_instance_id] = quest
     local response = result(true, "quest-started", {
@@ -593,6 +796,15 @@ function QuestRuntime:_transition(operation, quest_instance_id, selector, event_
     local template = self.templates[quest.templateId]
     if template == nil or template.contentVersion ~= quest.contentVersion then
         return result(false, "quest-template-unavailable")
+    end
+    local access = quest_access_status(self, template)
+    quest.accessSuspended = not access.eligible
+    quest.accessReason = access.reason
+    if quest.accessSuspended then
+        return result(false, "quest-access-suspended", {
+            quest = public_instance(quest, template),
+            access = access,
+        })
     end
     local stage = template.stages[quest.currentStageId]
     local next_stage_id = selector
@@ -664,6 +876,15 @@ function QuestRuntime:_resolve(operation, quest_instance_id, event_id, structure
     if template == nil or template.contentVersion ~= quest.contentVersion then
         return result(false, "quest-template-unavailable")
     end
+    local access = quest_access_status(self, template)
+    quest.accessSuspended = not access.eligible
+    quest.accessReason = access.reason
+    if quest.accessSuspended then
+        return result(false, "quest-access-suspended", {
+            quest = public_instance(quest, template),
+            access = access,
+        })
+    end
     local stage = template.stages[quest.currentStageId]
     if operation == "complete" and not stage.completionAllowed then
         return result(false, "quest-completion-not-allowed")
@@ -722,6 +943,7 @@ function QuestRuntime:template_status(template_id)
         titleKey = template.titleKey,
         summaryKey = template.summaryKey,
         startStageId = template.startStageId,
+        accessPolicy = copy(template.accessPolicy),
         stageCount = #template.stageOrder,
         objectiveRuleCount = template.objectiveRuleCount,
     }
@@ -731,9 +953,13 @@ function QuestRuntime:status()
     local active = 0
     local completed = 0
     local aborted = 0
+    local suspended = 0
     for _, quest in pairs(self.state.instances) do
         if quest.state == "active" then
             active = active + 1
+            if quest.accessSuspended == true then
+                suspended = suspended + 1
+            end
         elseif quest.state == "completed" then
             completed = completed + 1
         elseif quest.state == "aborted" then
@@ -747,10 +973,12 @@ function QuestRuntime:status()
         activeQuestCount = active,
         completedQuestCount = completed,
         abortedQuestCount = aborted,
+        suspendedQuestCount = suspended,
         processedEventCount = #sorted_keys(self.state.processedEventIds),
         localizationKeysOnly = true,
         structuredResultsOnly = true,
         objectiveRulesEnabled = true,
+        factionAccessPoliciesEnabled = true,
         snapshotOwnedByProgression = self.progression.state.contentQuests == self.state,
         authoredStoryContent = false,
         lastNotificationError = self.lastNotificationError,

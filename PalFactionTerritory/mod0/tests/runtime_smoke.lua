@@ -135,7 +135,7 @@ assert(
 )
 assert(Config.factionProgression.persistence.enabled == true)
 assert(Config.factionProgression.persistence.deferredIdentity == true)
-assert(state.factionApi.version == "1.0.0")
+assert(state.factionApi.version == "1.1.0")
 assert(state.factionCommerce.version == "1.0.0")
 assert(state.factionEconomy.version == "1.1.0")
 assert(state.factionEconomyShops.version == "1.0.0")

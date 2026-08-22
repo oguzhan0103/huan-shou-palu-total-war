@@ -76,6 +76,10 @@ local StrategicWorld = require("pwft.strategic_world")
 local StrategicWorldNativeBus =
     require("pwft.strategic_world_native_bus")
 local UniquePalCampaign = require("pwft.unique_pal_campaign")
+local UniquePalBossProviderBus =
+    require("pwft.unique_pal_boss_provider_bus")
+local UniquePalWorldEffectBus =
+    require("pwft.unique_pal_world_effect_bus")
 local WorldBalance = require("pwft.world_balance")
 
 local PREFIX = "[PalFactionTerritory0]"
@@ -1082,10 +1086,10 @@ local function register_console_commands(config, registry, policy, state)
                 log_to_console(ar, "USAGE pwft.progress join <humanFactionId>")
                 return true
             end
-            local outcome = state.factionProgression:join(faction_id)
-            if outcome.ok then
-                refresh_after_progression_change(faction_id)
-            end
+            local outcome = state.factionApi:join_human(
+                faction_id,
+                "operator-console-confirmed"
+            )
             log_to_console(ar, string.format(
                 "PROGRESSION_JOIN faction=%s ok=%s reason=%s rank=%s",
                 tostring(faction_id),
@@ -1094,36 +1098,10 @@ local function register_console_commands(config, registry, policy, state)
                 tostring(outcome.rankId or "none")
             ))
         elseif operation == "grant" then
-            local faction_id = parts[3]
-            local source = parts[4]
-            local amount = tonumber(parts[5])
-            if faction_id == nil or source == nil or amount == nil then
-                log_to_console(ar, "USAGE pwft.progress grant <humanFactionId> task|defense|commerce <positiveAmount> [commerceWindowId]")
-                return true
-            end
-            local outcome = state.factionProgression:grant_reputation(
-                faction_id,
-                source,
-                amount,
-                {
-                    windowId = parts[6],
-                    contextId = "console-offline-probe",
-                }
+            log_to_console(
+                ar,
+                "PROGRESSION_GRANT_DISABLED reason=authoritative-operation-required"
             )
-            if outcome.ok and outcome.applied ~= nil and outcome.applied > 0 then
-                refresh_after_progression_change(faction_id)
-            end
-            log_to_console(ar, string.format(
-                "PROGRESSION_GRANT faction=%s source=%s ok=%s reason=%s requested=%s applied=%s after=%s rank=%s",
-                tostring(faction_id),
-                tostring(source),
-                tostring(outcome.ok),
-                outcome.reason,
-                tostring(outcome.requested or amount),
-                tostring(outcome.applied or 0),
-                tostring(outcome.after or "unchanged"),
-                tostring(outcome.rankId or "none")
-            ))
         elseif operation == "reconcile" then
             local faction_id = parts[3]
             if faction_id == nil then
@@ -1154,7 +1132,7 @@ local function register_console_commands(config, registry, policy, state)
                 #gate.missingPalFriendly
             ))
         else
-            log_to_console(ar, "USAGE pwft.progress status [factionId]|join <humanFactionId>|grant <humanFactionId> task|defense|commerce <positiveAmount> [commerceWindowId]|reconcile <palFactionId>|gate")
+            log_to_console(ar, "USAGE pwft.progress status [factionId]|join <humanFactionId>|reconcile <palFactionId>|gate")
         end
         return true
     end)
@@ -4453,6 +4431,16 @@ local function register_runtime_probes(config, registry, policy, state)
             if state.strategicWorldNativeBus ~= nil then
                 state.strategicWorldNativeBus:unbind_world()
             end
+            if state.uniquePalBossProviderBus ~= nil then
+                state.uniquePalBossProviderBus:unbind_world(
+                    "runtime-world-unloading"
+                )
+            end
+            if state.uniquePalWorldEffectBus ~= nil then
+                state.uniquePalWorldEffectBus:unbind_world(
+                    "runtime-world-unloading"
+                )
+            end
             if state.factionNpcAttitudeBus ~= nil then
                 state.factionNpcAttitudeBus:clear_world()
             end
@@ -4688,6 +4676,12 @@ function Runtime.start(config, registry, policy)
             uniquePalCampaign = state.uniquePalCampaign
                     and state.uniquePalCampaign:status()
                 or nil,
+            uniquePalBossProviderBus = state.uniquePalBossProviderBus
+                    and state.uniquePalBossProviderBus:status()
+                or nil,
+            uniquePalWorldEffectBus = state.uniquePalWorldEffectBus
+                    and state.uniquePalWorldEffectBus:status()
+                or nil,
             endingEffectProviderBus = state.endingEffectProviderBus
                     and state.endingEffectProviderBus:status()
                 or nil,
@@ -4705,6 +4699,52 @@ function Runtime.start(config, registry, policy)
         faction_status
     )
             sync_progression_relations(policy, state)
+            if type(outcome) == "table"
+                and outcome.demoted == true then
+                log(string.format(
+                    "FACTION_RANK_DEMOTED faction=%s before=%s after=%s reputation=%s reason=%s",
+                    tostring(faction_id),
+                    tostring(outcome.beforeRankId or "none"),
+                    tostring(outcome.rankId or "none"),
+                    tostring(outcome.after),
+                    tostring(outcome.reasonCode or outcome.reason)
+                ))
+            end
+            if state.factionGuard ~= nil then
+                local guard_reconciliation = nil
+                if type(faction_id) == "string" then
+                    guard_reconciliation = state.factionGuard
+                        :reconcile_entitlement(
+                            faction_id,
+                            "reputation-entitlement-revoked"
+                        )
+                elseif type(outcome) == "table"
+                    and outcome.type == "progression-restored" then
+                    guard_reconciliation = state.factionGuard
+                        :reconcile_all_entitlements(
+                            "progression-restore-entitlement-revoked"
+                        )
+                end
+                if type(outcome) == "table" then
+                    outcome.guardReconciliation =
+                        guard_reconciliation
+                end
+                if guard_reconciliation ~= nil
+                    and guard_reconciliation.ok ~= true then
+                    log(
+                        "FACTION_GUARD_ENTITLEMENT_RECONCILIATION_PARTIAL reason="
+                            .. tostring(guard_reconciliation.reason)
+                    )
+                end
+            end
+            if state.questRuntime ~= nil then
+                local quest_reconciliation = state.questRuntime
+                    :reconcile_access(faction_id)
+                if type(outcome) == "table" then
+                    outcome.questAccessReconciliation =
+                        quest_reconciliation
+                end
+            end
             if state.progressionStore.enabled then
                 local save_result = state.progressionStore:save(
                     state.factionProgression:export_snapshot()
@@ -4766,6 +4806,14 @@ function Runtime.start(config, registry, policy)
                         ))
                     end
                 end
+            end
+            if state.factionNpcAttitudeBus ~= nil
+                and faction_id == nil
+                and type(outcome) == "table"
+                and outcome.type == "progression-restored" then
+                state.factionNpcAttitudeBus:refresh_faction(nil, {
+                    trigger = "progression-restored",
+                })
             end
             if state.factionNpcAttitudeBus ~= nil
                 and type(outcome) == "table"
@@ -4928,10 +4976,42 @@ function Runtime.start(config, registry, policy)
         {
             playerId = "local-player",
             onChange = function(event)
+                local world_effect_delivery = nil
+                local native_boss_delivery = nil
+                if state.uniquePalWorldEffectBus ~= nil then
+                    world_effect_delivery =
+                        state.uniquePalWorldEffectBus
+                            :handle_campaign_event(event)
+                end
+                if state.uniquePalBossProviderBus ~= nil then
+                    native_boss_delivery =
+                        state.uniquePalBossProviderBus
+                            :handle_campaign_event(event)
+                end
+                event.worldEffectDelivery = world_effect_delivery
+                event.nativeBossDelivery = native_boss_delivery
                 on_faction_state_changed(nil, event, nil)
             end,
         }
     )
+    state.uniquePalBossProviderBus =
+        UniquePalBossProviderBus.create(
+            state.uniquePalCampaign,
+            {
+                onChange = function(event)
+                    on_faction_state_changed(nil, event, nil)
+                end,
+            }
+        )
+    state.uniquePalWorldEffectBus =
+        UniquePalWorldEffectBus.create(
+            state.uniquePalCampaign,
+            {
+                onChange = function(event)
+                    on_faction_state_changed(nil, event, nil)
+                end,
+            }
+        )
     state.endingRuntime = EndingRuntime.create(
         state.factionProgression,
         state.strategicWorld,
@@ -4992,6 +5072,10 @@ function Runtime.start(config, registry, policy)
     _G.PWFT_STRATEGIC_WORLD_NATIVE_BUS_V1 =
         state.strategicWorldNativeBus
     _G.PWFT_UNIQUE_PAL_CAMPAIGN_V1 = state.uniquePalCampaign
+    _G.PWFT_UNIQUE_PAL_BOSS_PROVIDER_BUS_V1 =
+        state.uniquePalBossProviderBus
+    _G.PWFT_UNIQUE_PAL_WORLD_EFFECT_BUS_V1 =
+        state.uniquePalWorldEffectBus
     _G.PWFT_ENDING_EFFECT_PROVIDER_BUS_V1 =
         state.endingEffectProviderBus
     _G.PWFT_FACTION_RESOURCE_LEDGER_V1 =
@@ -5020,6 +5104,10 @@ function Runtime.start(config, registry, policy)
             factionEconomyWar = state.factionEconomyWar,
             strategicWorldNativeBus = state.strategicWorldNativeBus,
             uniquePalCampaign = state.uniquePalCampaign,
+            uniquePalBossProviderBus =
+                state.uniquePalBossProviderBus,
+            uniquePalWorldEffectBus =
+                state.uniquePalWorldEffectBus,
             endingEffectProviderBus = state.endingEffectProviderBus,
             rewardPolicy = state.rewardPolicy,
             factionNpcAttitudeBus = state.factionNpcAttitudeBus,
@@ -5388,11 +5476,16 @@ function Runtime.start(config, registry, policy)
         if restored ~= nil then
             local current = state.factionProgression:status()
             if current.revision == 0 then
-                state.factionProgression:restore_snapshot(
+                local restore_result = state.factionProgression:restore_snapshot(
                     restored.snapshot
                 )
                 sync_progression_relations(policy, state)
                 restore_source = restored.source
+                on_faction_state_changed(nil, {
+                    type = "progression-restored",
+                    source = restore_source,
+                    migration = restore_result.migration,
+                }, nil)
             else
                 restore_source = "live-state-newer-than-sidecar"
             end
@@ -5581,6 +5674,10 @@ function Runtime.start(config, registry, policy)
     local strategic_world_status = state.strategicWorld:status()
     local unique_pal_campaign_status =
         state.uniquePalCampaign:status()
+    local unique_pal_boss_provider_status =
+        state.uniquePalBossProviderBus:status()
+    local unique_pal_world_effect_status =
+        state.uniquePalWorldEffectBus:status()
     local content_pack_status = state.contentPackRegistry:status()
     local content_runtime_status = state.contentRuntime:status()
     local localization_status = state.localizationRuntime:status()
@@ -5661,6 +5758,31 @@ function Runtime.start(config, registry, policy)
         unique_pal_campaign_status.ransomAuthority,
         tostring(unique_pal_campaign_status.capabilities.nativeBossMutation),
         tostring(unique_pal_campaign_status.capabilities.nativeCurrencyMutation)
+    ))
+    log(string.format(
+        "UNIQUE_PAL_BOSS_PROVIDER_READY api=%s providers=%d handlers=%d bindings=%d pending=%d generation=%d exactVerifiedBindingsOnly=%s modelAuthority=%s directUEMutation=%s saveWrites=false",
+        unique_pal_boss_provider_status.apiVersion,
+        unique_pal_boss_provider_status.providerCount,
+        unique_pal_boss_provider_status.activeProviderHandlerCount,
+        unique_pal_boss_provider_status.activeBindingCount,
+        unique_pal_boss_provider_status.pendingDeliveryCount,
+        unique_pal_boss_provider_status.worldGeneration,
+        tostring(unique_pal_boss_provider_status.exactVerifiedBindingsOnly),
+        tostring(unique_pal_boss_provider_status.modelAuthority),
+        tostring(unique_pal_boss_provider_status.directUEMutation)
+    ))
+    log(string.format(
+        "UNIQUE_PAL_WORLD_EFFECT_READY api=%s providers=%d handlers=%d bindings=%d pending=%d offers=%d generation=%d exactBoundActorsOnly=%s broadActorScan=%s modelAuthority=%s saveWrites=false",
+        unique_pal_world_effect_status.apiVersion,
+        unique_pal_world_effect_status.providerCount,
+        unique_pal_world_effect_status.activeProviderHandlerCount,
+        unique_pal_world_effect_status.activeTargetBindingCount,
+        unique_pal_world_effect_status.pendingDeliveryCount,
+        unique_pal_world_effect_status.ransomOfferCount,
+        unique_pal_world_effect_status.worldGeneration,
+        tostring(unique_pal_world_effect_status.exactBoundActorsOnly),
+        tostring(unique_pal_world_effect_status.broadActorScan),
+        tostring(unique_pal_world_effect_status.modelAuthority)
     ))
     local ending_status = state.endingRuntime:status()
     log(string.format(

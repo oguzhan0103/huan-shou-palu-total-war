@@ -1,10 +1,11 @@
 local UniquePalCampaign = {}
 
-local API_VERSION = "1.0.0"
+local API_VERSION = "1.1.0"
 local STATE_SCHEMA_VERSION = "1.0.0"
 local PACK_SCHEMA = "pwft.unique-pal-campaign.pack.v1"
 local CAPTURE_AUTHORITY = "pwft.native-unique-pal-capture.v1"
 local BOSS_SPAWN_AUTHORITY = "pwft.native-unique-pal-boss-spawn.v1"
+local BOSS_DEFEAT_AUTHORITY = "pwft.native-unique-pal-boss-defeat.v1"
 local WAR_RESULT_AUTHORITY = "pwft.unique-pal-war-result.v1"
 local RANSOM_AUTHORITY = "pwft.native-ransom-payment.v1"
 
@@ -366,11 +367,15 @@ local function duplicate_operation(instance, operation_id, signature)
 end
 
 local function commit_operation(instance, operation_id, signature, response, events)
-    for _, event in ipairs(events or {}) do append_history(instance, event) end
     instance.state.operationSignatures[operation_id] = {
         signature = signature,
         response = copy(response),
     }
+    -- Persist the idempotency signature before notifying listeners. Runtime
+    -- listeners may write the sidecar while handling an event; committing the
+    -- signature first prevents a restart from replaying a state change whose
+    -- notification was already persisted.
+    for _, event in ipairs(events or {}) do append_history(instance, event) end
     return response
 end
 
@@ -549,6 +554,7 @@ function UniquePalCampaign.create(progression, strategic_world, options)
             deterministicOpeningWindows = true,
             preOpeningNotifications = true,
             nativeBossSpawnConfirmationRequired = true,
+            authoritativeBossDefeat = true,
             authoritativeCaptureOnly = true,
             deterministicTimeoutFactionAssignment = true,
             singleOwnerDelegatedToStrategicWorld = true,
@@ -854,6 +860,8 @@ function UniquePalCampaign:advance(logical_tick, operation_id)
                 )
                 if assigned == nil then
                     local expired_event_id = campaign.eventId
+                    local expired_spawn_id = campaign.nativeSpawnId
+                    local expired_actor_binding_id = campaign.actorBindingId
                     campaign.phase = "closed"
                     campaign.eventId = nil
                     campaign.noticeTick = nil
@@ -865,6 +873,8 @@ function UniquePalCampaign:advance(logical_tick, operation_id)
                         type = "unique-pal-opening-expired-unassigned",
                         uniquePalId = unique_pal_id,
                         eventId = expired_event_id,
+                        spawnId = expired_spawn_id,
+                        actorBindingId = expired_actor_binding_id,
                         reason = "no-surviving-assignment-faction",
                         nativeDespawnRequired = true,
                     }
@@ -892,6 +902,8 @@ function UniquePalCampaign:advance(logical_tick, operation_id)
                             })
                     end
                     local expired_event_id = campaign.eventId
+                    local expired_spawn_id = campaign.nativeSpawnId
+                    local expired_actor_binding_id = campaign.actorBindingId
                     campaign.phase = "owned"
                     campaign.owner = {
                         kind = "faction",
@@ -909,6 +921,8 @@ function UniquePalCampaign:advance(logical_tick, operation_id)
                         type = "unique-pal-opening-expired-assigned",
                         uniquePalId = unique_pal_id,
                         eventId = expired_event_id,
+                        spawnId = expired_spawn_id,
+                        actorBindingId = expired_actor_binding_id,
                         factionId = assigned,
                         nativeDespawnRequired = true,
                         textNotificationRequired = true,
@@ -1056,6 +1070,8 @@ function UniquePalCampaign:capture(input)
         })
     end
     local event_id = campaign.eventId
+    local spawn_id = campaign.nativeSpawnId
+    local actor_binding_id = campaign.actorBindingId
     campaign.phase = "owned"
     campaign.owner = { kind = "player", id = self.playerId }
     campaign.eventId = nil
@@ -1068,6 +1084,8 @@ function UniquePalCampaign:capture(input)
     local response = result(true, "unique-pal-captured-by-player", {
         uniquePalId = unique_pal_id,
         eventId = event_id,
+        spawnId = spawn_id,
+        actorBindingId = actor_binding_id,
         owner = copy(campaign.owner),
         nativeDespawnDuplicateRequired = true,
     })
@@ -1077,6 +1095,91 @@ function UniquePalCampaign:capture(input)
         eventId = event_id,
         playerId = self.playerId,
         captureId = capture_id,
+        spawnId = spawn_id,
+        actorBindingId = actor_binding_id,
+        nativeDespawnDuplicateRequired = true,
+    }})
+end
+
+function UniquePalCampaign:defeat(input)
+    assert(type(input) == "table",
+        "unique-Pal Boss defeat input is required")
+    local defeat_id = non_empty(input.defeatId,
+        "unique-Pal Boss defeat ID")
+    local unique_pal_id = stable_id(input.uniquePalId,
+        "defeated unique Pal ID")
+    local logical_tick = non_negative_integer(input.logicalTick,
+        "unique-Pal Boss defeat logical tick")
+    local signature = table.concat({
+        "defeat",
+        unique_pal_id,
+        tostring(input.eventId),
+        tostring(input.spawnId),
+        tostring(input.actorBindingId),
+        tostring(input.authoritySource),
+        tostring(logical_tick),
+    }, "|")
+    local duplicate = duplicate_operation(self, defeat_id, signature)
+    if duplicate ~= nil then return duplicate end
+    if input.authoritySource ~= BOSS_DEFEAT_AUTHORITY then
+        return result(false, "unique-pal-boss-defeat-authority-rejected")
+    end
+    non_empty(input.actorBindingId,
+        "unique-Pal Boss defeated actor binding ID")
+    local campaign = self.state.campaigns[unique_pal_id]
+    if campaign == nil then return result(false, "unknown-unique-pal-campaign") end
+    if campaign.phase ~= "open" then
+        return result(false, "unique-pal-boss-defeat-window-not-open", {
+            phase = campaign.phase,
+        })
+    end
+    if input.eventId ~= campaign.eventId
+        or input.spawnId ~= campaign.nativeSpawnId
+        or input.actorBindingId ~= campaign.actorBindingId then
+        return result(false, "unique-pal-boss-defeat-instance-mismatch")
+    end
+    if logical_tick < self.state.logicalTick then
+        return result(false, "logical-tick-regression")
+    end
+    local owner = current_owner(self, unique_pal_id)
+    if not owner_is_wild(owner) then
+        return result(false, "unique-pal-boss-defeat-owner-conflict", {
+            owner = copy(owner),
+        })
+    end
+    self.state.logicalTick = logical_tick
+    local event_id = campaign.eventId
+    local spawn_id = campaign.nativeSpawnId
+    local actor_binding_id = campaign.actorBindingId
+    campaign.phase = "closed"
+    campaign.owner = copy(owner)
+    campaign.eventId = nil
+    campaign.noticeTick = nil
+    campaign.openTick = nil
+    campaign.closeTick = nil
+    campaign.nativeSpawnId = nil
+    campaign.actorBindingId = nil
+    campaign.defeatCount = (campaign.defeatCount or 0) + 1
+    local response = result(true,
+        "unique-pal-boss-defeated-without-ownership-transfer", {
+            uniquePalId = unique_pal_id,
+            eventId = event_id,
+            spawnId = spawn_id,
+            actorBindingId = actor_binding_id,
+            owner = copy(owner),
+            nativeDespawnRequired = true,
+            nextScheduleRequired = true,
+        })
+    return commit_operation(self, defeat_id, signature, response, {{
+        type = "unique-pal-boss-defeated",
+        uniquePalId = unique_pal_id,
+        eventId = event_id,
+        defeatId = defeat_id,
+        spawnId = spawn_id,
+        actorBindingId = actor_binding_id,
+        owner = copy(owner),
+        nativeDespawnRequired = true,
+        nextScheduleRequired = true,
     }})
 end
 
@@ -1414,8 +1517,10 @@ function UniquePalCampaign:settle_ransom(input)
         transactionId = transaction_id,
         previousHolderFactionId = quote.holderFactionId,
         playerId = self.playerId,
+        currency = quote.currency,
         amount = quote.amount,
         cancelledWarId = cancelled_war_id,
+        nativeDeliveryRequired = true,
         commerceReputationAward = 0,
     }})
 end
@@ -1539,6 +1644,7 @@ function UniquePalCampaign:status()
         historyDropped = self.state.historyDropped,
         captureAuthority = CAPTURE_AUTHORITY,
         bossSpawnAuthority = BOSS_SPAWN_AUTHORITY,
+        bossDefeatAuthority = BOSS_DEFEAT_AUTHORITY,
         warResultAuthority = WAR_RESULT_AUTHORITY,
         ransomAuthority = RANSOM_AUTHORITY,
         lastNotificationError = self.lastNotificationError,

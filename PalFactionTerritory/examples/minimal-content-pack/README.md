@@ -43,7 +43,11 @@ contentModules = {
 
 3. 启动后检查 UE4SS 日志：该包必须出现 `CONTENT_MODULE ... registered=true activated=true`，汇总必须为 `CONTENT_MODULE_LOADER_READY ... failed=0`。
 
-Core 会在同一个 Lua 环境中 `require` 配置的模块，先把 manifest、任务、战略世界、唯一 Boss 战役、结局、白名单机制动作、NPC 领主护卫、帕鲁论道和本地化全部放入临时运行时校验，再进行确定性提交。任何一域失败时，整包不注册。`activate(context)` 可取得 `uniquePalCampaign`、`factionNpcAttitudeBus` 与 `npcLeaderGuardOrchestrator`，但必须注册配置白名单中的原生 provider，并精确绑定当前世界 actor；世界卸载后绑定和部署全部丢弃、重新发现，不写入 sidecar。不同 UE4SS Mod 的 `_G` 相互隔离，因此不支持另建一个 Mod 后通过 `_G.PWFT_*` 注入内容。
+Core 会在同一个 Lua 环境中 `require` 配置的模块，先把 manifest、任务、战略世界、唯一 Boss 战役、结局、白名单机制动作、NPC 领主护卫、帕鲁论道和本地化全部放入临时运行时校验，再进行确定性提交。任何一域失败时，整包不注册。`activate(context)` 可取得 `uniquePalCampaign`、`uniquePalBossProviderBus`、`uniquePalWorldEffectBus`、`factionNpcAttitudeBus` 与 `npcLeaderGuardOrchestrator`，但必须注册配置白名单中的原生 provider，并精确绑定当前世界 actor；世界卸载后绑定和部署全部丢弃、重新发现，不写入 sidecar。不同 UE4SS Mod 的 `_G` 相互隔离，因此不支持另建一个 Mod 后通过 `_G.PWFT_*` 注入内容。
+
+唯一 Boss 接线只有在 `unique_pal_campaign.lua` 的 `bindingStatus = "bound"` 且内容模块同时提交经当前 Build 核验的 `speciesId`、spawner key、预期 Actor class、地点、原生已有 Boss 或替换槽位路线，以及完整 `raid-slab` 数值档时才会激活。Provider 必须保证 delivery ID 幂等和 world generation 回调隔离；缺少任一证据时保持 `pending`。示例故意不提供这些值，不能直接改成正式绑定。
+
+势力毁灭和赎回的世界效果同样不会从示例自动生效。`uniquePalWorldEffectBus` 要求每个目标显式绑定当前 Build 的势力刷新器、允许清理的 Actor binding/class、城市锚点与居民／功能 NPC 刷新器、商会柜台，以及文本、保卫袭击、后台结果、支付和 Pal 交付路线。禁止扫描全部 Actor、删除地图建筑或由模型确认胜负／付款；未核验时只保留 Core 状态和待投递记录。
 
 默认 `modules = {}`，所以机制基座本身仍然不携带剧情。
 
