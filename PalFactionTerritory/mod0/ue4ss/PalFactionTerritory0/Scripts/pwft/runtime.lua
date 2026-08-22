@@ -86,8 +86,12 @@ local UniquePalWorldEffectBus =
     require("pwft.unique_pal_world_effect_bus")
 local UniquePalNativeDeliveryBridge =
     require("pwft.unique_pal_native_delivery_bridge")
+local UniquePalNativeDeliveryAdapter =
+    require("pwft.unique_pal_native_delivery_adapter")
 local UniquePalNativeDeliveryProbe =
     require("pwft.unique_pal_native_delivery_probe")
+local UniquePalNativeDeliveryLiveTest =
+    require("pwft.unique_pal_native_delivery_live_test")
 local UniquePalRansomShopBridge =
     require("pwft.unique_pal_ransom_shop_bridge")
 local WorldBalance = require("pwft.world_balance")
@@ -3246,6 +3250,59 @@ local function register_guard_live_test(config, state)
     ))
 end
 
+local function register_unique_pal_native_delivery_live_test(
+    config,
+    state
+)
+    local qa = config.uniquePalNativeDeliveryLiveTest
+    if qa.enabled ~= true then
+        log("UNIQUE_PAL_NATIVE_DELIVERY_LIVE_TEST_DISABLED config=false")
+        return
+    end
+    if state.uniquePalNativeDeliveryLiveTest == nil
+        or type(RegisterKeyBind) ~= "function"
+        or Key == nil
+        or Key[qa.key] == nil
+        or ModifierKey == nil
+        or ModifierKey.CONTROL == nil then
+        log("UNIQUE_PAL_NATIVE_DELIVERY_LIVE_TEST_UNAVAILABLE harness-or-keybind-api")
+        return
+    end
+    local callback = function()
+        local execute = function()
+            local started = state.uniquePalNativeDeliveryLiveTest
+                :start(state.nativeWorldGeneration)
+            log(string.format(
+                "UNIQUE_PAL_NATIVE_DELIVERY_LIVE_TEST_TRIGGER ok=%s reason=%s delivery=%s individual=%s generation=%d mutation=true",
+                tostring(started.ok == true),
+                tostring(started.reason),
+                tostring(started.deliveryId or "none"),
+                tostring(started.individualKey or "none"),
+                state.nativeWorldGeneration
+            ))
+        end
+        if type(ExecuteInGameThread) == "function" then
+            ExecuteInGameThread(execute)
+        else
+            execute()
+        end
+    end
+    state.callbacks.uniquePalNativeDeliveryLiveTest = callback
+    RegisterKeyBind(
+        Key[qa.key],
+        { ModifierKey.CONTROL },
+        callback
+    )
+    log(string.format(
+        "UNIQUE_PAL_NATIVE_DELIVERY_LIVE_TEST_READY key=Ctrl+%s species=%s level=%d maxAttempts=%d retryMs=%d qaOnly=true directContainerMutation=false",
+        qa.key,
+        qa.speciesId,
+        qa.level,
+        qa.maxAttempts,
+        qa.retryDelayMs
+    ))
+end
+
 local function register_rayne_relation_live_test(config, policy, state)
     local qa = config.rayneMerchant.relationLiveTest
     if qa == nil or qa.enabled ~= true then
@@ -4527,6 +4584,17 @@ local function register_runtime_probes(config, registry, policy, state)
                     "runtime-world-unloading"
                 )
             end
+            if state.uniquePalNativeDeliveryLiveTest ~= nil then
+                state.uniquePalNativeDeliveryLiveTest:unbind_world(
+                    "runtime-world-unloading"
+                )
+            elseif state.uniquePalNativeDeliveryAdapter ~= nil
+                and state.uniquePalNativeDeliveryAdapter:status()
+                    .worldBound == true then
+                state.uniquePalNativeDeliveryAdapter:unbind_world(
+                    "runtime-world-unloading"
+                )
+            end
             if state.factionConsequenceNativeBinding ~= nil then
                 state.factionConsequenceNativeBinding:unbind_world(
                     "runtime-world-unloading"
@@ -4640,6 +4708,14 @@ function Runtime.start(config, registry, policy)
     assert(config.uniquePalNativeDeliveryProbe.buildId == config.expectedSteamBuildId, "unique-Pal native delivery probe Build ID drifted")
     assert(type(config.uniquePalNativeDeliveryProbe.objectDumpSha256) == "string" and #config.uniquePalNativeDeliveryProbe.objectDumpSha256 == 64, "unique-Pal native delivery probe ObjectDump hash is required")
     assert(type(config.uniquePalNativeDeliveryProbe.retryDelaysMs) == "table" and #config.uniquePalNativeDeliveryProbe.retryDelaysMs > 0, "unique-Pal native delivery probe retry delays are required")
+    assert(type(config.uniquePalNativeDeliveryLiveTest) == "table", "unique-Pal native delivery live-test configuration is required")
+    assert(type(config.uniquePalNativeDeliveryLiveTest.enabled) == "boolean", "unique-Pal native delivery live-test flag is required")
+    assert(config.uniquePalNativeDeliveryLiveTest.buildId == config.expectedSteamBuildId, "unique-Pal native delivery live-test Build ID drifted")
+    assert(config.uniquePalNativeDeliveryLiveTest.objectDumpSha256 == config.uniquePalNativeDeliveryProbe.objectDumpSha256, "unique-Pal native delivery live-test ObjectDump hash drifted")
+    assert(type(config.uniquePalNativeDeliveryLiveTest.speciesId) == "string" and config.uniquePalNativeDeliveryLiveTest.speciesId ~= "", "unique-Pal native delivery live-test species is required")
+    assert(type(config.uniquePalNativeDeliveryLiveTest.level) == "number" and config.uniquePalNativeDeliveryLiveTest.level >= 1, "unique-Pal native delivery live-test level is invalid")
+    assert(type(config.uniquePalNativeDeliveryLiveTest.retryDelayMs) == "number" and config.uniquePalNativeDeliveryLiveTest.retryDelayMs > 0, "unique-Pal native delivery live-test retry delay is invalid")
+    assert(type(config.uniquePalNativeDeliveryLiveTest.maxAttempts) == "number" and config.uniquePalNativeDeliveryLiveTest.maxAttempts > 0, "unique-Pal native delivery live-test attempt limit is invalid")
     assert(config.factionProgression.enabled == true, "faction progression core must be enabled")
     assert(type(config.palReconciliation) == "table", "Pal reconciliation must be explicitly configured")
     assert(config.palReconciliation.enabled == true, "Pal reconciliation core must be enabled")
@@ -5205,6 +5281,38 @@ function Runtime.start(config, registry, policy)
             readOnly = config.uniquePalNativeDeliveryProbe.readOnly,
             logger = log,
         })
+    state.uniquePalNativeDeliveryAdapter =
+        UniquePalNativeDeliveryAdapter.create({
+            buildId = config.uniquePalNativeDeliveryLiveTest.buildId,
+            objectDumpSha256 = config.uniquePalNativeDeliveryLiveTest
+                .objectDumpSha256,
+            allowMutatingDelivery = config
+                .uniquePalNativeDeliveryLiveTest.enabled == true,
+            deliveryLevel = config.uniquePalNativeDeliveryLiveTest.level,
+            logger = log,
+        })
+    state.uniquePalNativeDeliveryLiveTest = nil
+    if config.uniquePalNativeDeliveryLiveTest.enabled == true then
+        assert(type(ExecuteWithDelay) == "function",
+            "native Pal delivery live test requires ExecuteWithDelay")
+        state.uniquePalNativeDeliveryLiveTest =
+            UniquePalNativeDeliveryLiveTest.create(
+                state.uniquePalNativeDeliveryAdapter,
+                {
+                    enabled = true,
+                    buildId = config
+                        .uniquePalNativeDeliveryLiveTest.buildId,
+                    speciesId = config
+                        .uniquePalNativeDeliveryLiveTest.speciesId,
+                    retryDelayMs = config
+                        .uniquePalNativeDeliveryLiveTest.retryDelayMs,
+                    maxAttempts = config
+                        .uniquePalNativeDeliveryLiveTest.maxAttempts,
+                    schedule = ExecuteWithDelay,
+                    logger = log,
+                }
+            )
+    end
     state.uniquePalRansomShopBridge =
         UniquePalRansomShopBridge.create(
             state.uniquePalWorldEffectBus,
@@ -5281,6 +5389,10 @@ function Runtime.start(config, registry, policy)
         state.uniquePalNativeDeliveryBridge
     _G.PWFT_UNIQUE_PAL_NATIVE_DELIVERY_PROBE_V1 =
         state.uniquePalNativeDeliveryProbe
+    _G.PWFT_UNIQUE_PAL_NATIVE_DELIVERY_ADAPTER_V1 =
+        state.uniquePalNativeDeliveryAdapter
+    _G.PWFT_UNIQUE_PAL_NATIVE_DELIVERY_LIVE_TEST_V1 =
+        state.uniquePalNativeDeliveryLiveTest
     _G.PWFT_UNIQUE_PAL_RANSOM_SHOP_BRIDGE_V1 =
         state.uniquePalRansomShopBridge
     _G.PWFT_ENDING_EFFECT_PROVIDER_BUS_V1 =
@@ -6382,6 +6494,7 @@ function Runtime.start(config, registry, policy)
     register_guard_console_command(state)
     register_agent_dialogue_runtime(config, state)
     register_guard_live_test(config, state)
+    register_unique_pal_native_delivery_live_test(config, state)
     register_rayne_relation_live_test(config, policy, state)
     register_economy_merchant_interaction_router(state)
     register_economy_merchant_live_test(config, state)

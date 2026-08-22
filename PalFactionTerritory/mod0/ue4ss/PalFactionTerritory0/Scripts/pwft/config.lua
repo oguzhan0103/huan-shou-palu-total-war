@@ -21,6 +21,23 @@ return {
         },
     },
 
+    -- Destructive QA only. Formal source and installed configuration keep
+    -- this false. When temporarily enabled after a verified save snapshot,
+    -- Ctrl+F10 delivers one level-1 Anubis through the current-build native
+    -- server-spawn/capture/storage-readback route and logs the exact
+    -- PalInstanceID. It is not registered as a production P2 provider.
+    uniquePalNativeDeliveryLiveTest = {
+        enabled = false,
+        key = "F10",
+        buildId = "24575825",
+        objectDumpSha256 =
+            "3e84e8a6936b7d1c33de6cfc034c4a200655a3e762cbc2ec4c6a57516476ec78",
+        speciesId = "Anubis",
+        level = 1,
+        retryDelayMs = 500,
+        maxAttempts = 60,
+    },
+
     -- The progression core owns reputation, independent human memberships,
     -- ranks, commerce caps, guard eligibility, and ending gates. Runtime
     -- Reputation is authoritative in a Mod-owned external sidecar.  The

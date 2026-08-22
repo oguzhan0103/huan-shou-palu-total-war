@@ -86,7 +86,8 @@ def main() -> int:
     require(
         development["sourceAdapterImplemented"] is True
         and development["offlineContractTestsPassed"] is True
-        and development["runtimeRegistered"] is False
+        and development["qaHarnessImplemented"] is True
+        and development["productionBridgeBindingRegistered"] is False
         and development["mutatingDeliveryDefaultEnabled"] is False
         and development["directContainerMutationImplemented"] is False
         and development["captureAndExactReadbackLiveAccepted"] is False,

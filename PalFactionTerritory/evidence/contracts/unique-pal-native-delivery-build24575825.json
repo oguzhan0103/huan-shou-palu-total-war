@@ -71,7 +71,8 @@
   "developmentStatus": {
     "sourceAdapterImplemented": true,
     "offlineContractTestsPassed": true,
-    "runtimeRegistered": false,
+    "qaHarnessImplemented": true,
+    "productionBridgeBindingRegistered": false,
     "mutatingDeliveryDefaultEnabled": false,
     "directContainerMutationImplemented": false,
     "captureAndExactReadbackLiveAccepted": false

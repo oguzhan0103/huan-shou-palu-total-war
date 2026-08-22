@@ -115,6 +115,7 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "unique_pal_world_effect_bus.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_bridge.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_adapter.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_live_test.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_probe.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_ransom_shop_bridge.lua",
         SCRIPTS_ROOT / "pwft" / "runtime.lua",
@@ -155,6 +156,7 @@ def main() -> int:
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_world_effect_bus_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_bridge_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_adapter_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_live_test_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_probe_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_ransom_shop_bridge_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "ending_runtime_spec.lua",
@@ -965,6 +967,9 @@ def main() -> int:
     unique_pal_native_delivery_adapter_text = (
         SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_adapter.lua"
     ).read_text(encoding="utf-8")
+    unique_pal_native_delivery_live_test_text = (
+        SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_live_test.lua"
+    ).read_text(encoding="utf-8")
     unique_pal_ransom_shop_text = (
         SCRIPTS_ROOT / "pwft" / "unique_pal_ransom_shop_bridge.lua"
     ).read_text(encoding="utf-8")
@@ -1403,8 +1408,28 @@ def main() -> int:
         "P2 current-build native Pal delivery adapter gates are incomplete",
     )
     require(
-        "unique_pal_native_delivery_adapter" not in runtime_text,
-        "unaccepted native Pal capture adapter must not be runtime-registered",
+        "UniquePalNativeDeliveryAdapter.create" in runtime_text
+        and "UniquePalNativeDeliveryLiveTest.create" in runtime_text
+        and "allowMutatingDelivery = config"
+        in runtime_text
+        and ".uniquePalNativeDeliveryLiveTest.enabled == true"
+        in runtime_text
+        and "PWFT_UNIQUE_PAL_NATIVE_DELIVERY_LIVE_TEST_V1"
+        in runtime_text
+        and "uniquePalNativeDeliveryBridge:register_binding"
+        not in runtime_text,
+        "native Pal delivery adapter must remain QA-gated and outside the production bridge",
+    )
+    require(
+        "uniquePalNativeDeliveryLiveTest = {" in config_text
+        and "Destructive QA only" in config_text
+        and "options.enabled == true"
+        in unique_pal_native_delivery_live_test_text
+        and "native-pal-delivery-live-test-verified"
+        in unique_pal_native_delivery_live_test_text
+        and "directContainerMutation = false"
+        in unique_pal_native_delivery_live_test_text,
+        "one-shot native Pal delivery live-test gate is incomplete",
     )
     require(
         "UniquePalNativeDeliveryBridge.create" in runtime_text
