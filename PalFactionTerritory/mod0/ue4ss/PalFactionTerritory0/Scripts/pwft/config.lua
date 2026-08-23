@@ -386,6 +386,14 @@ return {
         defaultActionAssetPath = "/Game/Pal/Blueprint/Controller/AIAction/NPC/Relax/BP_AIAction_NPC_Relax_SalesPerson.BP_AIAction_NPC_Relax_SalesPerson",
         defaultActionClassPath = "/Game/Pal/Blueprint/Controller/AIAction/NPC/Relax/BP_AIAction_NPC_Relax_SalesPerson.BP_AIAction_NPC_Relax_SalesPerson_C",
         expectedActorClassToken = "BP_NPC_DarkTrader_C",
+        -- The official boss spawner resolves the ordinary merchant class while
+        -- relations are peaceful, but Palworld deliberately promotes the same
+        -- template to its combat-capable BOSS class after hostility is enabled.
+        -- Both are native Dark Trader forms owned by this one runtime spawner.
+        expectedActorClassTokens = {
+            "BP_NPC_DarkTrader_C",
+            "BP_NPC_DarkTrader_BOSS_C",
+        },
         merchantLevel = 80,
         merchantLevelCap = 80,
 
@@ -418,9 +426,10 @@ return {
         nativeSetupRetryMs = 500,
         nativeSetupMaxAttempts = 40,
         -- Some native spawns produce the correct DarkTrader actor without
-        -- publishing SpawnedHandle. Resolve that actor by class and proximity
-        -- so the custom shop does not silently fall back to vanilla stock.
-        nativeActorFallbackAttempt = 2,
+        -- publishing SpawnedHandle. Give the owning spawner five seconds to
+        -- publish its handle before resolving a newly-created actor by class
+        -- and proximity. Existing actors are excluded from that fallback.
+        nativeActorFallbackAttempt = 10,
         nativeActorFallbackRadius = 2500.0,
         hostileAwarenessRadius = 2200.0,
         hostilityCheckIntervalMs = 1000,
@@ -428,7 +437,7 @@ return {
         shopRegistrationRetryMs = 1000,
         shopRegistrationMaxAttempts = 12,
         -- Temporary relation round-trip acceptance route. Production keeps
-        -- this disabled; when enabled, Ctrl+F11 toggles only the standalone
+        -- this disabled; when enabled, F11 toggles only the standalone
         -- Rayne Pal merchant between Friendly and Hostile without save writes.
         relationLiveTest = {
             enabled = false,

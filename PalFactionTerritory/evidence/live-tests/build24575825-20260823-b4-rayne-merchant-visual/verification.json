@@ -1,0 +1,114 @@
+{
+  "schemaVersion": "1.0.0",
+  "result": "PASS",
+  "recordedAt": "2026-08-23T17:18:29+08:00",
+  "gameVersion": "v1.0.3.101283",
+  "gameBuild": "24575825",
+  "acceptanceGate": "b4-rayne-merchant-friendly-hostile-friendly",
+  "catalog": {
+    "shopRow": "PFT_Rayne_AllPaldex",
+    "uniquePaldexEntryCount": 288,
+    "catalogSource": "generated/rayne-merchant/catalog.v1.json"
+  },
+  "visualEvidence": {
+    "friendlyShop": {
+      "file": "01-friendly-shop.jpg",
+      "bytes": 456927,
+      "sha256": "2b127d40c65948d36ceac25951ef1232ef46756ee30c1b5cf152e46a6fc5b515",
+      "width": 2560,
+      "height": 1440,
+      "nativeShopVisible": true,
+      "provenance": "same-build earlier attempt"
+    },
+    "hostileAttack": {
+      "file": "02-hostile-attack.jpg",
+      "bytes": 675061,
+      "sha256": "b5edd76881a9b177ccf9ab491649d02952656bbabedef5ef84f211fbb44d8730",
+      "width": 2560,
+      "height": 1440,
+      "redHostilityVisible": true,
+      "provenance": "same-build earlier attempt"
+    },
+    "hostileDefeat": {
+      "file": "02-hostile-defeat.jpg",
+      "bytes": 312062,
+      "sha256": "bf7d51fe88fc4d3158da8d95fbf98a98d154adb0263362c6e68b635c1ae92dfe",
+      "width": 2560,
+      "height": 1440,
+      "defeatVisible": true,
+      "provenance": "same-build earlier attempt"
+    },
+    "friendlyRecovered": {
+      "file": "03-friendly-recovered-fixed.jpg",
+      "bytes": 286155,
+      "sha256": "e7d7d5a49e9a61ab2588bdc579ddd9050208b450073a076dd52182272be14f59",
+      "width": 1922,
+      "height": 1112,
+      "singleMerchantVisible": true,
+      "provenance": "final clean rerun"
+    }
+  },
+  "cleanRoundTrip": {
+    "startedAt": "2026-08-23T17:11:31+08:00",
+    "completedAt": "2026-08-23T17:18:29+08:00",
+    "initialRelation": "Friendly",
+    "hostileRelation": "Hostile",
+    "finalRelation": "Friendly",
+    "allMerchantActorsFromNativeSpawner": true,
+    "nearbyScanActorBindings": 0,
+    "hostileInteractionEnabled": false,
+    "hostileAiActive": true,
+    "hostileBattleMode": true,
+    "hostileShopBlocked": true,
+    "hostileTargetAdded": true,
+    "friendlyInteractionEnabled": true,
+    "friendlyAiActive": false,
+    "friendlyBattleMode": false,
+    "friendlyInteractionRouteDispatched": true,
+    "palworldSaveWrites": 0
+  },
+  "publicLogExcerpt": {
+    "file": "rayne-roundtrip-excerpt.log",
+    "normalizedBytes": 2606,
+    "normalizedSha256": "541270f420e20225d5ef9196ada8ad769244244d975f3065e7e055ce79e0c408"
+  },
+  "rootCauseFix": {
+    "preSpawnActorBaseline": true,
+    "nearbyFallbackExcludesPreexistingActors": true,
+    "nativeSpawnerGraceSeconds": 5,
+    "lifecycleGenerationFence": true,
+    "fallbackActorExplicitDestroy": true,
+    "regularAndBossDarkTraderTokensAccepted": true
+  },
+  "restore": {
+    "result": "PASS",
+    "gameRunning": false,
+    "saveFiles": 384,
+    "saveDiffCount": 0,
+    "ue4ssSnapshotFiles": 176,
+    "ue4ssSnapshotDiffCountBeforeFormalDeploy": 0,
+    "assetModPakFiles": 2,
+    "logicModPakFiles": 1,
+    "pakDiffCount": 0,
+    "appManifestRestored": true,
+    "proxyDllRestored": true,
+    "designatedLevelSavSha256": "2579fdaf631690ab6d8ab7e9097881cb9dc365da116d022d1bc182e58cea9c69",
+    "formalDeploymentFiles": 82,
+    "deploymentMatchesCurrentSource": true,
+    "formalConfigSha256": "3afc9a5cd3787d1fbfc73d546e8ce792683cafc8ebbba64cb32d20e555e79eef",
+    "mapFastTravelSelectionProbeEnabled": false,
+    "relationLiveTestEnabled": false,
+    "contentModulesEmpty": true
+  },
+  "evidenceBoundary": {
+    "screenshotsSpanSameBuildAttempts": true,
+    "cleanRoundTripLogFromFinalRerun": true,
+    "freshShopUiReopenedAfterFinalRecovery": false,
+    "finalFriendlyInteractionDispatchObserved": true,
+    "rawLogPrivate": true,
+    "rawLogSha256": "c846d3c2866f074176bb24c3c5e00750dfb4a99f9f1f1d80343e318d42845d01",
+    "operatorAttackArtifactExcludedFromAcceptance": true,
+    "palworldSaveMutationByMod": false,
+    "userAcceptance": "not-performed"
+  }
+}

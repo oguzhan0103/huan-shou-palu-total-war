@@ -2757,10 +2757,13 @@ local function schedule_economy_merchant_presence_poll(state, generation)
         -- ExecuteWithDelay calls made from an ExecuteInGameThread callback can
         -- silently stop after the first hop on the live Palworld build.
         if presence.generation ~= generation then
-            if type(state.callbacks.economyMerchantPresencePolls)
-                == "table" then
-                state.callbacks.economyMerchantPresencePolls[generation] = nil
-            end
+            -- Do not release this Lua closure from inside its own LoopAsync
+            -- invocation.  UE4SS 3.0.1 still consults the registry ref while
+            -- unwinding the native timer; clearing the last strong reference
+            -- here turns that ref into "Ref was not function" and removes the
+            -- shared EngineTick hook.  The number of boot-world generations
+            -- is bounded, so retaining the fenced closure for the process
+            -- lifetime is the safe trade-off.
             return true
         end
         ExecuteInGameThread(game_callback)
@@ -3087,42 +3090,71 @@ local function register_agent_dialogue_runtime(config, state)
         operator:publish_status("scheduler-unavailable")
         return
     end
-    local function schedule()
-        local callback
-        callback = function()
-            ExecuteInGameThread(function()
-                local ok, outcome = pcall(function()
-                    return operator:tick()
-                end)
-                if not ok then
-                    log("AGENT_DIALOGUE_POLL_ERROR error=" .. tostring(outcome))
-                elseif outcome.reason ~= "operator-idle"
-                    and outcome.reason ~= "agent-response-pending" then
-                    log(string.format(
-                        "AGENT_DIALOGUE_POLL ok=%s reason=%s request=%s mutation=false",
-                        tostring(outcome.ok),
-                        tostring(outcome.reason),
-                        tostring(outcome.requestId or "none")
-                    ))
-                end
-                if not use_loop_async then
-                    schedule()
-                end
+    local function schedule(generation)
+        local game_callback = function()
+            if operator.generation ~= generation then
+                return
+            end
+            local ok, outcome = pcall(function()
+                return operator:tick()
             end)
+            if not ok then
+                log("AGENT_DIALOGUE_POLL_ERROR error=" .. tostring(outcome))
+            elseif outcome.reason ~= "operator-idle"
+                and outcome.reason ~= "agent-response-pending" then
+                log(string.format(
+                    "AGENT_DIALOGUE_POLL ok=%s reason=%s request=%s mutation=false",
+                    tostring(outcome.ok),
+                    tostring(outcome.reason),
+                    tostring(outcome.requestId or "none")
+                ))
+            end
+            if not use_loop_async
+                and operator.generation == generation then
+                schedule(generation)
+            end
+        end
+        local callback = function()
+            if operator.generation ~= generation then
+                -- UE4SS 3.0.1 may still consult the Lua registry reference
+                -- while unwinding this stale LoopAsync timer.  Keep every
+                -- world-generation closure strongly referenced for the
+                -- process lifetime, exactly as the merchant-presence loop
+                -- does, so a Title -> MainWorld transition cannot remove the
+                -- shared EngineTick hook with "Ref was not function".
+                return true
+            end
+            ExecuteInGameThread(game_callback)
             return false
         end
-        state.callbacks.agentDialoguePoll = callback
+        state.callbacks.agentDialoguePolls =
+            state.callbacks.agentDialoguePolls or {}
+        state.callbacks.agentDialoguePolls[generation] =
+            state.callbacks.agentDialoguePolls[generation] or {}
+        table.insert(
+            state.callbacks.agentDialoguePolls[generation],
+            callback
+        )
+        state.callbacks.agentDialogueGameCallbacks =
+            state.callbacks.agentDialogueGameCallbacks or {}
+        state.callbacks.agentDialogueGameCallbacks[generation] =
+            state.callbacks.agentDialogueGameCallbacks[generation] or {}
+        table.insert(
+            state.callbacks.agentDialogueGameCallbacks[generation],
+            game_callback
+        )
         if use_loop_async then
             LoopAsync(poll_interval, callback)
         else
             ExecuteWithDelay(poll_interval, callback)
         end
     end
-    operator:on_world_loaded()
-    schedule()
+    local generation = operator:on_world_loaded()
+    schedule(generation)
     log(string.format(
-        "AGENT_DIALOGUE_RUNTIME_READY bridge=true operator=true pollMs=%d command=pwft.dialogue externalInput=true playerConfirmation=F3 mutation=false",
-        poll_interval
+        "AGENT_DIALOGUE_RUNTIME_READY bridge=true operator=true pollMs=%d generation=%d command=pwft.dialogue externalInput=true playerConfirmation=F3 mutation=false",
+        poll_interval,
+        generation
     ))
 end
 
@@ -3389,7 +3421,7 @@ end
 local function register_economy_merchant_interaction_router(state)
     if type(RegisterKeyBind) ~= "function"
         or Key == nil
-        or Key.F6 == nil then
+        or Key.F8 == nil then
         log("ECONOMY_MERCHANT_INTERACTION_ROUTER_UNAVAILABLE keybind-api")
         return
     end
@@ -3405,20 +3437,103 @@ local function register_economy_merchant_interaction_router(state)
                 return
             end
             local outcome = state.factionEconomyMerchantRuntime
-                :interact_nearest(pawn, 350)
-            if outcome.ok
-                or outcome.reason ~= "no-economy-merchant-in-range" then
-                log(string.format(
-                    "ECONOMY_MERCHANT_INTERACTION_ROUTED ok=%s reason=%s faction=%s actor=%s distance=%s route=%s detail=%s",
-                    tostring(outcome.ok),
-                    tostring(outcome.reason),
-                    tostring(outcome.factionId or "none"),
-                    safe_full_name(outcome.actor),
-                    tostring(outcome.distance or "none"),
-                    tostring(outcome.route or "none"),
-                    tostring(outcome.detail or "none")
-                ))
+                :interact_nearest(pawn, 700)
+            if not outcome.ok
+                and outcome.reason == "no-economy-merchant-in-range" then
+                local rayne = state.rayneMerchant
+                local actor = rayne and rayne.actor
+                local faction_id = rayne
+                        and rayne.config
+                        and rayne.config.factionId
+                    or "pwft.faction.rayne_syndicate"
+                local relation_record = state.relations[faction_id]
+                local relation = type(relation_record) == "table"
+                        and relation_record.state
+                    or relation_record
+                    or "Friendly"
+                if relation == "Hostile" then
+                    outcome = {
+                        ok = false,
+                        reason = "rayne-merchant-hostile",
+                        factionId = faction_id,
+                        actor = actor,
+                    }
+                elseif not is_valid_object(actor) then
+                    outcome = {
+                        ok = false,
+                        reason = "rayne-merchant-unavailable",
+                        factionId = faction_id,
+                        actor = actor,
+                    }
+                else
+                    local distance_ok, distance_squared = pcall(function()
+                        return actor:GetSquaredDistanceTo(pawn)
+                    end)
+                    local distance_number = distance_ok
+                            and tonumber(distance_squared)
+                        or nil
+                    local distance = distance_ok
+                            and distance_number
+                            and math.sqrt(math.max(0, distance_number))
+                        or nil
+                    if distance == nil or distance > 700 then
+                        outcome = {
+                            ok = false,
+                            reason = "rayne-merchant-out-of-range",
+                            factionId = faction_id,
+                            actor = actor,
+                            distance = distance,
+                        }
+                    else
+                        local interaction = nil
+                        pcall(function()
+                            interaction = actor.BP_NPCInteractionComponent
+                        end)
+                        if not is_valid_object(interaction) then
+                            outcome = {
+                                ok = false,
+                                reason = "rayne-merchant-interaction-unavailable",
+                                factionId = faction_id,
+                                actor = actor,
+                                distance = distance,
+                            }
+                        else
+                            -- Build 24575825 declares two native arguments:
+                            -- Other and EPalInteractiveObjectIndicatorType.
+                            -- The regular overlap route supplies Talk (39);
+                            -- deterministic F8 dispatch must do the same.
+                            local talk_indicator_type = 39
+                            local opened, detail = pcall(function()
+                                return interaction:OnTriggerInteract(
+                                    pawn,
+                                    talk_indicator_type
+                                )
+                            end)
+                            outcome = {
+                                ok = opened,
+                                reason = opened
+                                        and "rayne-native-pal-shop-dispatched"
+                                    or "rayne-native-pal-shop-dispatch-failed",
+                                factionId = faction_id,
+                                actor = actor,
+                                distance = distance,
+                                route = "PalNPCInteractionComponent.OnTriggerInteract(Talk)",
+                                detail = detail,
+                            }
+                        end
+                    end
+                end
             end
+            log(string.format(
+                "ECONOMY_MERCHANT_INTERACTION_ROUTED ok=%s reason=%s faction=%s actor=%s distance=%s route=%s detail=%s",
+                tostring(outcome.ok),
+                tostring(outcome.reason),
+                tostring(outcome.factionId or "none"),
+                safe_full_name(outcome.actor),
+                tostring(outcome.distance or "none"),
+                tostring(outcome.route or "none"),
+                tostring(outcome.detail or "none")
+            ))
         end
         if type(ExecuteInGameThread) == "function" then
             ExecuteInGameThread(apply)
@@ -3430,10 +3545,14 @@ local function register_economy_merchant_interaction_router(state)
     -- Keep the Merchant Guild interaction route on its own key.  Palworld's
     -- ordinary F action is context-sensitive (beds, containers, workbenches)
     -- and consumes the key before UE4SS when one of those indicators is
-    -- active.  F6 remains deterministic without replacing native actions.
-    RegisterKeyBind(Key.F6, callback)
+    -- active.  F8 remains deterministic without replacing native actions.
+    -- F1/F2 are the faction-join confirmation pair, F5/F11/F12 are registered
+    -- later by PalFactionTerritoryQAHarness0, and F6 is owned by
+    -- PalMultiOtomo0. UE4SS resolves duplicate physical keys to the later
+    -- callback, so none of those keys can safely host this route.
+    RegisterKeyBind(Key.F8, callback)
     log(
-        "ECONOMY_MERCHANT_INTERACTION_ROUTER_READY key=F6 radius=350 route=refresh_merchant_shop->PalHUDService.Push(WBP_ItemShop_C,native-parameter) darkTraderPalShopBypassed=true"
+        "ECONOMY_MERCHANT_INTERACTION_ROUTER_READY key=F8 radius=700 route=economy-item-shop-or-rayne-native-pal-shop hostileRayneBlocked=true"
     )
 end
 

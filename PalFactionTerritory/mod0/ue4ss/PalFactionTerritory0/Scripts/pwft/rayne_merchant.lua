@@ -63,9 +63,11 @@ end
 -- The standalone Rayne Pal merchant is not one of the seven Merchant Guild
 -- counters.  A hostile relationship must therefore close its native
 -- interaction route explicitly instead of relying on battle mode to suppress
--- the prompt as an incidental side effect.  The actor is respawned whenever
--- the relation changes, so a later peaceful actor gets a clean native route.
-local function apply_relation_interaction_policy(actor, relation)
+-- the prompt as an incidental side effect.  The Dark Trader template is
+-- natively aggressive, so peaceful relations must also suspend its AI and
+-- battle flag.  The actor is respawned whenever the relation changes, giving
+-- a later peaceful actor a clean native route and an empty hate list.
+local function apply_relation_interaction_policy(actor, relation, options)
     if not is_valid_object(actor) then
         return false, "merchant-actor-unavailable"
     end
@@ -85,21 +87,44 @@ local function apply_relation_interaction_policy(actor, relation)
     local active_ok, active_error = pcall(function()
         actor:SetActive_Interact_ToAll(not hostile)
     end)
-    log(string.format(
-        "RELATION_INTERACTION_POLICY relation=%s hostile=%s flags=%s flagsDetail=%s active=%s activeDetail=%s interactEnabled=%s",
-        tostring(relation),
-        tostring(hostile),
-        tostring(flags_ok),
-        tostring(flags_error),
-        tostring(active_ok),
-        tostring(active_error),
-        tostring(not hostile)
-    ))
+    local controller_ok, controller = pcall(function()
+        return actor:GetController()
+    end)
+    local ai_ok = false
+    local ai_error = "merchant-controller-unavailable"
+    if controller_ok and is_valid_object(controller) then
+        ai_ok, ai_error = pcall(function()
+            controller:SetActiveAI(hostile)
+            actor:ChangeBattleModeFlag_ToAll(hostile)
+        end)
+    elseif not controller_ok then
+        ai_error = controller
+    end
+    if type(options) ~= "table" or options.log ~= false then
+        log(string.format(
+            "RELATION_INTERACTION_POLICY relation=%s hostile=%s flags=%s flagsDetail=%s active=%s activeDetail=%s interactEnabled=%s controller=%s ai=%s aiDetail=%s aiActive=%s battleMode=%s",
+            tostring(relation),
+            tostring(hostile),
+            tostring(flags_ok),
+            tostring(flags_error),
+            tostring(active_ok),
+            tostring(active_error),
+            tostring(not hostile),
+            safe_full_name(controller),
+            tostring(ai_ok),
+            tostring(ai_error),
+            tostring(hostile),
+            tostring(hostile)
+        ))
+    end
     if not flags_ok then
         return false, "npc-interaction-flags-failed:" .. tostring(flags_error)
     end
     if not active_ok then
         return false, "npc-interaction-activation-failed:" .. tostring(active_error)
+    end
+    if not ai_ok then
+        return false, "merchant-ai-policy-failed:" .. tostring(ai_error)
     end
     return true, hostile and "hostile-interaction-disabled"
         or "peaceful-interaction-enabled"
@@ -353,9 +378,29 @@ local function configure_native_spawner_template(
     return true, nil
 end
 
-local function configure_vendor(actor, config)
+local function expected_actor_tokens(config)
+    if type(config.expectedActorClassTokens) == "table"
+        and #config.expectedActorClassTokens > 0 then
+        return config.expectedActorClassTokens
+    end
+    return { config.expectedActorClassToken }
+end
+
+local function actor_matches_config(actor, config)
     local actor_name = safe_full_name(actor)
-    if not string.find(actor_name, config.expectedActorClassToken, 1, true) then
+    for _, token in ipairs(expected_actor_tokens(config)) do
+        if type(token) == "string"
+            and token ~= ""
+            and string.find(actor_name, token, 1, true) then
+            return true, actor_name, token
+        end
+    end
+    return false, actor_name, nil
+end
+
+local function configure_vendor(actor, config)
+    local actor_matches, actor_name = actor_matches_config(actor, config)
+    if not actor_matches then
         return nil, "unexpected-native-actor:" .. actor_name
     end
 
@@ -389,8 +434,8 @@ local function configure_vendor(actor, config)
 end
 
 local function get_native_vendor(actor, config)
-    local actor_name = safe_full_name(actor)
-    if not string.find(actor_name, config.expectedActorClassToken, 1, true) then
+    local actor_matches, actor_name = actor_matches_config(actor, config)
+    if not actor_matches then
         return nil, "unexpected-native-actor:" .. actor_name
     end
 
@@ -1270,7 +1315,31 @@ local function get_native_merchant_from_spawner(spawner)
     return actor, handle, nil
 end
 
-local function find_nearby_native_merchant(config, spawn_location)
+local function collect_native_merchant_actor_names(config)
+    local actor_names = {}
+    if type(FindAllOf) ~= "function" then
+        return actor_names
+    end
+    for _, token in ipairs(expected_actor_tokens(config)) do
+        local scan_ok, actors = pcall(function()
+            return FindAllOf(token)
+        end)
+        if scan_ok and actors ~= nil then
+            for _, actor in pairs(actors) do
+                if is_valid_object(actor) then
+                    actor_names[safe_full_name(actor)] = true
+                end
+            end
+        end
+    end
+    return actor_names
+end
+
+local function find_nearby_native_merchant(
+    config,
+    spawn_location,
+    excluded_actor_names
+)
     if type(FindAllOf) ~= "function" then
         return nil, nil, "native-actor-scan-unavailable"
     end
@@ -1278,22 +1347,31 @@ local function find_nearby_native_merchant(config, spawn_location)
         return nil, nil, "native-actor-scan-location-unavailable"
     end
 
-    local scan_ok, actors_or_error = pcall(function()
-        return FindAllOf(config.expectedActorClassToken)
-    end)
-    if not scan_ok or actors_or_error == nil then
-        return nil, nil, "native-actor-scan-failed:" .. tostring(actors_or_error)
+    local actors_or_error = {}
+    for _, token in ipairs(expected_actor_tokens(config)) do
+        local scan_ok, actors = pcall(function()
+            return FindAllOf(token)
+        end)
+        if not scan_ok or actors == nil then
+            return nil, nil, "native-actor-scan-failed:"
+                .. tostring(actors)
+                .. ":"
+                .. tostring(token)
+        end
+        for _, actor in pairs(actors) do
+            table.insert(actors_or_error, actor)
+        end
     end
 
     local nearest = nil
     local nearest_distance_squared = nil
     for _, actor in pairs(actors_or_error) do
+        local actor_name = safe_full_name(actor)
         if is_valid_object(actor)
-            and string.find(
-                safe_full_name(actor),
-                config.expectedActorClassToken,
-                1,
-                true
+            and actor_matches_config(actor, config)
+            and not (
+                type(excluded_actor_names) == "table"
+                and excluded_actor_names[actor_name] == true
             ) then
             local vendor = safe_property(
                 actor,
@@ -1361,6 +1439,7 @@ local function complete_native_merchant_setup(
 
     instance.actor = actor
     instance.spawnHandle = handle
+    instance.actorSource = actor_source or "spawner-handle"
     instance.vendor = vendor
     instance.lifecycleGeneration = instance.lifecycleGeneration + 1
     instance.lastSpawnError = nil
@@ -1470,14 +1549,18 @@ local function complete_native_merchant_setup(
     return true, nil
 end
 
-local function schedule_native_merchant_setup(instance, attempt)
+local function schedule_native_merchant_setup(instance, attempt, generation)
     if type(ExecuteWithDelay) ~= "function" then
         return
     end
+    generation = generation or instance.lifecycleGeneration
     instance.nativeSetupScheduled = true
     local callback = function()
         local function execute()
             instance.nativeSetupScheduled = false
+            if generation ~= instance.lifecycleGeneration then
+                return
+            end
             if not is_valid_object(instance.spawner) then
                 return
             end
@@ -1490,7 +1573,8 @@ local function schedule_native_merchant_setup(instance, attempt)
                     scan_distance,
                     scan_reason = find_nearby_native_merchant(
                         instance.config,
-                        instance.lastSpawnLocation
+                        instance.lastSpawnLocation,
+                        instance.nativeActorScanBaseline
                     )
                 if scanned_actor ~= nil then
                     actor = scanned_actor
@@ -1563,7 +1647,11 @@ local function schedule_native_merchant_setup(instance, attempt)
                         tostring(reason)
                     ))
                 end
-                schedule_native_merchant_setup(instance, attempt + 1)
+                schedule_native_merchant_setup(
+                    instance,
+                    attempt + 1,
+                    generation
+                )
             else
                 instance.lastSpawnError = reason
                 log(string.format(
@@ -1580,7 +1668,12 @@ local function schedule_native_merchant_setup(instance, attempt)
             execute()
         end
     end
-    instance.callbacks["nativeSetup" .. tostring(attempt)] = callback
+    instance.callbacks[
+        "nativeSetup"
+            .. tostring(generation)
+            .. "_"
+            .. tostring(attempt)
+    ] = callback
     ExecuteWithDelay(instance.config.nativeSetupRetryMs, callback)
 end
 
@@ -1641,22 +1734,59 @@ mark_nearby_players_hostile = function(instance)
     return added
 end
 
-schedule_hostility_monitor = function(instance)
+schedule_hostility_monitor = function(instance, generation)
+    generation = generation or instance.lifecycleGeneration
     if instance.config.enableFactionHostility ~= true
         or type(ExecuteWithDelay) ~= "function"
-        or instance.monitorScheduled then
+        or (instance.monitorScheduled
+            and instance.monitorGeneration == generation) then
         return
     end
     instance.monitorScheduled = true
+    instance.monitorGeneration = generation
     local callback
     callback = function()
         local function execute()
+            -- Delayed callbacks from a destroyed actor must never clear or
+            -- reschedule the monitor that belongs to its replacement.
+            if generation ~= instance.lifecycleGeneration then
+                return
+            end
             instance.monitorScheduled = false
+            instance.monitorGeneration = nil
             if not is_valid_object(instance.actor) then
                 return
             end
-            mark_nearby_players_hostile(instance)
-            schedule_hostility_monitor(instance)
+            local relation = current_relation(
+                instance.sharedState,
+                instance.config.factionId
+            )
+            -- The Dark Trader template can reactivate its native combat AI
+            -- after initialization.  Reassert both peaceful and hostile
+            -- policies on every monitor pass; only failures are logged.
+            local maintained, policy_reason =
+                apply_relation_interaction_policy(
+                    instance.actor,
+                    relation,
+                    { log = false }
+                )
+            if not maintained then
+                if instance.lastRelationPolicyError ~= policy_reason then
+                    log(string.format(
+                        "RELATION_POLICY_MONITOR_FAILED relation=%s reason=%s generation=%d",
+                        tostring(relation),
+                        tostring(policy_reason),
+                        generation
+                    ))
+                end
+                instance.lastRelationPolicyError = policy_reason
+            else
+                instance.lastRelationPolicyError = nil
+            end
+            if relation == "Hostile" then
+                mark_nearby_players_hostile(instance)
+            end
+            schedule_hostility_monitor(instance, generation)
         end
         if type(ExecuteInGameThread) == "function" then
             ExecuteInGameThread(execute)
@@ -1664,7 +1794,7 @@ schedule_hostility_monitor = function(instance)
             execute()
         end
     end
-    instance.callbacks.hostilityMonitor = callback
+    instance.callbacks["hostilityMonitor" .. tostring(generation)] = callback
     ExecuteWithDelay(instance.config.hostilityCheckIntervalMs, callback)
 end
 
@@ -1688,16 +1818,20 @@ local function destroy_actor(instance, reason)
     end
     if is_valid_object(instance.actor) then
         local actor_name = safe_full_name(instance.actor)
-        if not native_despawn_requested then
+        local explicit_actor_destroy_required = instance.spawnHandle == nil
+        if not native_despawn_requested
+            or explicit_actor_destroy_required then
             pcall(function()
                 instance.actor:K2_DestroyActor()
             end)
         end
         log(string.format(
-            "DESTROYED reason=%s actor=%s nativeDespawn=%s",
+            "DESTROYED reason=%s actor=%s nativeDespawn=%s explicitActorDestroy=%s actorSource=%s",
             tostring(reason),
             actor_name,
-            tostring(native_despawn_requested)
+            tostring(native_despawn_requested),
+            tostring(explicit_actor_destroy_required),
+            tostring(instance.actorSource or "unknown")
         ))
     end
     if is_valid_object(instance.spawner) then
@@ -1714,10 +1848,13 @@ local function destroy_actor(instance, reason)
     instance.actor = nil
     instance.spawner = nil
     instance.spawnHandle = nil
+    instance.actorSource = nil
     instance.vendor = nil
     instance.monitorScheduled = false
+    instance.monitorGeneration = nil
     instance.nativeSetupScheduled = false
     instance.nativeSpawnRequested = false
+    instance.nativeActorScanBaseline = {}
     instance.hostileTargets = {}
     instance.networkSetupComplete = false
     instance.traitInjectionComplete = false
@@ -1739,6 +1876,12 @@ local function validate_config(config)
     assert(type(config.defaultActionAssetPath) == "string" and config.defaultActionAssetPath ~= "", "native action asset is required")
     assert(type(config.defaultActionClassPath) == "string" and config.defaultActionClassPath ~= "", "native action class is required")
     assert(type(config.expectedActorClassToken) == "string" and config.expectedActorClassToken ~= "", "expected merchant actor class is required")
+    if config.expectedActorClassTokens ~= nil then
+        assert(type(config.expectedActorClassTokens) == "table" and #config.expectedActorClassTokens > 0, "expected merchant actor class list is invalid")
+        for _, token in ipairs(config.expectedActorClassTokens) do
+            assert(type(token) == "string" and token ~= "", "expected merchant actor class token is invalid")
+        end
+    end
     assert(type(config.merchantLevel) == "number" and config.merchantLevel > 0, "invalid native merchant level")
     assert(type(config.merchantLevelCap) == "number" and config.merchantLevelCap > 0, "invalid native merchant level cap")
     assert(config.merchantLevel <= config.merchantLevelCap, "native merchant level exceeds the supported game cap")
@@ -1789,8 +1932,12 @@ function RayneMerchant.create(config, shared_state)
         hostileTargetCount = 0,
         lastPlayerScanError = nil,
         monitorScheduled = false,
+        monitorGeneration = nil,
+        lastRelationPolicyError = nil,
         nativeSetupScheduled = false,
         nativeSpawnRequested = false,
+        nativeActorScanBaseline = {},
+        actorSource = nil,
         spawnScheduled = false,
         lifecycleGeneration = 0,
         callbacks = {},
@@ -1851,6 +1998,8 @@ function RayneMerchant.create(config, shared_state)
             ))
         end
 
+        self.nativeActorScanBaseline =
+            collect_native_merchant_actor_names(self.config)
         local spawner, _, spawn_location, spawn_error = spawn_native_spawner(
             tower,
             self.config,
@@ -1989,12 +2138,14 @@ end
 
 RayneMerchant._test = {
     current_relation = current_relation,
+    actor_matches_config = actor_matches_config,
     apply_relation_interaction_policy = apply_relation_interaction_policy,
     choose_rainbow_passives = choose_rainbow_passives,
     unwrap_remote_value = unwrap_remote_value,
     for_each_array = for_each_array,
     replace_first_passives = replace_first_passives,
     find_nearby_native_merchant = find_nearby_native_merchant,
+    collect_native_merchant_actor_names = collect_native_merchant_actor_names,
 }
 
 return RayneMerchant

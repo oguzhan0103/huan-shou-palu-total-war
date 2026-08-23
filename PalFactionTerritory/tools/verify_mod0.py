@@ -236,11 +236,17 @@ def main() -> int:
         PROJECT_ROOT / "tools" / "verify_world_level_live_evidence.py",
         PROJECT_ROOT / "tools" / "verify_pal_faction_rage_live_evidence.py",
         PROJECT_ROOT / "tools" / "verify_companion_commerce_live_evidence.py",
+        PROJECT_ROOT / "tools" / "verify_b4_rayne_merchant_visual_evidence.py",
         PROJECT_ROOT / "tools" / "verify_b5_task_defense_live_evidence.py",
         PROJECT_ROOT
         / "evidence"
         / "live-tests"
         / "build24575825-20260822-progression-sidecar"
+        / "verification.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "live-tests"
+        / "build24575825-20260823-b4-rayne-merchant-visual"
         / "verification.json",
         PROJECT_ROOT
         / "evidence"
@@ -352,6 +358,14 @@ def main() -> int:
         [
             sys.executable,
             str(PROJECT_ROOT / "tools" / "verify_companion_commerce_live_evidence.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_b4_rayne_merchant_visual_evidence.py"),
         ],
         cwd=PROJECT_ROOT,
         check=True,
