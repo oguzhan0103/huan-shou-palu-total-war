@@ -18,4 +18,4 @@ Build：Steam 24575825 / v1.0.3.101283
 - `b6-economy-war-excerpt.log`：去本机路径的两进程关键时序；
 - `tools/verify_b6_dynamic_economy_live_evidence.py`：自动证据校验器。
 
-完整 UE4SS 日志、State、SaveGames 预检快照和可恢复隔离目录保留在私有测试输出，不进入仓库。Steam 云开关已恢复开启，但 Steam 当时仍显示“云过期”；没有选择任何云端／本地覆盖操作，权威本地快照保持逐文件零差异。
+完整 UE4SS 日志、State、SaveGames 预检快照和可恢复隔离目录保留在私有测试输出，不进入仓库。Steam 云开关恢复开启时，验收时点仍显示“云过期”；随后仅重启 Steam 续传，日志以 `Upload complete, result OK` 结束，游戏库恢复云端对勾。恢复前后没有选择任何云端／本地覆盖，主 `Level.sav` 与 `LevelMeta.sav` 哈希保持验收值不变；Steam 只可能继续协调历史自动备份清单。

@@ -138,6 +138,25 @@ def verify(evidence: dict[str, Any]) -> None:
     require(restore["steamCloudUiStatus"] == "out-of-date", "Steam Cloud UI status was hidden")
     require(restore["steamCloudOverwriteChoiceMade"] is False, "a cloud overwrite choice was made")
 
+    cloud = evidence["postAcceptanceCloudRecovery"]
+    require(cloud["result"] == "PASS", "post-acceptance Steam Cloud recovery failed")
+    require(
+        cloud["recoveryMethod"] == "restart-steam-and-resume-sync",
+        "Steam Cloud recovery method drifted",
+    )
+    require(cloud["steamCloudUiStatus"] == "synchronized-checkmark", "Steam Cloud UI did not recover")
+    require(cloud["steamCloudLogResult"] == "Upload complete, result OK", "Steam Cloud log did not close OK")
+    require(cloud["gameRunning"] is False, "game was running during cloud recovery evidence")
+    require(cloud["palworldLaunchedForRecovery"] is False, "Palworld was launched for cloud recovery")
+    require(cloud["steamCloudOverwriteChoiceMade"] is False, "a cloud overwrite choice was made during recovery")
+    require(cloud["mainSaveHashesMatchAcceptance"] is True, "main save hashes changed during cloud recovery")
+    require(cloud["levelSavSha256"] == restore["levelSavSha256"], "Level.sav hash drifted after cloud recovery")
+    require(
+        cloud["levelMetaSavSha256"] == restore["levelMetaSavSha256"],
+        "LevelMeta.sav hash drifted after cloud recovery",
+    )
+    require(cloud["cloudHistoryMayReconcileBackupFiles"] is True, "cloud backup-history boundary was hidden")
+
     boundary = evidence["evidenceBoundary"]
     require(len(boundary["preRestartRawLogSha256"]) == 64, "pre-restart log hash invalid")
     require(len(boundary["postRestartRawLogSha256"]) == 64, "post-restart log hash invalid")

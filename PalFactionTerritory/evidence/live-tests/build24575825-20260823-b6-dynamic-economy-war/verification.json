@@ -125,6 +125,20 @@
     "steamCloudUiStatus": "out-of-date",
     "steamCloudOverwriteChoiceMade": false
   },
+  "postAcceptanceCloudRecovery": {
+    "result": "PASS",
+    "recoveryMethod": "restart-steam-and-resume-sync",
+    "recoveryTimestamp": "2026-08-23T20:32:42+08:00",
+    "steamCloudUiStatus": "synchronized-checkmark",
+    "steamCloudLogResult": "Upload complete, result OK",
+    "gameRunning": false,
+    "palworldLaunchedForRecovery": false,
+    "steamCloudOverwriteChoiceMade": false,
+    "levelSavSha256": "2579fdaf631690ab6d8ab7e9097881cb9dc365da116d022d1bc182e58cea9c69",
+    "levelMetaSavSha256": "4839cc7d8c52e31d511a05f3c817f80f1c6bc64154f6854c1940a6fa9cf5a1ff",
+    "mainSaveHashesMatchAcceptance": true,
+    "cloudHistoryMayReconcileBackupFiles": true
+  },
   "evidenceBoundary": {
     "preRestartRawLogSha256": "4fb1e3a8536dcbfa33efea45b0ee672ef07937554ff8a9d2044420980ff4d3e2",
     "postRestartRawLogSha256": "46b46cf9e001d98ce59fc6bf0227b3f8cb771a0da1634672aff4fddf98ab0c7f",
