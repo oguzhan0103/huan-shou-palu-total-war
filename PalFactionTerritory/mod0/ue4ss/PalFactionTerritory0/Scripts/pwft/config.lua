@@ -263,6 +263,24 @@ return {
             factionId = "pwft.faction.rayne_syndicate",
             forwardDistance = 600,
         },
+        -- B6 concentrated acceptance only.  With the Rayne Merchant Guild
+        -- counter already active, Ctrl+F3 advances one auditable phase:
+        -- established -> limited sale -> procurement/trade -> threat -> war
+        -- -> mandatory game restart -> ceasefire -> stable.  Every resource
+        -- and conflict event lives only in the Mod-owned progression sidecar;
+        -- the verified preflight restore returns the test profile afterwards.
+        economyWarLiveTest = {
+            enabled = false,
+            key = "F3",
+            runId = "b6-live-20260823-r1",
+            factionId = "pwft.faction.rayne_syndicate",
+            resourceId = "metal_ore",
+            productItemId = "CopperIngot",
+            initialQuantity = 150,
+            firstReduction = 100,
+            secondReduction = 1,
+            nativeMerchantRequired = true,
+        },
         -- Native transaction acceptance only. When temporarily enabled,
         -- Ctrl+F12 advances the window ID consumed by subsequent real shop
         -- confirmations. It never grants reputation itself, so three capped

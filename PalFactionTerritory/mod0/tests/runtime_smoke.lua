@@ -149,9 +149,13 @@ assert(Config.factionProgression.persistence.enabled == true)
 assert(Config.factionProgression.persistence.deferredIdentity == true)
 assert(state.factionApi.version == "1.1.0")
 assert(state.factionCommerce.version == "1.0.0")
-assert(state.factionEconomy.version == "1.1.0")
+assert(state.factionEconomy.version == "1.0.0")
+assert(state.factionEconomyStatic.version == "1.1.0")
+assert(state.factionEconomy.capabilities.resourceLedgerAuthority == true)
 assert(state.factionEconomyShops.version == "1.0.0")
 assert(_G.PWFT_FACTION_API_V1 == state.factionApi)
+assert(_G.PWFT_FACTION_DYNAMIC_ECONOMY_V1
+    == state.factionEconomy)
 assert(
     _G.PWFT_FACTION_CONSEQUENCE_API_V1
         == state.factionConsequenceRouter
@@ -356,7 +360,10 @@ assert(
     state.factionEconomy:status().balanceProfileId
         == "pwft.economy.balance.supply_band_v1"
 )
-assert(state.factionEconomy:status().balanceRuntimeAuthority == false)
+assert(state.factionEconomy:status().balanceRuntimeAuthority == true)
+assert(state.factionEconomy:status().dynamicPriceRuntimeEnabled == true)
+assert(state.factionEconomy:status().dynamicStockCounts == true)
+assert(state.factionEconomy:status().dynamicProcurementRequests == true)
 assert(state.factionEconomy:status().customProductRowsEnabled == false)
 assert(
     state.factionEconomyShops:status().representativeCount == 7

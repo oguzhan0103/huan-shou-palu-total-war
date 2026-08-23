@@ -23,7 +23,11 @@ local FactionConsequenceNativeBinding =
 local FactionCommerce = require("pwft.faction_commerce")
 local FactionDefense = require("pwft.faction_defense")
 local FactionEconomy = require("pwft.faction_economy")
+local FactionDynamicEconomy =
+    require("pwft.faction_dynamic_economy")
 local FactionEconomyWar = require("pwft.faction_economy_war")
+local FactionEconomyWarLiveTest =
+    require("pwft.faction_economy_war_live_test")
 local FactionEconomyShopCatalog =
     require("pwft.faction_economy_shop_catalog")
 local FactionEconomyMerchantRuntime =
@@ -4464,6 +4468,86 @@ local function begin_progression_identity_probe(config, state)
     )
 end
 
+local function register_economy_war_live_test(config, state)
+    local qa = config.factionCommerce.economyWarLiveTest
+    if type(qa) ~= "table" or qa.enabled ~= true then
+        log("ECONOMY_WAR_LIVE_TEST_DISABLED config=false")
+        return
+    end
+    if state.factionEconomyWarLiveTest == nil
+        or type(RegisterKeyBind) ~= "function"
+        or Key == nil
+        or Key[qa.key] == nil
+        or ModifierKey == nil
+        or ModifierKey.CONTROL == nil then
+        log("ECONOMY_WAR_LIVE_TEST_UNAVAILABLE runtime-or-keybind-api")
+        return
+    end
+    local callback = function()
+        local apply = function()
+            if state.progressionStore == nil
+                or state.progressionStore.enabled ~= true then
+                log(
+                    "ECONOMY_WAR_LIVE_TEST_BLOCKED reason=progression-sidecar-not-ready mutations=0"
+                )
+                return
+            end
+            local outcome = state.factionEconomyWarLiveTest:advance()
+            local snapshot = outcome.snapshot
+                or state.factionEconomyWarLiveTest:status().snapshot
+                or {}
+            local native = outcome.nativeRefresh or {}
+            log(string.format(
+                "ECONOMY_WAR_LIVE_TEST_STEP run=%s ok=%s reason=%s phase=%s step=%s quantity=%s band=%s direction=%s sellPrice=%s stock=%s procurementPrice=%s procurementQuota=%s conflict=%s supplier=%s ledgerRevision=%s merchantActive=%s merchant=%s sameMerchant=%s nativeOk=%s nativeReason=%s persistence=%s restartRequired=%s story=false palworldSaveWrites=0",
+                tostring(qa.runId),
+                tostring(outcome.ok),
+                tostring(outcome.reason),
+                tostring(snapshot.phase or "none"),
+                tostring(outcome.stepCount or "none"),
+                tostring(snapshot.quantity or "none"),
+                tostring(snapshot.supplyBand or "none"),
+                tostring(snapshot.direction or "none"),
+                tostring(snapshot.sellPrice or "none"),
+                tostring(snapshot.stock or "none"),
+                tostring(snapshot.procurementPrice or "none"),
+                tostring(snapshot.procurementQuota or "none"),
+                tostring(snapshot.conflictStatus or "none"),
+                tostring(snapshot.supplierFactionId or "none"),
+                tostring(snapshot.resourceLedgerRevision or "none"),
+                tostring(snapshot.merchantActiveCount or "none"),
+                tostring(snapshot.merchantActorIdentity or "none"),
+                tostring(native.sameMerchantActor),
+                tostring(native.ok),
+                tostring(native.reason or "none"),
+                tostring(snapshot.persistenceConfirmed == true),
+                tostring(outcome.restartRequired == true)
+            ))
+        end
+        if type(ExecuteInGameThread) == "function" then
+            ExecuteInGameThread(apply)
+        else
+            apply()
+        end
+    end
+    state.callbacks.economyWarLiveTest = callback
+    RegisterKeyBind(
+        Key[qa.key],
+        { ModifierKey.CONTROL },
+        callback
+    )
+    local status = state.factionEconomyWarLiveTest:status()
+    log(string.format(
+        "ECONOMY_WAR_LIVE_TEST_READY key=Ctrl+%s run=%s phase=%s faction=%s resource=%s product=%s nativeMerchantRequired=%s restartGate=true story=false palworldSaveWrites=0",
+        qa.key,
+        qa.runId,
+        status.phase,
+        qa.factionId,
+        qa.resourceId,
+        qa.productItemId,
+        tostring(qa.nativeMerchantRequired == true)
+    ))
+end
+
 local function begin_unique_pal_native_delivery_probe(config, state)
     local probe_config = config.uniquePalNativeDeliveryProbe
     local probe = state.uniquePalNativeDeliveryProbe
@@ -4908,6 +4992,8 @@ function Runtime.start(config, registry, policy)
     assert(type(config.factionCommerce.nativeCharacterAdapter.merchantDefaultActionClassPath) == "string" and config.factionCommerce.nativeCharacterAdapter.merchantDefaultActionClassPath ~= "", "merchant salesperson action class is required")
     assert(type(config.factionCommerce.economyMerchantLiveTest) == "table", "economy merchant live-test configuration is required")
     assert(type(config.factionCommerce.economyMerchantLiveTest.enabled) == "boolean", "economy merchant live-test flag is required")
+    assert(type(config.factionCommerce.economyWarLiveTest) == "table", "economy-war live-test configuration is required")
+    assert(type(config.factionCommerce.economyWarLiveTest.enabled) == "boolean", "economy-war live-test flag is required")
     assert(type(config.factionCommerce.commerceWindowLiveTest) == "table", "commerce window live-test configuration is required")
     assert(type(config.factionCommerce.commerceWindowLiveTest.enabled) == "boolean", "commerce window live-test flag is required")
     assert(type(config.factionCommerce.hostileCommerceLiveTest) == "table", "hostile commerce live-test configuration is required")
@@ -5269,10 +5355,34 @@ function Runtime.start(config, registry, policy)
         state.factionConsequenceNativeBinding:start()
     _G.PWFT_FACTION_CONSEQUENCE_NATIVE_BINDING_V1 =
         state.factionConsequenceNativeBinding
+    local function on_resource_ledger_changed(
+        faction_id,
+        event
+    )
+        on_faction_state_changed(faction_id, event, nil)
+        local merchant_runtime =
+            state.factionEconomyMerchantRuntime
+        if merchant_runtime ~= nil
+            and type(merchant_runtime.refresh_dynamic_market)
+                == "function" then
+            local refreshed = merchant_runtime
+                :refresh_dynamic_market(faction_id)
+            log(string.format(
+                "FACTION_DYNAMIC_MARKET_RESOURCE_REFRESH faction=%s event=%s operation=%s ok=%s reason=%s revision=%s active=%s",
+                tostring(faction_id),
+                tostring(event and event.type or "unknown"),
+                tostring(event and event.operationId or "none"),
+                tostring(refreshed.ok),
+                tostring(refreshed.reason),
+                tostring(refreshed.resourceLedgerRevision or "none"),
+                tostring(refreshed.active == true)
+            ))
+        end
+    end
     state.factionResourceLedger = FactionResourceLedger.create(
         state.factionProgression,
         registry.economy,
-        { onChange = on_faction_state_changed }
+        { onChange = on_resource_ledger_changed }
     )
     state.factionEconomyWar = FactionEconomyWar.create(
         state.factionProgression,
@@ -5785,8 +5895,12 @@ function Runtime.start(config, registry, policy)
     state.factionJoinNativeStartError = join_native_error
     _G.PWFT_FACTION_JOIN_NATIVE_ROUTER_V1 =
         state.factionJoinNativeRouter
-    state.factionEconomy = FactionEconomy.create(
+    state.factionEconomyStatic = FactionEconomy.create(
         registry.economy
+    )
+    state.factionEconomy = FactionDynamicEconomy.create(
+        state.factionEconomyStatic,
+        state.factionResourceLedger
     )
     state.factionEconomyShops =
         FactionEconomyShopCatalog.create(
@@ -6039,6 +6153,45 @@ function Runtime.start(config, registry, policy)
                         .nativeEconomyMerchantSpawnEnabled,
             }
         )
+    state.factionEconomyWarLiveTest = nil
+    if config.factionCommerce.economyWarLiveTest.enabled == true then
+        state.factionEconomyWarLiveTest =
+            FactionEconomyWarLiveTest.create(
+                state.factionProgression,
+                state.factionResourceLedger,
+                state.factionEconomy,
+                state.factionEconomyWar,
+                state.factionEconomyMerchantRuntime,
+                {
+                    runId = config.factionCommerce
+                        .economyWarLiveTest.runId,
+                    factionId = config.factionCommerce
+                        .economyWarLiveTest.factionId,
+                    resourceId = config.factionCommerce
+                        .economyWarLiveTest.resourceId,
+                    productItemId = config.factionCommerce
+                        .economyWarLiveTest.productItemId,
+                    initialQuantity = config.factionCommerce
+                        .economyWarLiveTest.initialQuantity,
+                    firstReduction = config.factionCommerce
+                        .economyWarLiveTest.firstReduction,
+                    secondReduction = config.factionCommerce
+                        .economyWarLiveTest.secondReduction,
+                    nativeMerchantRequired = config.factionCommerce
+                        .economyWarLiveTest.nativeMerchantRequired,
+                    persist = function(snapshot)
+                        if state.progressionStore == nil
+                            or state.progressionStore.enabled ~= true then
+                            return {
+                                ok = false,
+                                reason = "progression-sidecar-not-ready",
+                            }
+                        end
+                        return state.progressionStore:save(snapshot)
+                    end,
+                }
+            )
+    end
     state.factionEconomyMerchantPresence =
         FactionEconomyMerchantPresence.create(
             state.factionEconomyMerchantRuntime,
@@ -6147,6 +6300,8 @@ function Runtime.start(config, registry, policy)
     end
     _G.PWFT_COMMERCE_API_V1 = state.factionCommerce
     _G.PWFT_ECONOMY_API_V1 = state.factionEconomy
+    _G.PWFT_FACTION_DYNAMIC_ECONOMY_V1 =
+        state.factionEconomy
     _G.PWFT_ECONOMY_SHOP_API_V1 =
         state.factionEconomyShops
     _G.PWFT_COMMERCE_BRIDGE_V1 = state.commerceBridge
@@ -6763,6 +6918,7 @@ function Runtime.start(config, registry, policy)
     register_rayne_relation_live_test(config, policy, state)
     register_economy_merchant_interaction_router(state)
     register_economy_merchant_live_test(config, state)
+    register_economy_war_live_test(config, state)
     register_commerce_window_live_test(config, state)
     register_hostile_commerce_live_test(config, state)
     register_native_map_keybinds(config, registry, policy, state)

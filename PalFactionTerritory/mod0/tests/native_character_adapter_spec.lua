@@ -293,6 +293,103 @@ assert(merchant.BP_InteractableSphere.indicatorBound == true)
 assert(merchant.setActiveInteractCount == 1)
 assert(merchant.interactActive == true)
 
+-- Build-24575825 dynamic economy route: mutate only audited products in the
+-- transient PalItemShop. Sell lines receive exact price/stock; products that
+-- became procurement requests remain visible as sold out so the native Sell
+-- tab and confirmed replication bridge can accept them from the player.
+local function dynamic_product(item_id, initial_price, initial_stock)
+    local giver = valid_object(
+        "PalShopProductGiver_StaticItem " .. item_id
+    )
+    giver.ProductStaticItemID = "FName:" .. item_id
+    giver.OverridePrice = initial_price
+    giver.StockNum = initial_stock
+    giver.MaxStockNum = initial_stock
+    giver.bIsInfinityStockFlag = true
+    giver.ProductCreateData = {
+        ItemShopCreateData = {
+            OverridePrice = initial_price,
+            Stock = initial_stock,
+        },
+    }
+    function giver:OnRep_StockNum()
+        self.stockRepCount = (self.stockRepCount or 0) + 1
+    end
+    function giver:OnRep_MaxStockNum()
+        self.maxStockRepCount =
+            (self.maxStockRepCount or 0) + 1
+    end
+    local product = valid_object("PalShopProductBase " .. item_id)
+    product.MyProductGiver = giver
+    function product:OnUpdateProductStock(stock)
+        self.updatedStock = stock
+    end
+    function product:OnUpdateProductMaxStock(stock)
+        self.updatedMaxStock = stock
+    end
+    return product, giver
+end
+
+local copper_product, copper_giver =
+    dynamic_product("CopperIngot", 240, 66)
+local iron_product, iron_giver =
+    dynamic_product("IronIngot", 720, 12)
+local unrelated_product, unrelated_giver =
+    dynamic_product("PalSphere", 120, 99)
+local dynamic_shop = valid_object("PalItemShop DynamicTest")
+dynamic_shop.ProductArray = {
+    copper_product,
+    iron_product,
+    unrelated_product,
+}
+function dynamic_shop.ProductArray:GetArrayNum()
+    return 3
+end
+function dynamic_shop:OnRep_ProductArray()
+    self.productArrayRepCount =
+        (self.productArrayRepCount or 0) + 1
+end
+vendor.MyItemShop = dynamic_shop
+local dynamic_ok, dynamic_reason, dynamic_detail =
+    adapter:apply_dynamic_item_shop_market(merchant, {
+        factionId = "pwft.faction.rayne_syndicate",
+        salesChannel = "ItemShop",
+        dynamicMarketEnabled = true,
+        resourceLedgerRevision = 2,
+        marketUniverseItemIds = {
+            "CopperIngot",
+            "IronIngot",
+        },
+        products = {
+            { itemId = "CopperIngot", price = 280, stock = 25 },
+        },
+        requested = {
+            { itemId = "IronIngot", targetPrice = 860, quota = 20 },
+        },
+    })
+assert(dynamic_ok, dynamic_reason)
+assert(dynamic_reason == "dynamic-item-shop-applied")
+assert(dynamic_detail.inspectedCount == 3)
+assert(dynamic_detail.matchedCount == 2)
+assert(dynamic_detail.changedCount == 2)
+assert(dynamic_detail.sellLineCount == 1)
+assert(dynamic_detail.procurementSoldOutLineCount == 1)
+assert(copper_giver.OverridePrice == 280)
+assert(copper_giver.StockNum == 25)
+assert(copper_giver.MaxStockNum == 25)
+assert(copper_giver.bIsInfinityStockFlag == false)
+assert(copper_giver.ProductCreateData.ItemShopCreateData.OverridePrice == 280)
+assert(copper_giver.ProductCreateData.ItemShopCreateData.Stock == 25)
+assert(copper_product.updatedStock == 25)
+assert(copper_product.updatedMaxStock == 25)
+assert(iron_giver.OverridePrice == 860)
+assert(iron_giver.StockNum == 0 and iron_giver.MaxStockNum == 0)
+assert(iron_product.updatedStock == 0)
+assert(unrelated_giver.OverridePrice == 120)
+assert(unrelated_giver.StockNum == 99)
+assert(dynamic_shop.productArrayRepCount == 1)
+assert(adapter.capabilities.itemShopDynamicProductMutationRoute)
+
 -- Re-entry must reactivate the route without rebinding the Blueprint
 -- OnTriggerInteract delegate or reinitialising the interaction component.
 local interaction_reentry_ok, interaction_reentry_error =

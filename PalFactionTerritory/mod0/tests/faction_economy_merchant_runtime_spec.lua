@@ -6,6 +6,10 @@ package.path = table.concat({
 local Registry = require("pwft.registry")
 local FactionApi = require("pwft.faction_api")
 local FactionEconomy = require("pwft.faction_economy")
+local FactionDynamicEconomy =
+    require("pwft.faction_dynamic_economy")
+local FactionResourceLedger =
+    require("pwft.faction_resource_ledger")
 local FactionEconomyShopCatalog =
     require("pwft.faction_economy_shop_catalog")
 local FactionEconomyMerchantRuntime =
@@ -206,6 +210,109 @@ assert(#deactivated.removedFactionIds == 7)
 assert(#despawned == 7)
 assert(#unregistered == 7)
 assert(runtime:status().activeCount == 0)
+
+-- Resource-ledger events refresh the already-active counter in place. The
+-- merchant actor is never duplicated; only its transient ProductArray plan
+-- changes from established sale -> limited sale -> procurement request.
+local dynamic_progression = FactionProgression.create(
+    Registry.progression
+)
+local dynamic_ledger = FactionResourceLedger.create(
+    dynamic_progression,
+    Registry.economy
+)
+local dynamic_economy = FactionDynamicEconomy.create(
+    economy,
+    dynamic_ledger
+)
+local dynamic_shops = FactionEconomyShopCatalog.create(
+    active_contract,
+    dynamic_economy
+)
+local dynamic_spawn_count = 0
+local dynamic_apply_plans = {}
+local dynamic_adapter = {
+    spawn_merchant = function(_, plan)
+        dynamic_spawn_count = dynamic_spawn_count + 1
+        return "dynamic-actor:" .. plan.runtimeId
+    end,
+    refresh_merchant_shop = function()
+        return true, "network-shop-rebound"
+    end,
+    apply_dynamic_item_shop_market = function(_, _, plan)
+        table.insert(dynamic_apply_plans, copy(plan))
+        return true, "dynamic-item-shop-applied", {
+            changedCount = 1,
+        }
+    end,
+    despawn = function()
+        return true
+    end,
+}
+local dynamic_runtime = FactionEconomyMerchantRuntime.create(
+    dynamic_shops,
+    Registry.commerce,
+    api,
+    bridge,
+    dynamic_adapter,
+    { activationAuthorized = true }
+)
+local dynamic_active = dynamic_runtime:activate_faction(
+    "pwft.faction.rayne_syndicate",
+    root,
+    rotation
+)
+assert(dynamic_active.ok)
+assert(dynamic_spawn_count == 1)
+assert(dynamic_runtime:status().dynamicMarketEnabled == true)
+
+assert(dynamic_ledger:apply_event({
+    operationId = "merchant-runtime.consume-metal.1",
+    type = "consumption",
+    factionId = "pwft.faction.rayne_syndicate",
+    resourceId = "metal_ore",
+    amount = 100,
+}).ok)
+local limited_refresh = dynamic_runtime:refresh_dynamic_market(
+    "pwft.faction.rayne_syndicate"
+)
+assert(limited_refresh.ok)
+assert(limited_refresh.resourceLedgerRevision == 1)
+assert(dynamic_spawn_count == 1)
+local limited_plan = dynamic_apply_plans[#dynamic_apply_plans]
+local limited_copper = nil
+for _, product in ipairs(limited_plan.products) do
+    if product.itemId == "CopperIngot" then
+        limited_copper = product
+    end
+end
+assert(limited_copper ~= nil)
+assert(limited_copper.price == 280)
+assert(limited_copper.stock == 25)
+
+assert(dynamic_ledger:apply_event({
+    operationId = "merchant-runtime.consume-metal.2",
+    type = "loss",
+    factionId = "pwft.faction.rayne_syndicate",
+    resourceId = "metal_ore",
+    amount = 1,
+}).ok)
+local procurement_refresh = dynamic_runtime:refresh_dynamic_market(
+    "pwft.faction.rayne_syndicate"
+)
+assert(procurement_refresh.ok)
+assert(procurement_refresh.resourceLedgerRevision == 2)
+local procurement_plan = dynamic_apply_plans[#dynamic_apply_plans]
+local requested_copper = nil
+for _, request in ipairs(procurement_plan.requested) do
+    if request.itemId == "CopperIngot" then
+        requested_copper = request
+    end
+end
+assert(requested_copper ~= nil)
+assert(requested_copper.targetPrice == 290)
+assert(dynamic_spawn_count == 1)
+assert(dynamic_runtime:status().dynamicMarketRefreshCount == 2)
 
 local rollback_spawn_count = 0
 local rollback_despawned = {}
