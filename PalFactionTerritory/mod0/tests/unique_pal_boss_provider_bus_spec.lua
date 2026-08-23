@@ -157,6 +157,7 @@ local function handler(payload, context)
     }
 end
 assert(bus:register_provider(provider, handler).ok)
+assert(bus:status().fullyCapableProviderCount == 1)
 
 local balance = {
     profileId = "raid-slab",

@@ -957,13 +957,28 @@ end
 
 function UniquePalBossProviderBus:status()
     local provider_count, handler_count, binding_count = 0, 0, 0
-    for _ in pairs(self.providers) do provider_count = provider_count + 1 end
+    local fully_capable_provider_count = 0
+    for provider_id, provider in pairs(self.providers) do
+        provider_count = provider_count + 1
+        local complete = provider.enabled == true
+            and type(self.handlers[provider_id]) == "function"
+        for delivery_kind in pairs(DELIVERY_KINDS) do
+            if provider.deliveryKinds[delivery_kind] ~= true then
+                complete = false
+            end
+        end
+        if complete then
+            fully_capable_provider_count =
+                fully_capable_provider_count + 1
+        end
+    end
     for _ in pairs(self.handlers) do handler_count = handler_count + 1 end
     for _ in pairs(self.bindings) do binding_count = binding_count + 1 end
     local applied, pending, cancelled = delivery_counts(self)
     return {
         apiVersion = self.version,
         providerCount = provider_count,
+        fullyCapableProviderCount = fully_capable_provider_count,
         activeProviderHandlerCount = handler_count,
         activeBindingCount = binding_count,
         appliedDeliveryCount = applied,

@@ -201,6 +201,7 @@ local function handler(payload, context)
     }
 end
 assert(bus:register_provider(provider, handler).ok)
+assert(bus:status().fullyCapableProviderCount == 1)
 
 local function target_binding(target_id, city_id, faction_id, suffix)
     return {
@@ -286,6 +287,7 @@ assert(bus:bind_target(unsafe_binding).reason
     == "invalid-unique-pal-world-effect-binding")
 assert(bus:bind_target(rayne_binding).ok)
 assert(bus:bind_target(pidf_binding).ok)
+assert(bus:status().fullyOperationalTargetBindingCount == 2)
 
 local generation = bus:status().worldGeneration
 local background = campaign:declare_destruction_war(

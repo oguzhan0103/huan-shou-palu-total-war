@@ -233,6 +233,8 @@ assert(_G.PWFT_STRATEGIC_WORLD_API_V1 == state.strategicWorld)
 assert(_G.PWFT_ENDING_API_V1 == state.endingRuntime)
 assert(_G.PWFT_STRATEGIC_WORLD_NATIVE_BUS_V1
     == state.strategicWorldNativeBus)
+assert(_G.PWFT_STRATEGIC_WORLD_READINESS_V1
+    == state.strategicWorldReadiness)
 assert(_G.PWFT_ENDING_EFFECT_PROVIDER_BUS_V1
     == state.endingEffectProviderBus)
 assert(_G.PWFT_FACTION_RESOURCE_LEDGER_V1
@@ -243,6 +245,12 @@ assert(state.factionResourceLedger:status().factionCount == 7)
 assert(state.factionResourceLedger:status().resourceCount == 8)
 assert(state.factionEconomyWar:status().conflictCount == 0)
 assert(state.strategicWorldNativeBus:status().bindingCount == 0)
+local b7_readiness = state.strategicWorldReadiness:status()
+assert(b7_readiness.ok == false)
+assert(b7_readiness.phase == "content-key-required")
+assert(b7_readiness.liveEvidenceRequired == true)
+assert(b7_readiness.liveAccepted == false)
+assert(b7_readiness.PalworldSaveMutation == false)
 assert(state.endingEffectProviderBus:status().modelCommitAuthority == false)
 assert(state.rewardPolicy:status().capabilities.modelAuthority == false)
 assert(type(state.factionProgression.state.factionResourceLedger) == "table")

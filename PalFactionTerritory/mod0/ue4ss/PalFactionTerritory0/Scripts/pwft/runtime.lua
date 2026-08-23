@@ -84,6 +84,8 @@ local SettlementRaid = require("pwft.settlement_raid")
 local StrategicWorld = require("pwft.strategic_world")
 local StrategicWorldNativeBus =
     require("pwft.strategic_world_native_bus")
+local StrategicWorldReadiness =
+    require("pwft.strategic_world_readiness")
 local UniquePalCampaign = require("pwft.unique_pal_campaign")
 local UniquePalBossProviderBus =
     require("pwft.unique_pal_boss_provider_bus")
@@ -4894,6 +4896,22 @@ local function register_runtime_probes(config, registry, policy, state)
                     tonumber(reactivated.failedCount) or 0
                 ))
             end
+            if state.strategicWorldReadiness ~= nil then
+                local readiness = state.strategicWorldReadiness:evaluate(
+                    "world-reactivated:g"
+                        .. tostring(state.nativeWorldGeneration)
+                )
+                log(string.format(
+                    "B7_STRATEGIC_WORLD_READINESS ready=%s phase=%s passed=%d blocked=%d contentBlocked=%d runtimeBlocked=%d generation=%d liveEvidenceRequired=true liveAccepted=false saveWrites=false",
+                    tostring(readiness.readyForLiveAcceptance == true),
+                    tostring(readiness.phase),
+                    tonumber(readiness.passedCount) or 0,
+                    tonumber(readiness.blockedCount) or 0,
+                    tonumber(readiness.contentBlockedCount) or 0,
+                    tonumber(readiness.runtimeBlockedCount) or 0,
+                    tonumber(state.nativeWorldGeneration) or 0
+                ))
+            end
             if state.settlementRaid ~= nil then
                 state.settlementRaid:on_world_loaded("load-map-post")
             end
@@ -5097,6 +5115,9 @@ function Runtime.start(config, registry, policy)
                 or nil,
             strategicWorldNativeBus = state.strategicWorldNativeBus
                     and state.strategicWorldNativeBus:status()
+                or nil,
+            strategicWorldReadiness = state.strategicWorldReadiness
+                    and state.strategicWorldReadiness:status()
                 or nil,
             uniquePalCampaign = state.uniquePalCampaign
                     and state.uniquePalCampaign:status()
@@ -5775,6 +5796,34 @@ function Runtime.start(config, registry, policy)
         state.contentModuleLoader:load()
     _G.PWFT_CONTENT_MODULE_LOADER_V1 =
         state.contentModuleLoader
+    state.strategicWorldReadiness = StrategicWorldReadiness.create({
+        contentModuleLoader = state.contentModuleLoader,
+        strategicWorld = state.strategicWorld,
+        endingRuntime = state.endingRuntime,
+        strategicWorldNativeBus = state.strategicWorldNativeBus,
+        uniquePalBossProviderBus = state.uniquePalBossProviderBus,
+        uniquePalWorldEffectBus = state.uniquePalWorldEffectBus,
+        uniquePalNativeDeliveryBridge =
+            state.uniquePalNativeDeliveryBridge,
+        uniquePalNativeDeliveryProduction =
+            state.uniquePalNativeDeliveryProduction,
+        factionNpcAttitudeBus = state.factionNpcAttitudeBus,
+        endingEffectProviderBus = state.endingEffectProviderBus,
+    })
+    _G.PWFT_STRATEGIC_WORLD_READINESS_V1 =
+        state.strategicWorldReadiness
+    local b7_readiness = state.strategicWorldReadiness:evaluate(
+        "content-modules-loaded"
+    )
+    log(string.format(
+        "B7_STRATEGIC_WORLD_READINESS ready=%s phase=%s passed=%d blocked=%d contentBlocked=%d runtimeBlocked=%d liveEvidenceRequired=true liveAccepted=false saveWrites=false",
+        tostring(b7_readiness.readyForLiveAcceptance == true),
+        tostring(b7_readiness.phase),
+        tonumber(b7_readiness.passedCount) or 0,
+        tonumber(b7_readiness.blockedCount) or 0,
+        tonumber(b7_readiness.contentBlockedCount) or 0,
+        tonumber(b7_readiness.runtimeBlockedCount) or 0
+    ))
     for _, source in ipairs(
         state.palDiscourseRuntime:export_native_raid_sources()
     ) do

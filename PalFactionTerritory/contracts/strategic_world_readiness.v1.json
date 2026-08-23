@@ -1,0 +1,98 @@
+{
+  "schemaVersion": "1.0.0",
+  "apiVersion": "1.0.0",
+  "api": "PWFT_STRATEGIC_WORLD_READINESS_V1",
+  "workPackage": "B7",
+  "storyContentIncluded": false,
+  "phases": [
+    "content-key-required",
+    "native-bindings-required",
+    "ready-for-b7-live-acceptance"
+  ],
+  "requiredChecks": [
+    {
+      "id": "content-modules-activated",
+      "owner": "content-author"
+    },
+    {
+      "id": "strategic-content-defined",
+      "owner": "content-author"
+    },
+    {
+      "id": "ending-content-defined",
+      "owner": "content-author"
+    },
+    {
+      "id": "strategic-native-provider-bound",
+      "owner": "runtime-integration"
+    },
+    {
+      "id": "unique-pal-boss-provider-bound",
+      "owner": "runtime-integration"
+    },
+    {
+      "id": "unique-pal-world-effect-provider-bound",
+      "owner": "runtime-integration"
+    },
+    {
+      "id": "unique-pal-native-delivery-bound",
+      "owner": "runtime-integration"
+    },
+    {
+      "id": "faction-npc-attitude-provider-bound",
+      "owner": "runtime-integration"
+    },
+    {
+      "id": "ending-effect-provider-bound",
+      "owner": "runtime-integration"
+    }
+  ],
+  "providerCompleteness": {
+    "strategicNativeEvents": [
+      "unique-pal-captured",
+      "city-captured",
+      "boss-damage",
+      "boss-death",
+      "city-loaded"
+    ],
+    "uniquePalBossDeliveries": [
+      "announce",
+      "spawn",
+      "open",
+      "close",
+      "cooldown"
+    ],
+    "uniquePalWorldDeliveries": [
+      "war-notice",
+      "player-defense-request",
+      "world-spawn-suppression",
+      "loaded-actor-cleanup",
+      "empty-city",
+      "merchant-filter",
+      "ransom-offer",
+      "pal-delivery"
+    ],
+    "endingEffects": [
+      "set_title",
+      "set_world_disposition",
+      "set_faction_disposition",
+      "city_transition"
+    ]
+  },
+  "acceptanceBoundary": {
+    "readinessPassIsLiveAcceptance": false,
+    "liveEvidenceRequired": true,
+    "userAcceptanceClaimed": false,
+    "exactActorAndClassBindingsRequired": true,
+    "broadActorScanAllowed": false,
+    "PalworldSaveMutation": false
+  },
+  "baseMechanicsOnlyExpectation": {
+    "configuredContentModules": 0,
+    "phase": "content-key-required",
+    "requiredCheckCount": 9,
+    "contentBlockedCount": 3,
+    "runtimeBlockedCount": 6,
+    "readyForLiveAcceptance": false
+  }
+}

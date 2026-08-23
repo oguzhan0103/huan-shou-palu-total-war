@@ -634,7 +634,21 @@ end
 
 function EndingEffectProviderBus:status()
     local provider_count, commit_count, replay_count, pending_count = 0, 0, 0, 0
-    for _ in pairs(self.providers) do provider_count = provider_count + 1 end
+    local fully_capable_provider_count = 0
+    for provider_id, provider in pairs(self.providers) do
+        provider_count = provider_count + 1
+        local complete = provider.enabled == true
+            and type(self.handlers[provider_id]) == "function"
+        for effect_kind in pairs(OUTPUT_KINDS) do
+            if provider.effectKinds[effect_kind] ~= true then
+                complete = false
+            end
+        end
+        if complete then
+            fully_capable_provider_count =
+                fully_capable_provider_count + 1
+        end
+    end
     for _, scope in pairs(self.commits) do
         commit_count = commit_count + 1
         local _, pending = delivery_status(self, scope)
@@ -648,6 +662,7 @@ function EndingEffectProviderBus:status()
     return {
         apiVersion = self.version,
         providerCount = provider_count,
+        fullyCapableProviderCount = fully_capable_provider_count,
         activeProviderHandlerCount = (function()
             local count = 0
             for _ in pairs(self.handlers) do count = count + 1 end

@@ -112,6 +112,7 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "progression_store.lua",
         SCRIPTS_ROOT / "pwft" / "quest_runtime.lua",
         SCRIPTS_ROOT / "pwft" / "strategic_world.lua",
+        SCRIPTS_ROOT / "pwft" / "strategic_world_readiness.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_campaign.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_boss_provider_bus.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_world_effect_bus.lua",
@@ -161,6 +162,7 @@ def main() -> int:
         PROJECT_ROOT / "mod0" / "tests" / "localization_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "quest_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "strategic_world_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "strategic_world_readiness_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_campaign_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_boss_provider_bus_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_world_effect_bus_spec.lua",
@@ -201,6 +203,7 @@ def main() -> int:
         PROJECT_ROOT / "contracts" / "content_pack.v1.json",
         PROJECT_ROOT / "contracts" / "content_bundle.v1.json",
         PROJECT_ROOT / "contracts" / "strategic_world.v1.json",
+        PROJECT_ROOT / "contracts" / "strategic_world_readiness.v1.json",
         PROJECT_ROOT / "contracts" / "unique_pal_campaign.v1.json",
         PROJECT_ROOT / "contracts" / "unique_pal_boss_provider.v1.json",
         PROJECT_ROOT / "contracts" / "unique_pal_world_effects.v1.json",
@@ -398,6 +401,27 @@ def main() -> int:
     )
     factions = json.loads(
         (PROJECT_ROOT / "contracts" / "factions.v1.json").read_text(encoding="utf-8")
+    )
+    strategic_readiness = json.loads(
+        (PROJECT_ROOT / "contracts" / "strategic_world_readiness.v1.json")
+        .read_text(encoding="utf-8")
+    )
+    require(
+        strategic_readiness["api"] == "PWFT_STRATEGIC_WORLD_READINESS_V1",
+        "B7 readiness contract API drifted",
+    )
+    require(
+        len(strategic_readiness["requiredChecks"]) == 9,
+        "B7 readiness contract check count drifted",
+    )
+    require(
+        strategic_readiness["acceptanceBoundary"]["readinessPassIsLiveAcceptance"]
+        is False
+        and strategic_readiness["acceptanceBoundary"]["liveEvidenceRequired"]
+        is True
+        and strategic_readiness["acceptanceBoundary"]["PalworldSaveMutation"]
+        is False,
+        "B7 readiness contract evidence or save boundary drifted",
     )
     progression = json.loads(
         (PROJECT_ROOT / "contracts" / "faction_progression.v1.json").read_text(encoding="utf-8")
@@ -1091,6 +1115,9 @@ def main() -> int:
     unique_pal_boss_provider_text = (
         SCRIPTS_ROOT / "pwft" / "unique_pal_boss_provider_bus.lua"
     ).read_text(encoding="utf-8")
+    strategic_world_readiness_text = (
+        SCRIPTS_ROOT / "pwft" / "strategic_world_readiness.lua"
+    ).read_text(encoding="utf-8")
     unique_pal_world_effect_text = (
         SCRIPTS_ROOT / "pwft" / "unique_pal_world_effect_bus.lua"
     ).read_text(encoding="utf-8")
@@ -1458,6 +1485,32 @@ def main() -> int:
         and "PWFT_UNIQUE_PAL_BOSS_PROVIDER_BUS_V1" in runtime_text
         and "uniquePalBossProviderBus:unbind_world" in runtime_text,
         "P1 unique-Pal Boss provider runtime lifecycle is incomplete",
+    )
+    require(
+        "StrategicWorldReadiness.create" in runtime_text
+        and "PWFT_STRATEGIC_WORLD_READINESS_V1" in runtime_text
+        and "B7_STRATEGIC_WORLD_READINESS" in runtime_text
+        and "strategicWorldReadiness:status()" in runtime_text,
+        "B7 strategic-world readiness lifecycle is incomplete",
+    )
+    require(
+        "content-key-required" in strategic_world_readiness_text
+        and "native-bindings-required" in strategic_world_readiness_text
+        and "ready-for-b7-live-acceptance"
+        in strategic_world_readiness_text
+        and "liveEvidenceRequired = true"
+        in strategic_world_readiness_text
+        and "liveAccepted = false" in strategic_world_readiness_text
+        and "storyContentIncluded = false"
+        in strategic_world_readiness_text
+        and "PalworldSaveMutation = false"
+        in strategic_world_readiness_text
+        and "broadActorScan == false"
+        in strategic_world_readiness_text
+        and "componentStatuses = statuses"
+        not in strategic_world_readiness_text
+        and "io." not in strategic_world_readiness_text,
+        "B7 readiness content, exact-binding, or evidence boundary is incomplete",
     )
     require(
         "verified-unique-pal-boss-binding-required"
