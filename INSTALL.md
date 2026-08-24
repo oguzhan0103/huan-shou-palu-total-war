@@ -1,9 +1,9 @@
 # 《幻兽帕鲁全面战争》安装到游戏说明
 
 如果不确定 Release 中每个附件的用途，请先阅读
-[中文下载文件总说明](./请先看_幻兽帕鲁全面战争_v1.0.4_下载文件说明_玩家安装与开发者指南.md)。
+[v1.0.5 中文下载与卸载说明](./请先看_幻兽帕鲁全面战争_v1.0.5_下载与卸载说明.md)。
 
-适用版本：`v1.0.4`
+适用版本：`v1.0.5`
 
 兼容目标：Windows Steam 版 Palworld Build `24575825`
 
@@ -50,7 +50,7 @@ Palworld/Pal/Binaries/Win64/ue4ss/Mods/
 1. 从 GitHub Release 下载：
 
 ```text
-PalFactionTerritory0-v1.0.4-build24575825-runtime-source.zip
+PalFactionTerritory0-v1.0.5-build24575825-runtime-source.zip
 ```
 
 2. 校验同页提供的 SHA-256。
@@ -141,9 +141,27 @@ Companion/start-companion.cmd
 ue4ss/Mods/PalFactionTerritory0/
 ```
 
-卸载时删除 Mod 自有目录以及由内容作者安装的三个 Mod PAK。不要删除 UE4SS 中其他
-Mod，也不要删除或改写 Palworld 原版 PAK。Mod 的持久状态位于 Mod 自有 `State`
-目录，不直接写入 Palworld 世界存档；需要保留进度时先备份该目录。
+推荐从 v1.0.5 Release 下载：
+
+```text
+PalworldTotalWar-v1.0.5-Quick-Uninstall.zip
+```
+
+解压后双击 `快速卸载_幻兽帕鲁全面战争.cmd`。工具会自动定位游戏目录、列出精确
+删除目标，并等待玩家输入大写 `UNINSTALL`；执行前会把 Mod 自有 `State` 备份到
+`文档/PalFactionTerritory-UninstallBackups/`。默认只删除：
+
+```text
+ue4ss/Mods/PalFactionTerritory0/
+ue4ss/Mods/PalFactionTerritoryQAHarness0/
+Pal/Content/Paks/LogicMods/PalFactionTerritory0.pak
+Pal/Content/Paks/~mods/PalFactionTerritory_FactionEconomyShops_P.pak
+Pal/Content/Paks/~mods/PalFactionTerritory_RayneMerchant_P.pak
+```
+
+工具不会删除 Palworld 存档、Steam 云存档、UE4SS、`dwmapi.dll`、其他 Mod、原版
+PAK 或可选 `PalMultiOtomo0`。需要手工卸载时也只能删除上述本项目目标；不要删除
+或改写 Palworld 原版 PAK。
 
 ## 七、下载者应选择哪个附件
 
@@ -151,6 +169,7 @@ Mod，也不要删除或改写 Palworld 原版 PAK。Mod 的持久状态位于 M
 |---|---|---|
 | `Core-source.zip` | 开发者、内容作者 | 否；是完整机制源码 |
 | `runtime-source.zip` | 已安装 UE4SS 的测试者 | 只能安装 Lua 层；仍缺 Cooked PAK |
+| `Quick-Uninstall.zip` | 已安装本项目、需要快速移除的玩家 | 只卸载本项目并备份 Mod State |
 | `OfficialAddons-source.zip` | 多帕鲁扩展测试者 | 可复制 UE4SS Mod，但当前 Build 复验待完成 |
 | `AIExperimental-source.zip` | 本地模型开发者 | 需自行编译 Rust sidecar |
 
