@@ -455,6 +455,27 @@ assert(rebind_campaign:campaign_status("sample.unique.capture").phase
 assert(stale_campaign_state.campaigns["sample.unique.capture"].phase
     == "scheduled")
 
+-- A sidecar written before the campaign pack existed is valid upgrade input.
+-- Loaded code-owned definitions seed their default StrategicWorld/campaign
+-- records during the same transactional restore instead of blocking startup.
+local legacy_progression = Progression.create(Registry.progression)
+local legacy_snapshot = legacy_progression:export_snapshot()
+local upgrade_progression, upgrade_world, upgrade_campaign = create_runtime()
+local pre_upgrade_campaign_state = upgrade_campaign.state
+local upgraded = upgrade_progression:restore_snapshot(legacy_snapshot)
+assert(upgraded.ok)
+assert(upgrade_campaign.state ~= pre_upgrade_campaign_state)
+assert(upgrade_campaign:campaign_status("sample.unique.opening").phase
+    == "closed")
+assert(upgrade_campaign:campaign_status("sample.unique.guardian").phase
+    == "owned")
+assert(upgrade_world:unique_pal_status("sample.unique.opening").owner.kind
+    == "wild")
+assert(upgrade_world:unique_pal_status("sample.unique.guardian").owner.id
+    == genetics)
+assert(upgrade_campaign:register_pack(campaign_pack).reason
+    == "unique-pal-campaign-pack-already-registered")
+
 -- A player-defense loss (including absence) destroys the target and suppresses
 -- all future faction/merchant spawns. This is isolated from the ransom path.
 local loss_progression, loss_world, loss_campaign = create_runtime()

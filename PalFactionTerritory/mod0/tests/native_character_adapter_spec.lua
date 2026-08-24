@@ -390,6 +390,35 @@ assert(unrelated_giver.StockNum == 99)
 assert(dynamic_shop.productArrayRepCount == 1)
 assert(adapter.capabilities.itemShopDynamicProductMutationRoute)
 
+-- Ransom binding reads UE4SS struct userdata without probing an absent
+-- ToString member.  This metatable models the live wrapper, which raises for
+-- unknown reflected members instead of returning nil.
+dynamic_shop.MyShopID = setmetatable(
+    { A = 1, B = 2, C = 3, D = 4 },
+    { __index = function(_, key) error("unknown Guid member: " .. key) end }
+)
+function dynamic_shop:GetId()
+    return nil, { A = 1, B = 2, C = 3, D = 4 }
+end
+copper_product.MyProductID = setmetatable(
+    { A = 5, B = 6, C = 7, D = 8 },
+    { __index = function(_, key) error("unknown Guid member: " .. key) end }
+)
+function copper_product:GetId()
+    return nil, { A = 5, B = 6, C = 7, D = 8 }
+end
+local ransom_identity, ransom_error =
+    adapter:configure_unique_pal_ransom_product(merchant, {
+        productItemId = "CopperIngot",
+        unitPrice = 100000000,
+        buyQuantity = 1,
+    })
+assert(ransom_identity ~= nil, ransom_error)
+assert(ransom_identity.shopId == "00000001-00000002-00000003-00000004")
+assert(ransom_identity.productId == "00000005-00000006-00000007-00000008")
+assert(copper_giver.OverridePrice == 100000000)
+assert(copper_giver.StockNum == 1 and copper_giver.MaxStockNum == 1)
+
 -- Re-entry must reactivate the route without rebinding the Blueprint
 -- OnTriggerInteract delegate or reinitialising the interaction component.
 local interaction_reentry_ok, interaction_reentry_error =
@@ -898,5 +927,40 @@ assert(boss_route.spawnRequestRoute ==
     "Spawn() proven BossDarkTrader route")
 assert(last_spawner.compatibilitySpawnCount == 1)
 assert(last_spawner.outsideRequestCount == nil)
+
+-- The authoritative network shop must be established before transient
+-- dynamic prices/stock are applied.  Setup can replace PalShopBase.
+local refresh_order = {}
+local original_configure_vendor = adapter._configure_vendor
+local original_request_network_shop_setup =
+    adapter._request_network_shop_setup
+local original_apply_dynamic_item_shop_market =
+    adapter.apply_dynamic_item_shop_market
+adapter._configure_vendor = function()
+    refresh_order[#refresh_order + 1] = "configure-vendor"
+    return true, nil
+end
+adapter._request_network_shop_setup = function()
+    refresh_order[#refresh_order + 1] = "network-shop"
+    return true, "network-shop-ready"
+end
+adapter.apply_dynamic_item_shop_market = function()
+    refresh_order[#refresh_order + 1] = "dynamic-market"
+    return true, "dynamic-item-shop-applied"
+end
+local reordered, reordered_detail = adapter:refresh_merchant_shop(
+    merchant,
+    {
+        shopRowName = "PFT_Economy_Test",
+        dynamicMarketEnabled = true,
+    }
+)
+assert(reordered, reordered_detail)
+assert(table.concat(refresh_order, "|")
+    == "configure-vendor|network-shop|dynamic-market")
+adapter._configure_vendor = original_configure_vendor
+adapter._request_network_shop_setup = original_request_network_shop_setup
+adapter.apply_dynamic_item_shop_market =
+    original_apply_dynamic_item_shop_market
 
 print("PASS inactive native merchant and guard blueprint adapter")

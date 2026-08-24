@@ -1455,6 +1455,20 @@ local function complete_native_merchant_setup(
     if not interaction_ready then
         return false, interaction_reason
     end
+    if instance.sharedState
+            .factionNpcAttitudeNativeProduction ~= nil then
+        local attitude_binding = instance.sharedState
+            .factionNpcAttitudeNativeProduction:bind_actor(
+                "pwft.native.NPC-attitude.rayne-merchant",
+                actor
+            )
+        if not attitude_binding.ok then
+            log(
+                "NPC_ATTITUDE_BIND_DEFERRED reason="
+                    .. tostring(attitude_binding.reason)
+            )
+        end
+    end
 
     if relation ~= "Hostile"
         and instance.sharedState.factionMerchantRuntime ~= nil then
@@ -1801,6 +1815,13 @@ end
 local function destroy_actor(instance, reason)
     -- Invalidate delayed native callbacks before touching any UObject.
     instance.lifecycleGeneration = instance.lifecycleGeneration + 1
+    if instance.sharedState
+            .factionNpcAttitudeNativeProduction ~= nil then
+        instance.sharedState.factionNpcAttitudeNativeProduction
+            :unbind_actor(
+                "pwft.native.NPC-attitude.rayne-merchant"
+            )
+    end
     if instance.sharedState.factionMerchantRuntime ~= nil
         and instance.actor ~= nil then
         instance.sharedState.factionMerchantRuntime

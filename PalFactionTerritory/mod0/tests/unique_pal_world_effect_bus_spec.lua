@@ -397,8 +397,14 @@ assert(world:unique_pal_status(
     "spec.unique-pal.effects.defense"
 ).owner.kind == "player")
 assert(bus:status().pendingDeliveryCount == 1)
-local delivery_retry = bus:retry_pending("faction:" .. pidf)
+local delivery_retry = bus:retry_pending_kind(
+    "pal-delivery",
+    "faction:" .. pidf
+)
 assert(not delivery_retry.ok and delivery_retry.pendingCount == 1)
+assert(delivery_retry.deliveryKind == "pal-delivery")
+assert(delivery_retry.matchedCount == 1)
+assert(delivery_retry.attemptedCount == 1)
 local pal_delivery_id = "unique-pal-world."
     .. payment.callbackId .. ".pal-delivery"
 local pending_pal_delivery = bus:delivery_status(pal_delivery_id)
@@ -407,6 +413,18 @@ assert(pending_pal_delivery.providerRequestId
     == pal_delivery_id .. ":native-pal-delivery")
 assert(pending_pal_delivery.providerIndividualKey
     == pal_delivery_id .. ":individual")
+local delivery_call_count = #deliveries
+local parked_delivery = bus:retry_pending_kind(
+    "pal-delivery",
+    "faction:" .. pidf
+)
+assert(not parked_delivery.ok and parked_delivery.pendingCount == 1)
+assert(parked_delivery.attemptedCount == 0)
+assert(#deliveries == delivery_call_count)
+local unsupported_delivery = bus:retry_pending_kind("spec-unsupported")
+assert(not unsupported_delivery.ok)
+assert(unsupported_delivery.reason
+    == "unsupported-unique-pal-world-delivery-kind")
 local pal_delivery_callback = {
     callbackId = "spec.unique-pal.effects.pal.delivery.confirm.1",
     providerId = provider.providerId,

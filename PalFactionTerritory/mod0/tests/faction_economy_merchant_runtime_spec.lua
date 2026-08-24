@@ -736,6 +736,21 @@ assert(
     market_runtime.nativeItemShopHudParams[near_merchant]
         == routed_parameter
 )
+local holder_filtered = market_runtime:nearest_faction(
+    routed_player,
+    1000,
+    "pwft.faction.free_pal_alliance"
+)
+assert(holder_filtered.ok)
+assert(holder_filtered.factionId == "pwft.faction.free_pal_alliance")
+assert(math.abs(holder_filtered.distance - 890) < 0.001)
+local no_wrong_holder = market_runtime:nearest_faction(
+    routed_player,
+    350,
+    "pwft.faction.free_pal_alliance"
+)
+assert(not no_wrong_holder.ok)
+assert(no_wrong_holder.reason == "no-economy-merchant-in-range")
 local out_of_range = market_runtime:interact_nearest(
     {
         K2_GetActorLocation = function()

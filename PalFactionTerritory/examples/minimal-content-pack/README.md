@@ -12,10 +12,11 @@
 - `unique_pal_campaign.lua`：唯一 Boss 白名单、开放窗口、毁灭目标、NPC 候选势力和高额赎金的纯数据示例；原生 Boss 槽位未验证前保持 `pending`。
 - `ending_routes.lua`：保留、移交、移除三个纯规则路线槽。
 - `content_actions.lua`：任务/选择结果可触发的白名单机制动作；夺取唯一帕鲁、毁城和提交结局等不可逆动作必须声明玩家确认。
-- `leader_guards.lua`：NPC 领主/重要角色及护卫编组骨架；只声明稳定 ID、精确角色类、场景和上限，实际原生角色由白名单 provider 生成。
+- `leader_guards.lua`：NPC 领主/重要角色及护卫编组骨架；只声明稳定 ID、精确角色类、场景和上限。Core 已为七个人类势力提供 `<factionId>.default-guard` 原生护卫原型；内容作者也可通过 `PWFT_NPC_LEADER_GUARD_NATIVE_PRODUCTION_V1:register_archetype(...)` 注册额外原型。真实领主 Actor 出现后必须用同一 API 精确绑定，生产 Provider 才会按编组生成、跟随、进入战斗并整组回收。
+- `reward_policies.lua`：难度倍率、里程碑保底、频道单位数和单次上限；只计算奖励意图，不直接写背包。
 - `pal_discourse.lua`：一个通用帕鲁代表和一棵可完成或放弃的有向无环论道树。
 - `bundle.lua`：可被 Core 原子校验和注册的 `pwft.content-bundle.v1` 整包。
-- `content_module.lua`：游戏内加载入口，只导出 `bundle`。
+- `content_module.lua`：游戏内加载入口，导出 `bundle`，并在受信 `activate(context)` 中把示例奖励频道绑定到 Build 24575825 的原生物品 Provider。
 - `pack.lua`：兼容测试和工具链的一览入口。
 
 ## 作者必须替换的字段
@@ -25,6 +26,7 @@
 3. 将 `speciesId`、人类/帕鲁 `factionId`、城邦归属、信物额度和好感度上限替换为目标内容。引用的核心 ID 必须存在于当前 PWFT registry。
 4. 按需要改写任务阶段图、三条路线的 `conditions`/`effects`、`content_actions.lua`、`leader_guards.lua`、`unique_pal_campaign.lua` 和论道树节点。任务的每个阶段必须可达且存在完成路径；论道树必须无环、全部可达、所有路径终止。没有实机证据时不得把 Boss `bindingStatus` 从 `pending` 改成 `bound`。
 5. 修改已发布定义时必须提升 `contentVersion` 并提供迁移；不得在相同版本下静默改动内容。
+6. 把 `content_module.lua` 中示例 `nativeItemId = "StainlessSteel"` 换成内容包实际奖励，并把 `maximumUnitsPerDelivery` 设为不低于 policy 可能产生的最高单位数。Core 会先把 operation/channel 写入 Mod 侧车，再按精确 `OwnerPlayerUId` 选择库存；主机使用 `AddItem_ServerInternal`，客户端使用 `RequestAddItem_ToServer`，只有 `CountItemNum` 精确增加预期数量才完成。进程中断或读回歧义会进入 `reconciliation-required`，绝不自动再发一份。金币、模型输出和直接 SaveGames 修改均不是支持的奖励频道。
 
 ## 游戏内安装与加载
 

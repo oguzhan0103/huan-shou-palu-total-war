@@ -579,6 +579,44 @@ function UniquePalNativeDeliveryBridge:process_pending(delivery_id)
     return response
 end
 
+function UniquePalNativeDeliveryBridge:process_all_pending()
+    local delivery_ids = {}
+    for delivery_id, record in pairs(self.recordsByDeliveryId) do
+        if record.stage ~= "applied" then
+            delivery_ids[#delivery_ids + 1] = delivery_id
+        end
+    end
+    table.sort(delivery_ids)
+
+    local confirmed, pending, rejected = 0, 0, 0
+    local last_reason = nil
+    for _, delivery_id in ipairs(delivery_ids) do
+        local response = self:process_pending(delivery_id)
+        last_reason = response.reason
+        local record = self.recordsByDeliveryId[delivery_id]
+        if response.ok == true
+            and record ~= nil and record.stage == "applied" then
+            confirmed = confirmed + 1
+        elseif response.retryable == false then
+            rejected = rejected + 1
+        else
+            pending = pending + 1
+        end
+    end
+
+    return result(pending == 0 and rejected == 0,
+        pending == 0 and rejected == 0
+                and "native-pal-delivery-pump-complete"
+            or "native-pal-delivery-pump-pending", {
+            attemptedCount = #delivery_ids,
+            confirmedCount = confirmed,
+            pendingCount = pending,
+            rejectedCount = rejected,
+            retryable = pending > 0,
+            lastDeliveryReason = last_reason,
+        })
+end
+
 function UniquePalNativeDeliveryBridge:unbind_world(reason)
     local record_count, binding_count = 0, 0
     for _, record in pairs(self.recordsByDeliveryId) do

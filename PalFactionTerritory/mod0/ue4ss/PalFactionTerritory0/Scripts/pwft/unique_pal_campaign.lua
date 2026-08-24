@@ -585,23 +585,102 @@ function UniquePalCampaign.create(progression, strategic_world, options)
     return instance
 end
 
+local function initialize_definition_state(instance, definition)
+    local owner = current_owner(instance, definition.id)
+    instance.state.campaigns[definition.id] = {
+        uniquePalId = definition.id,
+        phase = owner_is_wild(owner) and "closed" or "owned",
+        owner = copy(owner),
+        scheduleSequence = 0,
+        eventId = nil,
+        noticeTick = nil,
+        openTick = nil,
+        closeTick = nil,
+        activeWarId = nil,
+        captureCount = 0,
+        timeoutAssignmentCount = 0,
+        ransomCount = 0,
+    }
+    local key = target_key(definition.target)
+    instance.state.targets[key] = {
+        key = key,
+        kind = definition.target.kind,
+        id = definition.target.id,
+        affectedFactionIds = copy(
+            definition.target.affectedFactionIds),
+        status = "active",
+    }
+end
+
+-- Content packs are code-owned definitions while campaign records are
+-- progression-sidecar state.  A legitimate older sidecar therefore may not
+-- contain a pack that was added by a newer mod version.  Restore listeners
+-- must seed that pack's initial records instead of rejecting the whole
+-- sidecar.  Existing packs remain strict: changing a version or definition
+-- still requires an explicit migration.
+local function reconcile_loaded_pack_state(instance)
+    local initialized = 0
+    for content_pack_id, normalized in pairs(instance.packDefinitions) do
+        local existing = instance.state.packs[content_pack_id]
+        if existing == nil then
+            for _, definition in ipairs(normalized.uniquePals) do
+                assert(instance.state.campaigns[definition.id] == nil,
+                    "restored campaign state has an unowned unique Pal record: "
+                        .. definition.id)
+                assert(instance.state.targets[target_key(definition.target)]
+                        == nil,
+                    "restored campaign state has an unowned target record: "
+                        .. target_key(definition.target))
+            end
+            instance.state.packs[content_pack_id] = {
+                contentPackId = content_pack_id,
+                contentVersion = normalized.contentVersion,
+                definition = copy(normalized),
+            }
+            for _, definition in ipairs(normalized.uniquePals) do
+                initialize_definition_state(instance, definition)
+            end
+            initialized = initialized + 1
+        else
+            assert(existing.contentVersion == normalized.contentVersion,
+                "restored campaign pack requires migration: "
+                    .. content_pack_id)
+            if existing.definition ~= nil then
+                assert(deep_equal(existing.definition, normalized),
+                    "restored campaign pack definition mismatch: "
+                        .. content_pack_id)
+            else
+                existing.definition = copy(normalized)
+            end
+            for _, definition in ipairs(normalized.uniquePals) do
+                assert(instance.state.campaigns[definition.id] ~= nil,
+                    "restored state missing unique Pal campaign: "
+                        .. definition.id)
+                assert(instance.state.targets[target_key(definition.target)]
+                        ~= nil,
+                    "restored state missing unique Pal target: "
+                        .. target_key(definition.target))
+            end
+        end
+    end
+    return initialized
+end
+
 function UniquePalCampaign:rebind_progression_state()
-    local called, rebound = pcall(ensure_state, self)
+    local previous_state = self.state
+    local called, rebound = pcall(function()
+        self.state = ensure_state(self)
+        return reconcile_loaded_pack_state(self)
+    end)
     if not called then
         return result(false, "unique-pal-campaign-snapshot-invalid", {
             error = tostring(rebound),
         })
     end
-    self.state = rebound
-    for unique_pal_id in pairs(self.definitions) do
-        if self.state.campaigns[unique_pal_id] == nil then
-            return result(false,
-                "restored-state-missing-unique-pal-campaign", {
-                    uniquePalId = unique_pal_id,
-                })
-        end
-    end
-    return result(true, "unique-pal-campaign-state-rebound")
+    return result(true, "unique-pal-campaign-state-rebound", {
+        stateChanged = previous_state ~= self.state,
+        initializedPackCount = rebound,
+    })
 end
 
 function UniquePalCampaign:register_pack(pack)
@@ -675,29 +754,7 @@ function UniquePalCampaign:register_pack(pack)
         self.speciesIndex[definition.boss.speciesId] = definition.id
         local key = target_key(definition.target)
         self.targetIndex[key] = definition.id
-        local owner = current_owner(self, definition.id)
-        self.state.campaigns[definition.id] = {
-            uniquePalId = definition.id,
-            phase = owner_is_wild(owner) and "closed" or "owned",
-            owner = copy(owner),
-            scheduleSequence = 0,
-            eventId = nil,
-            noticeTick = nil,
-            openTick = nil,
-            closeTick = nil,
-            activeWarId = nil,
-            captureCount = 0,
-            timeoutAssignmentCount = 0,
-            ransomCount = 0,
-        }
-        self.state.targets[key] = {
-            key = key,
-            kind = definition.target.kind,
-            id = definition.target.id,
-            affectedFactionIds = copy(
-                definition.target.affectedFactionIds),
-            status = "active",
-        }
+        initialize_definition_state(self, definition)
     end
     append_history(self, {
         type = "unique-pal-campaign-pack-registered",

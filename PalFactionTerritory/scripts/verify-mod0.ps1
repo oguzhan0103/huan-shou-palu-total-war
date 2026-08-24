@@ -16,6 +16,9 @@ if ($LASTEXITCODE -ne 0) { throw "Mod 0 structural verification failed" }
 $WorkspaceRoot = Split-Path -Parent $ProjectRoot
 & node (Join-Path $WorkspaceRoot "tools\verify-public.mjs")
 if ($LASTEXITCODE -ne 0) { throw "Public Lua verification failed" }
+& powershell -NoLogo -NoProfile -ExecutionPolicy Bypass `
+    -File (Join-Path $ProjectRoot "tools\test_quick_uninstall.ps1")
+if ($LASTEXITCODE -ne 0) { throw "Quick uninstaller safety test failed" }
 return
 
 $LuaFiles = @(
@@ -293,6 +296,72 @@ try {
     $SettlementRaidText = $SettlementRaidOutput -join "`n"
     if ($SettlementRaidExitCode -ne 0 -or $SettlementRaidText -match "(?im)assertion failed|stack traceback:") {
         throw "Lua settlement-raid test failed"
+    }
+
+    $B7BossOutput = & npx.cmd --offline --yes --package=fengari-node-cli@0.1.0 fengari "mod0/tests/unique_pal_boss_native_production_spec.lua" 2>&1
+    $B7BossExitCode = $LASTEXITCODE
+    $B7BossOutput | Write-Output
+    $B7BossText = $B7BossOutput -join "`n"
+    if ($B7BossExitCode -ne 0 -or $B7BossText -match "(?im)assertion failed|stack traceback:") {
+        throw "Lua B7 native unique-Pal Boss production test failed"
+    }
+
+    $B7WorldEffectsOutput = & npx.cmd --offline --yes --package=fengari-node-cli@0.1.0 fengari "mod0/tests/unique_pal_world_effect_native_production_spec.lua" 2>&1
+    $B7WorldEffectsExitCode = $LASTEXITCODE
+    $B7WorldEffectsOutput | Write-Output
+    $B7WorldEffectsText = $B7WorldEffectsOutput -join "`n"
+    if ($B7WorldEffectsExitCode -ne 0 -or $B7WorldEffectsText -match "(?im)assertion failed|stack traceback:") {
+        throw "Lua B7 native unique-Pal world-effect production test failed"
+    }
+
+    $B7StageText = Get-Content -LiteralPath `
+        (Join-Path $Root "scripts\stage-b7-unique-pal-live-test.ps1") `
+        -Raw -Encoding utf8
+    foreach ($Required in @(
+        'automaticSchedulerEnabled = $false',
+        'qaEnabled = $true',
+        'Ctrl+F4',
+        'Ctrl+F6',
+        'Ctrl+F11',
+        'automaticWarEnabled = $false',
+        'Ctrl+F1',
+        'Ctrl+F5',
+        'Ctrl+F7',
+        'broadActorScanAllowed = $false'
+    )) {
+        if (-not $B7StageText.Contains($Required)) {
+            throw "B7 staging contract is missing: $Required"
+        }
+    }
+
+    $A9StageText = Get-Content -LiteralPath `
+        (Join-Path $Root "scripts\stage-a9-reward-live-test.ps1") `
+        -Raw -Encoding utf8
+    $A9RestoreText = Get-Content -LiteralPath `
+        (Join-Path $Root "scripts\restore-a9-reward-live-test-baseline.ps1") `
+        -Raw -Encoding utf8
+    foreach ($Required in @(
+        'Installed A9 source parity drifted before staging',
+        'Press Ctrl+F8 once',
+        'repeatSameKeyTestsIdempotency = $true',
+        'restorationRequired = $true',
+        'Assert-ManifestEqual $SaveManifest',
+        'Assert-ManifestEqual $StateManifest'
+    )) {
+        if (-not $A9StageText.Contains($Required)) {
+            throw "A9 staging contract is missing: $Required"
+        }
+    }
+    foreach ($Required in @(
+        'A9 restore manifest names an unexpected destructive target',
+        'A9 SaveGames snapshot pre-restore',
+        'A9 Mod-State snapshot pre-restore',
+        'changedRunQuarantine',
+        'PASS restored exact A9 SaveGames, Mod State, and formal installed config'
+    )) {
+        if (-not $A9RestoreText.Contains($Required)) {
+            throw "A9 restore contract is missing: $Required"
+        }
     }
 
     $RuntimeOutput = & npx.cmd --offline --yes --package=fengari-node-cli@0.1.0 fengari "mod0/tests/runtime_smoke.lua" 2>&1

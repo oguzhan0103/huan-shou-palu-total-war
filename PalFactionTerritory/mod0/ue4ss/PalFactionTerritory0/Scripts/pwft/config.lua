@@ -61,6 +61,137 @@ return {
         storyContentIncluded = false,
     },
 
+    -- A9 item-reward settlement uses the current Build's reflected
+    -- server-authoritative grant routes.  Every delivery is written to the
+    -- Mod sidecar before mutation and is accepted only after an exact
+    -- OwnerPlayerUId inventory-count readback.  The base registers the
+    -- provider but no reward channels: trusted content modules supply the
+    -- native item IDs and caps, which keeps detailed reward design outside
+    -- the mechanics-only foundation. Currency and direct save-payload writes
+    -- remain unsupported.
+    rewardItemNativeProduction = {
+        enabled = true,
+        buildId = "24575825",
+        objectDumpSha256 =
+            "3e84e8a6936b7d1c33de6cfc034c4a200655a3e762cbc2ec4c6a57516476ec78",
+        currentBuildVerified = true,
+        providerId = "pwft.native.reward-item.production",
+        authoritySource = "pwft.native.reward-item.authority",
+        routeKey =
+            "PalPlayerInventoryData.AddItem_ServerInternal|"
+                .. "PalNetworkPlayerComponent.RequestAddItem_ToServer|"
+                .. "PalPlayerInventoryData.CountItemNum",
+        retryDelayMs = 500,
+        maxVerifyAttempts = 60,
+        storyContentIncluded = false,
+    },
+
+    -- Destructive QA only. A staging script may enable this in the installed
+    -- copy after taking SaveGames and Mod-State snapshots. Press Ctrl+F8 once
+    -- to issue one StainlessSteel reward and a second time to prove the same
+    -- operation does not dispatch again. Formal source stays disabled.
+    rewardItemNativeLiveTest = {
+        enabled = false,
+        key = "F8",
+        requireControlModifier = true,
+        operationId = "pwft.qa.reward-item.20260824.1",
+        contentPackId = "pwft.qa.reward-item",
+        policyId = "pwft.qa.reward-item.boss",
+        channelId = "pwft.qa.reward-item.channel.stainless-steel",
+        providerId = "pwft.native.reward-item.production",
+        nativeItemId = "StainlessSteel",
+        units = 1,
+        storyContentIncluded = false,
+    },
+
+    -- B7 production route for the five user-confirmed unique Pals. One
+    -- logical campaign tick equals one real minute. The ordinary release
+    -- schedule is randomised per Pal; QA controls remain disabled in the
+    -- distributable and may be enabled only for concentrated live testing.
+    uniquePalBossNativeProduction = {
+        enabled = true,
+        buildId = "24575825",
+        providerId = "pwft.native.unique-pal-boss.production",
+        authoritySource = "pwft.native.unique-pal-boss.authority",
+        playerId = "local-player",
+        automaticSchedulerEnabled = true,
+        tickIntervalMs = 60000,
+        spawnResolveDelaysMs = {
+            500,
+            1500,
+            4000,
+            8000,
+        },
+        spawnOffset = {
+            X = 1200,
+            Y = 0,
+            Z = 80,
+        },
+        qa = {
+            enabled = false,
+            requireControlModifier = true,
+            uniquePalId = "pwft.unique.anubis",
+            uniquePalIds = {
+                "pwft.unique.pinkcat",
+                "pwft.unique.anubis",
+                "pwft.unique.weasel_dragon",
+                "pwft.unique.black_metal_dragon",
+                "pwft.unique.ronin",
+            },
+            openKey = "F4",
+            captureKey = "F11",
+            timeoutKey = "F6",
+            cycleKey = "F12",
+            weakenKey = "F9",
+            suppressionProbeKey = "F3",
+            suppressionProbeCharacterId = "BOSS_SheepBall",
+            -- Test-only fallback for automation environments whose injected
+            -- keys are visible to UE but not UE4SS' low-level key hook.
+            -- Formal builds keep this disabled and never poll an external
+            -- command file.
+            commandFileEnabled = false,
+            commandFilePath = "",
+            commandPollIntervalMs = 250,
+        },
+        storyContentIncluded = false,
+    },
+
+    -- B7 production world consequences. NPC holders wait 30-60 minutes
+    -- before declaring a destruction war; off-screen wars resolve through a
+    -- deterministic text route, while joined target factions reuse the
+    -- already proven settlement-raid attendance/result bridge. Ctrl+F7 near
+    -- a holder's Merchant Guild counter opens the exact-price ransom route.
+    uniquePalWorldEffectNativeProduction = {
+        enabled = true,
+        buildId = "24575825",
+        providerId =
+            "pwft.native.unique-pal-world-effect.production",
+        authoritySource =
+            "pwft.native.unique-pal-world-effect.authority",
+        autoWarEnabled = true,
+        minimumWarDelayMs = 1800000,
+        maximumWarDelayMs = 3600000,
+        backgroundResolveDelayMs = 15000,
+        backgroundAttackerWinPercent = 65,
+        defenseCountdownSeconds = 30,
+        ransomInteractionKey = "F7",
+        ransomInteractionRequireControlModifier = true,
+        ransomInteractionRadius = 700,
+        -- Every authored economy row contains this product. During an open
+        -- ransom it becomes stock-one and uses the campaign's exact price;
+        -- the normal economy row is restored after settlement.
+        ransomProductItemId = "StainlessSteel",
+        qa = {
+            enabled = false,
+            requireControlModifier = true,
+            uniquePalId = "pwft.unique.anubis",
+            joinTargetKey = "F1",
+            warKey = "F5",
+            forceAttackerWin = true,
+        },
+        storyContentIncluded = false,
+    },
+
     -- The progression core owns reputation, independent human memberships,
     -- ranks, commerce caps, guard eligibility, and ending gates. Runtime
     -- Reputation is authoritative in a Mod-owned external sidecar.  The
@@ -177,24 +308,48 @@ return {
     -- remains a mechanics-only foundation.
     contentModules = {
         enabled = true,
-        modules = {},
+        modules = {
+            "pwft_b7_unique_pals.content_module",
+        },
         fallbackLocale = "zh-CN",
         storyContentIncludedByBase = false,
     },
 
-    -- Native attitude and NPC-leader guard adapters are optional trusted
-    -- providers.  The empty whitelist is fail-closed: the mechanics APIs are
-    -- available, but no game object can be mutated until an installed content
-    -- module explicitly opts in a provider ID + authority pair.
+    -- Native attitude and NPC-leader guard adapters use explicit trusted
+    -- provider ID + authority pairs. They still fail closed until an exact
+    -- content definition and live Actor binding exist.
     factionNpcAttitudes = {
-        providerWhitelist = {},
+        providerWhitelist = {
+            ["pwft.native.NPC-attitude.production"] =
+                "pwft.native.NPC-attitude.authority",
+        },
+    },
+    factionNpcAttitudeNativeProduction = {
+        enabled = true,
+        providerId = "pwft.native.NPC-attitude.production",
+        authoritySource =
+            "pwft.native.NPC-attitude.authority",
     },
     npcLeaderGuards = {
-        providerWhitelist = {},
+        providerWhitelist = {
+            ["pwft.native.NPC-leader-guard.production"] =
+                "pwft.native.NPC-leader-guard.authority",
+        },
         maxPerLeader = 2,
         maxPerFaction = 6,
         maxPerScene = 12,
         maximumMembersPerFormation = 16,
+    },
+    npcLeaderGuardNativeProduction = {
+        enabled = true,
+        providerId = "pwft.native.NPC-leader-guard.production",
+        authoritySource = "pwft.native.NPC-leader-guard.authority",
+        spawnRadius = 220,
+        spawnVerticalOffset = 10,
+        -- Core ships no story leader or guard composition. Content modules
+        -- register verified archetype -> native character mappings here or
+        -- through PWFT_NPC_LEADER_GUARD_NATIVE_PRODUCTION_V1.
+        archetypes = {},
     },
 
     -- Player-facing read-only faction panel. It uses a dedicated cooked

@@ -7,6 +7,7 @@ local Production = require("pwft.unique_pal_native_delivery_production")
 
 local generation = 3
 local adapter_bind_count = 0
+local bridge_unbind_count = 0
 local registered_definition = nil
 local registered_adapter = nil
 local handled_delivery = nil
@@ -54,6 +55,12 @@ local bridge = {
     handle_delivery = function(_, payload, context)
         handled_delivery = { payload = payload, context = context }
         return { ok = true, reason = "native-pal-delivery-accepted" }
+    end,
+    unbind_world = function(_, reason)
+        bridge_unbind_count = bridge_unbind_count + 1
+        assert(reason
+            == "production-native-pal-delivery-generation-rebind")
+        return { ok = true, reason = "native-pal-delivery-world-unbound" }
     end,
 }
 local config = {
@@ -109,6 +116,7 @@ assert(production:status().activeBindingCount == 1)
 assert(production:status().registrationCount == 1)
 assert(production:status().approvedSpeciesCount == 5)
 assert(production:status().feybreakTentativeEnabled == false)
+assert(bridge_unbind_count == 0)
 
 -- A map load increments the world-effect generation and clears the bridge's
 -- native binding.  The same trusted content activation must be allowed to
@@ -121,6 +129,8 @@ assert(adapter_bind_count == 3)
 assert(production:status().activeBindingCount == 1)
 assert(production:status().registrationCount == 1)
 assert(production:status().worldRebindCount == 1)
+assert(production:status().bridgeWorldGeneration == generation)
+assert(bridge_unbind_count == 1)
 
 local wrong_species = {}
 for key, value in pairs(definition) do wrong_species[key] = value end

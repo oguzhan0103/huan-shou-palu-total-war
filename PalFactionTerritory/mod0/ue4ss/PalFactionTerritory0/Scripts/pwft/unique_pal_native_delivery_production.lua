@@ -102,6 +102,7 @@ function UniquePalNativeDeliveryProduction.create(
         registrationsByTargetBindingId = {},
         registrationCount = 0,
         worldRebindCount = 0,
+        bridgeWorldGeneration = nil,
         rejectionCount = 0,
         deliveryRequestCount = 0,
         lastError = nil,
@@ -196,6 +197,30 @@ function UniquePalNativeDeliveryProduction:register(definition)
         end
     end
 
+    -- Progression restore deliberately advances the world-effect generation
+    -- after its persistent snapshot is rebound.  The native bridge owns
+    -- world-scoped adapter references, so clear the complete previous
+    -- generation exactly once before rebuilding the five content bindings.
+    -- Without this fence the first post-restore registration conflicts with
+    -- the otherwise identical old signature solely because its generation
+    -- changed.
+    if self.bridgeWorldGeneration ~= normalized.worldGeneration then
+        if self.bridgeWorldGeneration ~= nil
+            and type(self.bridge.unbind_world) == "function" then
+            local unbound = self.bridge:unbind_world(
+                "production-native-pal-delivery-generation-rebind"
+            )
+            if type(unbound) ~= "table" or unbound.ok ~= true then
+                self.rejectionCount = self.rejectionCount + 1
+                self.lastError = type(unbound) == "table"
+                        and unbound.reason
+                    or "production-native-pal-bridge-world-unbind-failed"
+                return result(false, self.lastError)
+            end
+        end
+        self.bridgeWorldGeneration = normalized.worldGeneration
+    end
+
     local bound = self.adapter:bind_world(normalized.worldGeneration)
     if type(bound) ~= "table" or bound.ok ~= true then
         self.rejectionCount = self.rejectionCount + 1
@@ -264,6 +289,7 @@ function UniquePalNativeDeliveryProduction:status()
         activeBindingCount = active,
         registrationCount = self.registrationCount,
         worldRebindCount = self.worldRebindCount,
+        bridgeWorldGeneration = self.bridgeWorldGeneration,
         rejectionCount = self.rejectionCount,
         deliveryRequestCount = self.deliveryRequestCount,
         lastError = self.lastError,

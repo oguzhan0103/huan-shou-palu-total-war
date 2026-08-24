@@ -535,6 +535,43 @@ function NpcLeaderGuardOrchestrator:bind_leader(definition)
     })
 end
 
+function NpcLeaderGuardOrchestrator:unbind_leader(definition)
+    assert(type(definition) == "table", "leader unbinding is required")
+    local binding_id = require_text(definition.bindingId,
+        "leader unbinding ID")
+    local existing = self.bindings[binding_id]
+    if existing == nil then
+        return result(true, "leader-guard-leader-already-unbound", {
+            bindingId = binding_id,
+        })
+    end
+    if definition.providerId ~= nil
+        and definition.providerId ~= existing.providerId then
+        return result(false, "leader-guard-unbinding-provider-mismatch")
+    end
+    if definition.actorKey ~= nil
+        and definition.actorKey ~= existing.actorKey then
+        return result(false, "leader-guard-unbinding-actor-mismatch")
+    end
+    if definition.actorClassKey ~= nil
+        and definition.actorClassKey ~= existing.actorClassKey then
+        return result(false, "leader-guard-unbinding-class-mismatch")
+    end
+    for _, active in pairs(self.activeDeployments) do
+        if active.bindingId == binding_id then
+            return result(false, "leader-guard-binding-has-active-deployment", {
+                bindingId = binding_id,
+                deploymentId = active.deploymentId,
+            })
+        end
+    end
+    self.bindings[binding_id] = nil
+    return result(true, "leader-guard-leader-unbound", {
+        bindingId = binding_id,
+        leaderId = existing.leaderId,
+    })
+end
+
 function NpcLeaderGuardOrchestrator:ingest(event)
     local ok, normalized, binding, provider = pcall(normalize_event, self, event)
     if not ok then

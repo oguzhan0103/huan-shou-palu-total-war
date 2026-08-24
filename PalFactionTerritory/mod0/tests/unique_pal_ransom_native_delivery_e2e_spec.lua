@@ -271,11 +271,17 @@ local commerce_bridge = CommerceBridge.create(commerce, {
         return "pwft.native.transaction.anubis-ransom-001"
     end,
     windowIdProvider = function() return "spec-window" end,
-    priceResolver = function(request_shop, request_product, quantity)
+    priceResolver = function(
+        request_shop,
+        request_product,
+        quantity,
+        request_faction
+    )
         return ransom_bridge:resolve_price(
             request_shop,
             request_product,
-            quantity
+            quantity,
+            request_faction
         )
     end,
     buyPolicyResolver = function(pending)
@@ -304,11 +310,13 @@ assert(commerce_bridge:register_vendor_actor(
 assert(commerce_bridge:on_shop_setup(component, actor))
 local requested, pending = commerce_bridge:on_buy_request(
     component,
-    { A = 1, B = 2, C = 3, D = 4 },
-    { A = 5, B = 6, C = 7, D = 8 },
+    { A = 9, B = 10, C = 11, D = 12 },
+    { A = 13, B = 14, C = 15, D = 16 },
     1
 )
 assert(requested and pending.totalGold == price)
+assert(pending.shopId == "00000009-0000000a-0000000b-0000000c")
+assert(pending.productId == "0000000d-0000000e-0000000f-00000010")
 assert(pending.buyPolicy.settlementKind == "unique-pal-ransom")
 assert(pending.buyPolicy.settlementEligible == true)
 assert(pending.buyPolicy.skipCommerceReputation == true)
@@ -336,6 +344,7 @@ assert(storage_read_count == 1)
 assert(native_bridge:status().confirmedDeliveryCount == 1)
 assert(native_bridge:status().pendingDeliveryCount == 0)
 assert(ransom_bridge:status().confirmedPaymentCount == 1)
+assert(ransom_bridge:status().runtimeIdentityBindCount == 1)
 assert(ransom_bridge:status().palDeliveryIncluded == false)
 
 local event = {
@@ -344,8 +353,8 @@ local event = {
     reason = "native-buy-confirmed-commerce-award-suppressed",
     transactionId = "pwft.native.transaction.anubis-ransom-001",
     factionId = pidf,
-    shopId = shop_id,
-    productId = product_id,
+    shopId = pending.shopId,
+    productId = pending.productId,
     buyNum = 1,
     totalGold = price,
     settlementKind = "unique-pal-ransom",

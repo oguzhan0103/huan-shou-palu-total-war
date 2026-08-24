@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "1.0.0",
+  "apiVersion": "1.0.0",
+  "workPackage": "A8-native-production",
+  "orchestratorApi": "PWFT_NPC_LEADER_GUARD_API_V1",
+  "productionApi": "PWFT_NPC_LEADER_GUARD_NATIVE_PRODUCTION_V1",
+  "provider": {
+    "providerId": "pwft.native.NPC-leader-guard.production",
+    "authoritySource": "pwft.native.NPC-leader-guard.authority",
+    "whitelisted": true
+  },
+  "supportedIntents": [
+    "deploy-guards",
+    "follow-leader",
+    "enter-combat",
+    "retire-guards",
+    "despawn-guards",
+    "recall-guards"
+  ],
+  "baseArchetypePolicy": {
+    "source": "registry.commerce.factions[*].guardCharacterIds[0]",
+    "archetypeIdSuffix": ".default-guard",
+    "humanFactionCount": 7,
+    "storyContentIncluded": false,
+    "contentAuthorsMayRegisterAdditionalArchetypes": true
+  },
+  "nativeLifecycle": {
+    "spawnRoute": "NativeCharacterAdapter.spawn_guard",
+    "followRoute": "VisitorLeader plus native MoveToActor pulse",
+    "combatPolicy": "Palworld hate controller temporarily owns movement",
+    "postCombatPolicy": "resume exact leader follow",
+    "cleanupRoute": "NativeCharacterAdapter.despawn",
+    "partialSpawnRollback": true,
+    "allMembersDownAutoRecall": true,
+    "worldUnloadCleanup": true
+  },
+  "safety": {
+    "exactLeaderActorAndClassRequired": true,
+    "broadActorScanAllowed": false,
+    "destroyedFactionSpawnSuppressed": true,
+    "perLeaderFactionSceneCapsEnforced": true,
+    "UObjectsPersisted": false,
+    "PalworldSaveMutation": false,
+    "modelAuthority": false
+  },
+  "contentBoundary": {
+    "coreDefinesStoryLeaders": false,
+    "coreDefinesLeaderLocations": false,
+    "contentPackProvidesLeaderId": true,
+    "contentPackProvidesExactActorClass": true,
+    "contentPackProvidesFormation": true,
+    "liveActorDiscoveryRequiredForBinding": true
+  },
+  "acceptanceBoundary": {
+    "automatedPassIsLiveAcceptance": false,
+    "realLeaderActorRequired": true,
+    "realGuardSpawnFollowCombatRecallEvidenceRequired": true,
+    "userAcceptanceClaimed": false
+  }
+}

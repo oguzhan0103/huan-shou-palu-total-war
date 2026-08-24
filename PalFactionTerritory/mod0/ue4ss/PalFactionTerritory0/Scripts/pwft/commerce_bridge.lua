@@ -132,25 +132,45 @@ local function guid_text(value)
     if value == nil then
         return "<nil-guid>"
     end
-    local ok, converted = pcall(function()
-        if type(value.ToString) == "function" then
-            return value:ToString()
+    -- Build 24575825 exposes RequestBuyProduct_ToServer GUID parameters as
+    -- reflected UScriptStruct userdata.  They have A/B/C/D fields but no
+    -- callable ToString member; tostring(userdata) only yields a transient
+    -- pointer such as "UScriptStruct: 000001...".  Read the declared fields
+    -- through the protected property helper before trying any presentation
+    -- method so the request identity exactly matches the GUID read from the
+    -- authoritative shop/product objects.
+    local words = {
+        safe_property(value, "A"),
+        safe_property(value, "B"),
+        safe_property(value, "C"),
+        safe_property(value, "D"),
+    }
+    local complete = true
+    for index = 1, 4 do
+        local numeric = tonumber(safe_unwrap(words[index]))
+        if numeric == nil then
+            complete = false
+            break
         end
-        return nil
-    end)
-    if ok and converted ~= nil and tostring(converted) ~= "" then
-        return tostring(converted)
+        words[index] = math.floor(numeric % 4294967296)
     end
-    if type(value) == "table"
-        and value.A ~= nil and value.B ~= nil
-        and value.C ~= nil and value.D ~= nil then
+    if complete then
         return string.format(
             "%08x-%08x-%08x-%08x",
-            tonumber(value.A) or 0,
-            tonumber(value.B) or 0,
-            tonumber(value.C) or 0,
-            tonumber(value.D) or 0
+            words[1],
+            words[2],
+            words[3],
+            words[4]
         )
+    end
+    local to_string = safe_property(value, "ToString")
+    if type(to_string) == "function" then
+        local ok, converted = pcall(function()
+            return value:ToString()
+        end)
+        if ok and converted ~= nil and tostring(converted) ~= "" then
+            return tostring(converted)
+        end
     end
     return tostring(value)
 end
@@ -571,7 +591,8 @@ function CommerceBridge:on_buy_request(component, shop_guid, product_guid, buy_n
             self.priceResolver,
             shop_id,
             product_id,
-            integer_value(buy_num, 1)
+            integer_value(buy_num, 1),
+            faction_id
         )
         if ok and tonumber(resolved) ~= nil and tonumber(resolved) >= 0 then
             total_gold = tonumber(resolved)

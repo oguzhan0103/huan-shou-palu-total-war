@@ -186,9 +186,15 @@ local first_process = bridge:process_pending(delivery_id)
 assert(not first_process.ok
     and first_process.reason == "spec-storage-readback-pending")
 assert(commit_count == 1 and verify_count == 1 and callback_count == 0)
-local second_process = bridge:process_pending(delivery_id)
-assert(second_process.ok)
+local second_process = bridge:process_all_pending()
+assert(second_process.ok
+    and second_process.attemptedCount == 1
+    and second_process.confirmedCount == 1
+    and second_process.pendingCount == 0
+    and second_process.rejectedCount == 0)
 assert(commit_count == 1 and verify_count == 2 and callback_count == 1)
+local empty_process = bridge:process_all_pending()
+assert(empty_process.ok and empty_process.attemptedCount == 0)
 local duplicate_process = bridge:process_pending(delivery_id)
 assert(duplicate_process.ok and duplicate_process.idempotent == true)
 assert(commit_count == 1 and verify_count == 2 and callback_count == 1)
@@ -267,4 +273,4 @@ assert(malformed.retryable == false)
 assert(malformed_rollback_count == 1)
 assert(malformed_bridge:status().rollbackCount == 1)
 
-print("PASS unique-Pal native delivery bridge fail-closes unverified builds, preflights storage capacity, creates and captures once, readbacks the exact individual before confirmation, retries without duplication, and rolls back only uncommitted world-scoped creations")
+print("PASS unique-Pal native delivery bridge fail-closes unverified builds, preflights storage capacity, creates and captures once, readbacks the exact individual before confirmation, exposes a deterministic pending-delivery pump, retries without duplication, and rolls back only uncommitted world-scoped creations")

@@ -80,6 +80,7 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "content_module_loader.lua",
         SCRIPTS_ROOT / "pwft" / "localization_runtime.lua",
         SCRIPTS_ROOT / "pwft" / "ending_runtime.lua",
+        SCRIPTS_ROOT / "pwft" / "ending_effect_native_production.lua",
         SCRIPTS_ROOT / "pwft" / "commerce_bridge.lua",
         SCRIPTS_ROOT / "pwft" / "faction_api.lua",
         SCRIPTS_ROOT / "pwft" / "faction_consequence_router.lua",
@@ -92,6 +93,7 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "faction_economy_merchant_runtime.lua",
         SCRIPTS_ROOT / "pwft" / "faction_economy_shop_catalog.lua",
         SCRIPTS_ROOT / "pwft" / "faction_guard.lua",
+        SCRIPTS_ROOT / "pwft" / "faction_npc_attitude_native_production.lua",
         SCRIPTS_ROOT / "pwft" / "faction_join.lua",
         SCRIPTS_ROOT / "pwft" / "faction_merchant_runtime.lua",
         SCRIPTS_ROOT / "pwft" / "faction_progression.lua",
@@ -99,6 +101,10 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "faction_ui_presenter.lua",
         SCRIPTS_ROOT / "pwft" / "json.lua",
         SCRIPTS_ROOT / "pwft" / "native_character_adapter.lua",
+        SCRIPTS_ROOT / "pwft" / "npc_leader_guard_native_production.lua",
+        SCRIPTS_ROOT / "pwft" / "reward_delivery_bus.lua",
+        SCRIPTS_ROOT / "pwft" / "reward_item_native_adapter.lua",
+        SCRIPTS_ROOT / "pwft" / "reward_delivery_live_test.lua",
         SCRIPTS_ROOT / "pwft" / "pal_reconciliation.lua",
         SCRIPTS_ROOT / "pwft" / "pal_raid_result_adapter.lua",
         SCRIPTS_ROOT / "pwft" / "pal_raid_native_binding.lua",
@@ -112,9 +118,11 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "progression_store.lua",
         SCRIPTS_ROOT / "pwft" / "quest_runtime.lua",
         SCRIPTS_ROOT / "pwft" / "strategic_world.lua",
+        SCRIPTS_ROOT / "pwft" / "strategic_world_native_production.lua",
         SCRIPTS_ROOT / "pwft" / "strategic_world_readiness.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_campaign.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_boss_provider_bus.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_boss_native_production.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_world_effect_bus.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_bridge.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_adapter.lua",
@@ -122,6 +130,7 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_live_test.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_probe.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_ransom_shop_bridge.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_world_effect_native_production.lua",
         SCRIPTS_ROOT / "pwft" / "runtime.lua",
         SCRIPTS_ROOT / "pwft" / "settlement_raid.lua",
         SCRIPTS_ROOT / "pwft" / "world_balance.lua",
@@ -131,6 +140,19 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft_b5_acceptance" / "quest_template.lua",
         SCRIPTS_ROOT / "pwft_b5_acceptance" / "bundle.lua",
         SCRIPTS_ROOT / "pwft_b5_acceptance" / "content_module.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "manifest.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "localization_keys.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "localization_catalogs.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "strategic_world.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "unique_pal_campaign.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "ending_routes.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "native_bindings.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "world_effect_bindings.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "strategic_native_bindings.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "npc_attitude_bindings.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "ending_effect_bindings.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "bundle.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "content_module.lua",
         PROJECT_ROOT / "mod0" / "tests" / "policy_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_api_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_consequence_router_spec.lua",
@@ -162,10 +184,13 @@ def main() -> int:
         PROJECT_ROOT / "mod0" / "tests" / "localization_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "quest_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "strategic_world_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "strategic_world_native_production_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "strategic_world_readiness_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_campaign_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_boss_provider_bus_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_boss_native_production_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_world_effect_bus_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_world_effect_native_production_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_bridge_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_adapter_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_production_spec.lua",
@@ -174,6 +199,12 @@ def main() -> int:
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_probe_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_ransom_shop_bridge_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "ending_runtime_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "ending_effect_native_production_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "faction_npc_attitude_native_production_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "npc_leader_guard_native_production_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "reward_delivery_bus_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "reward_item_native_adapter_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "reward_delivery_live_test_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "content_pack_author_sdk_e2e_spec.lua",
         PROJECT_ROOT / "examples" / "minimal-content-pack" / "README.md",
         PROJECT_ROOT / "examples" / "minimal-content-pack" / "pack.lua",
@@ -204,6 +235,8 @@ def main() -> int:
         PROJECT_ROOT / "contracts" / "content_bundle.v1.json",
         PROJECT_ROOT / "contracts" / "strategic_world.v1.json",
         PROJECT_ROOT / "contracts" / "strategic_world_readiness.v1.json",
+        PROJECT_ROOT / "contracts" / "npc_leader_guard_native_production.v1.json",
+        PROJECT_ROOT / "contracts" / "reward_delivery_native.v1.json",
         PROJECT_ROOT / "contracts" / "unique_pal_campaign.v1.json",
         PROJECT_ROOT / "contracts" / "unique_pal_boss_provider.v1.json",
         PROJECT_ROOT / "contracts" / "unique_pal_world_effects.v1.json",
@@ -242,6 +275,7 @@ def main() -> int:
         PROJECT_ROOT / "tools" / "verify_b4_rayne_merchant_visual_evidence.py",
         PROJECT_ROOT / "tools" / "verify_b5_task_defense_live_evidence.py",
         PROJECT_ROOT / "tools" / "verify_b6_dynamic_economy_live_evidence.py",
+        PROJECT_ROOT / "tools" / "verify_a9_reward_live_evidence.py",
         PROJECT_ROOT
         / "evidence"
         / "live-tests"
@@ -277,6 +311,16 @@ def main() -> int:
         / "live-tests"
         / "build24575825-20260823-companion-commerce"
         / "verification.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "live-tests"
+        / "build24575825-20260824-a9-native-reward"
+        / "verification.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "live-tests"
+        / "build24575825-20260824-a9-native-reward"
+        / "reward-delivery-excerpt.log",
         PROJECT_ROOT / "scripts" / "build-faction-economy-shops.ps1",
         PROJECT_ROOT / "evidence" / "asset_json" / "DT_PalMonsterParameter.mapped.json",
         HUMAN_PARAMETER_ASSET,
@@ -391,6 +435,14 @@ def main() -> int:
         [
             sys.executable,
             str(PROJECT_ROOT / "tools" / "verify_b6_dynamic_economy_live_evidence.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_a9_reward_live_evidence.py"),
         ],
         cwd=PROJECT_ROOT,
         check=True,
@@ -1115,11 +1167,30 @@ def main() -> int:
     unique_pal_boss_provider_text = (
         SCRIPTS_ROOT / "pwft" / "unique_pal_boss_provider_bus.lua"
     ).read_text(encoding="utf-8")
+    unique_pal_boss_native_production_text = (
+        SCRIPTS_ROOT / "pwft" / "unique_pal_boss_native_production.lua"
+    ).read_text(encoding="utf-8")
+    b7_unique_pal_module_text = (
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "content_module.lua"
+    ).read_text(encoding="utf-8")
+    b7_unique_pal_bindings_text = (
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "native_bindings.lua"
+    ).read_text(encoding="utf-8")
     strategic_world_readiness_text = (
         SCRIPTS_ROOT / "pwft" / "strategic_world_readiness.lua"
     ).read_text(encoding="utf-8")
     unique_pal_world_effect_text = (
         SCRIPTS_ROOT / "pwft" / "unique_pal_world_effect_bus.lua"
+    ).read_text(encoding="utf-8")
+    unique_pal_world_effect_production_text = (
+        SCRIPTS_ROOT
+        / "pwft"
+        / "unique_pal_world_effect_native_production.lua"
+    ).read_text(encoding="utf-8")
+    b7_unique_pal_world_bindings_text = (
+        SCRIPTS_ROOT
+        / "pwft_b7_unique_pals"
+        / "world_effect_bindings.lua"
     ).read_text(encoding="utf-8")
     unique_pal_native_delivery_text = (
         SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_bridge.lua"
@@ -1528,6 +1599,34 @@ def main() -> int:
         "P1 authoritative native callback surface is incomplete",
     )
     require(
+        "UniquePalBossNativeProduction.create" in runtime_text
+        and "PWFT_UNIQUE_PAL_BOSS_NATIVE_PRODUCTION_V1" in runtime_text
+        and "uniquePalBossNativeProduction:unbind_world" in runtime_text
+        and "UNIQUE_PAL_BOSS_NATIVE_PRODUCTION_READY" in runtime_text,
+        "B7 production Boss runtime lifecycle is incomplete",
+    )
+    require(
+        "PalNPCManager.SpawnNPCForServer"
+        in unique_pal_boss_native_production_text
+        and "PalCaptureSuccess" in unique_pal_boss_native_production_text
+        and "OnDeadCharacter" in unique_pal_boss_native_production_text
+        and "another-unique-pal-window-already-active"
+        in unique_pal_boss_native_production_text
+        and "broadActorScan = false"
+        in unique_pal_boss_native_production_text
+        and "storyContentIncluded = false"
+        in unique_pal_boss_native_production_text,
+        "B7 production Boss exact-instance, single-window, or story boundary is incomplete",
+    )
+    require(
+        '"pwft_b7_unique_pals.content_module"' in config_text
+        and "defaultEnabled = true" in b7_unique_pal_module_text
+        and b7_unique_pal_bindings_text.count("BOSS_") >= 4
+        and "Boss_Anubis" in b7_unique_pal_bindings_text
+        and "feybreak" not in b7_unique_pal_bindings_text.lower(),
+        "B7 five-Pal mechanics pack is not enabled with the verified base-island bindings",
+    )
+    require(
         "UniquePalWorldEffectBus.create" in runtime_text
         and "PWFT_UNIQUE_PAL_WORLD_EFFECT_BUS_V1" in runtime_text
         and "uniquePalWorldEffectBus:unbind_world" in runtime_text,
@@ -1548,6 +1647,42 @@ def main() -> int:
         and "confirm_pal_delivery" in unique_pal_world_effect_text
         and "pal-delivery" in unique_pal_world_effect_text,
         "P2 war, defense, ransom, or Pal-delivery bridge is incomplete",
+    )
+    require(
+        "UniquePalWorldEffectNativeProduction.create" in runtime_text
+        and "PWFT_UNIQUE_PAL_WORLD_EFFECT_NATIVE_PRODUCTION_V1"
+        in runtime_text
+        and "uniquePalWorldEffectNativeProduction:unbind_world"
+        in runtime_text
+        and "UNIQUE_PAL_WORLD_EFFECT_PRODUCTION_READY" in runtime_text,
+        "B7 production world-effect runtime lifecycle is incomplete",
+    )
+    require(
+        "declare_destruction_war"
+        in unique_pal_world_effect_production_text
+        and "confirm_background_war"
+        in unique_pal_world_effect_production_text
+        and "confirm_player_defense"
+        in unique_pal_world_effect_production_text
+        and "configure_unique_pal_ransom"
+        in unique_pal_world_effect_production_text
+        and "handle_delivery" in unique_pal_world_effect_production_text
+        and "directMapActorDeletion = false"
+        in unique_pal_world_effect_production_text
+        and "PalworldSaveMutation = false"
+        in unique_pal_world_effect_production_text,
+        "B7 production destruction-war, defense, ransom, or delivery route is incomplete",
+    )
+    require(
+        b7_unique_pal_world_bindings_text.count("targetBindingId = binding_id")
+        == 1
+        and b7_unique_pal_world_bindings_text.count("uniquePalId =") >= 5
+        and b7_unique_pal_world_bindings_text.count("cityAnchorKey =") == 1
+        and "pwft.unique.anubis" in b7_unique_pal_world_bindings_text
+        and "pwft.unique.ronin" in b7_unique_pal_world_bindings_text
+        and "pwft.island.sakurajima"
+        in b7_unique_pal_world_bindings_text,
+        "B7 five-target world-effect or delivery bindings are incomplete",
     )
     require(
         "serverAuthoritativePrice" in unique_pal_ransom_shop_text
@@ -1779,11 +1914,10 @@ def main() -> int:
         "B5 task/defense authority, replay, or safety gate is incomplete",
     )
     require(
-        'modules = {}' in config_text
-        and "storyContentIncludedByBase = false" in config_text
+        "storyContentIncludedByBase = false" in config_text
         and "defaultEnabled = false" in b5_acceptance_module_text
         and "storyContentIncluded = false" in b5_acceptance_module_text,
-        "B5 mechanics-only acceptance content must remain disabled by default",
+        "B5 mechanics-only acceptance content must remain disabled by default while B7 uses its own pack",
     )
     require(
         'eventSource = "defense"' in b5_acceptance_quest_text

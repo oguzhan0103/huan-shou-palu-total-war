@@ -78,8 +78,10 @@ function UniquePalRansomShopBridge.create(world_effect_bus, options)
         logger = options.logger,
         offersById = {},
         offersByNativeKey = {},
+        activeOfferIdByFaction = {},
         processedTransactions = {},
         acceptedOfferCount = 0,
+        runtimeIdentityBindCount = 0,
         confirmedPaymentCount = 0,
         rejectedPaymentCount = 0,
         ignoredCommerceEventCount = 0,
@@ -187,6 +189,8 @@ function UniquePalRansomShopBridge:accept_offer(
                 deliveryId = normalized.deliveryId,
             })
         end
+        self.activeOfferIdByFaction[existing.merchantFactionId] =
+            existing.offerId
         return result(true, "native-ransom-shop-offer-already-accepted", {
             deliveryId = normalized.deliveryId,
             accepted = true,
@@ -205,6 +209,8 @@ function UniquePalRansomShopBridge:accept_offer(
     end
     self.offersById[normalized.offerId] = normalized
     self.offersByNativeKey[key] = normalized.offerId
+    self.activeOfferIdByFaction[normalized.merchantFactionId] =
+        normalized.offerId
     self.acceptedOfferCount = self.acceptedOfferCount + 1
     self.lastError = nil
     log(self, string.format(
@@ -225,12 +231,52 @@ end
 function UniquePalRansomShopBridge:resolve_price(
     shop_id,
     product_id,
-    quantity
+    quantity,
+    faction_id
 )
-    local offer_id = self.offersByNativeKey[
-        native_key(shop_id, product_id)
-    ]
+    local request_key = native_key(shop_id, product_id)
+    local offer_id = self.offersByNativeKey[request_key]
     local offer = offer_id and self.offersById[offer_id] or nil
+    if offer ~= nil and offer.runtimeShopId == nil then
+        -- The source PalShop objects and the authoritative network request
+        -- normally share GUIDs.  Record that first exact request as the
+        -- session identity too, so a later ordinary product cannot claim the
+        -- still-open stock-one offer through the fallback below.
+        offer.runtimeShopId = shop_id
+        offer.runtimeProductId = product_id
+    elseif offer == nil and type(faction_id) == "string" then
+        -- Build 24575825 can clone the transient vendor PalShop during
+        -- SetupShopDataForActor_ToServer.  The UI then sends the clone's GUIDs
+        -- rather than the source-object GUIDs read when the price and stock
+        -- were configured.  Rebind exactly once, and only to the most recent
+        -- open stock-one offer presented by that exact registered merchant
+        -- faction.  The subsequent server buy-success callback remains the
+        -- payment authority; no balance or reputation is mutated here.
+        local active_offer_id = self.activeOfferIdByFaction[faction_id]
+        local candidate = active_offer_id
+                and self.offersById[active_offer_id]
+            or nil
+        if candidate ~= nil
+            and candidate.status == "open"
+            and candidate.runtimeShopId == nil
+            and quantity == candidate.buyQuantity then
+            candidate.runtimeShopId = shop_id
+            candidate.runtimeProductId = product_id
+            self.offersByNativeKey[request_key] = candidate.offerId
+            self.runtimeIdentityBindCount =
+                self.runtimeIdentityBindCount + 1
+            offer = candidate
+            log(self, string.format(
+                "RUNTIME_IDENTITY_BOUND offer=%s sourceShop=%s sourceProduct=%s requestShop=%s requestProduct=%s faction=%s",
+                candidate.offerId,
+                candidate.shopId,
+                candidate.productId,
+                shop_id,
+                product_id,
+                faction_id
+            ))
+        end
+    end
     if offer == nil or offer.status ~= "open"
         or quantity ~= offer.buyQuantity then
         return nil
@@ -309,8 +355,8 @@ function UniquePalRansomShopBridge:handle_commerce_event(event)
     local exact = event.settlementEligible == true
         and event.commerceReputationSuppressed == true
         and event.factionId == offer.merchantFactionId
-        and event.shopId == offer.shopId
-        and event.productId == offer.productId
+        and event.shopId == (offer.runtimeShopId or offer.shopId)
+        and event.productId == (offer.runtimeProductId or offer.productId)
         and event.buyNum == offer.buyQuantity
         and event.totalGold == offer.amount
         and current_generation == offer.worldGeneration
@@ -345,6 +391,10 @@ function UniquePalRansomShopBridge:handle_commerce_event(event)
         }
         offer.status = "settled"
         offer.transactionId = transaction_id
+        if self.activeOfferIdByFaction[offer.merchantFactionId]
+            == offer.offerId then
+            self.activeOfferIdByFaction[offer.merchantFactionId] = nil
+        end
         self.confirmedPaymentCount = self.confirmedPaymentCount + 1
         self.lastError = nil
         log(self, string.format(
@@ -368,6 +418,7 @@ function UniquePalRansomShopBridge:unbind_world(reason)
     for _ in pairs(self.offersById) do count = count + 1 end
     self.offersById = {}
     self.offersByNativeKey = {}
+    self.activeOfferIdByFaction = {}
     self.processedTransactions = {}
     self.worldUnbindCount = self.worldUnbindCount + 1
     self.lastError = reason or "world-unloading"
@@ -387,6 +438,7 @@ function UniquePalRansomShopBridge:status()
         openOfferCount = open,
         settledOfferCount = settled,
         acceptedOfferCount = self.acceptedOfferCount,
+        runtimeIdentityBindCount = self.runtimeIdentityBindCount,
         confirmedPaymentCount = self.confirmedPaymentCount,
         rejectedPaymentCount = self.rejectedPaymentCount,
         ignoredCommerceEventCount = self.ignoredCommerceEventCount,
@@ -398,6 +450,7 @@ function UniquePalRansomShopBridge:status()
         PalworldSaveMutation = false,
         palDeliveryIncluded = false,
         exactShopProductFactionPriceAndGeneration = true,
+        clonedNetworkShopIdentityRebind = true,
     }
 end
 

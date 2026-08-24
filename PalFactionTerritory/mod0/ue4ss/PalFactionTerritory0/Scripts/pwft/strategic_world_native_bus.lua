@@ -528,6 +528,35 @@ function StrategicWorldNativeBus:bind_actor(definition)
     })
 end
 
+function StrategicWorldNativeBus:unbind_actor(definition)
+    assert(type(definition) == "table",
+        "native strategic unbind request is required")
+    local binding_id = require_text(
+        definition.bindingId,
+        "native strategic unbind binding ID"
+    )
+    local binding = self.bindings[binding_id]
+    if binding == nil then
+        return result(true,
+            "native-strategic-actor-already-unbound", {
+            bindingId = binding_id,
+        })
+    end
+    if definition.providerId ~= binding.providerId
+        or definition.actorKey ~= binding.actorKey
+        or definition.actorClassKey ~= binding.actorClassKey then
+        self.rejectedCount = self.rejectedCount + 1
+        return result(false,
+            "native-strategic-unbind-exact-match-required")
+    end
+    self.bindings[binding_id] = nil
+    return result(true, "native-strategic-actor-unbound", {
+        bindingId = binding_id,
+        bindingKind = binding.bindingKind,
+        strategicId = binding.strategicId,
+    })
+end
+
 function StrategicWorldNativeBus:unbind_world()
     local count = 0
     for _ in pairs(self.bindings) do

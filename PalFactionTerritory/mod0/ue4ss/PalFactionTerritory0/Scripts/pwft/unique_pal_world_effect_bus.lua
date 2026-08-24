@@ -953,6 +953,69 @@ function UniquePalWorldEffectBus:retry_pending(target_key)
         })
 end
 
+function UniquePalWorldEffectBus:retry_pending_kind(
+    delivery_kind,
+    target_key
+)
+    delivery_kind = require_text(delivery_kind,
+        "unique-Pal world delivery kind")
+    if DELIVERY_KINDS[delivery_kind] ~= true then
+        return result(false, "unsupported-unique-pal-world-delivery-kind", {
+            deliveryKind = delivery_kind,
+            attemptedCount = 0,
+            appliedCount = 0,
+            pendingCount = 0,
+            cancelledCount = 0,
+            retryable = false,
+        })
+    end
+
+    local matched, attempted = 0, 0
+    local applied, pending, cancelled = 0, 0, 0
+    for _, id in ipairs(sorted_keys(self.deliveries)) do
+        local delivery = self.deliveries[id]
+        if delivery.deliveryKind == delivery_kind
+            and (target_key == nil or delivery.targetKey == target_key) then
+            matched = matched + 1
+            local parked_in_current_generation =
+                delivery.status == "awaiting-confirmation"
+                and delivery.requestedGeneration == self.worldGeneration
+            local terminal = delivery.status == "cancelled"
+                or (delivery.status == "applied"
+                    and (not GENERATION_REPLAY_KINDS[delivery_kind]
+                        or delivery.appliedGeneration
+                            == self.worldGeneration))
+            if not parked_in_current_generation and not terminal then
+                attempted = attempted + 1
+                apply_delivery(self, delivery)
+            end
+            if delivery.status == "applied" then
+                applied = applied + 1
+            elseif delivery.status == "cancelled" then
+                cancelled = cancelled + 1
+            else
+                pending = pending + 1
+            end
+        end
+    end
+    if attempted > 0 then
+        self.retryCount = self.retryCount + 1
+        persist_snapshot(self)
+    end
+    return result(pending == 0,
+        pending == 0
+                and "unique-pal-world-delivery-kind-retried"
+            or "unique-pal-world-delivery-kind-still-pending", {
+            deliveryKind = delivery_kind,
+            matchedCount = matched,
+            attemptedCount = attempted,
+            appliedCount = applied,
+            pendingCount = pending,
+            cancelledCount = cancelled,
+            retryable = pending > 0,
+        })
+end
+
 function UniquePalWorldEffectBus:reconcile_target(target_key)
     local kind, id = split_target_key(target_key)
     local target = self.campaign:target_status(kind, id)
