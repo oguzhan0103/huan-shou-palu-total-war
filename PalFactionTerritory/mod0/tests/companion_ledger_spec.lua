@@ -136,6 +136,36 @@ assert(encoded_record == false)
 assert(string.find(encoded_record_reason, "event%-encode%-failed") ~= nil)
 assert(ledger:status().eventSequence == sequence_before_encode_failure)
 
+local public_recorded, public_envelope, public_record_projection =
+    ledger:record_public({
+        type = "merchant-registered",
+        factionId = "pwft.faction.eternal_pyre",
+        metadata = {
+            mode = "fixed-market",
+            runtimeCallback = function()
+                return "must-not-cross-json-boundary"
+            end,
+            callbackSlots = {
+                function()
+                    return "array-slot-must-be-null"
+                end,
+            },
+        },
+    })
+assert(public_recorded == true)
+assert(public_envelope.metadata.mode == "fixed-market")
+assert(public_envelope.metadata.runtimeCallback == nil)
+assert(public_envelope.metadata.callbackSlots[1] == Json.null)
+assert(public_record_projection.redactedCount == 2)
+local public_record_redactions = {}
+for _, redaction in ipairs(public_record_projection.redactions) do
+    public_record_redactions[redaction.path] = redaction.reason
+end
+assert(public_record_redactions["$.metadata.runtimeCallback"]
+    == "unsupported-function")
+assert(public_record_redactions["$.metadata.callbackSlots[1]"]
+    == "unsupported-function")
+
 local state_before_encode_failure = files[status.statePath]
 local encoded_publish, encoded_publish_reason = ledger:publish({
     releaseId = "must-not-replace-on-encode-failure",
@@ -149,7 +179,7 @@ assert(string.find(
 assert(files[status.statePath] == state_before_encode_failure)
 assert(files[status.statePath .. ".tmp"] == nil)
 
-local hostile_pairs = setmetatable({}, {
+local hostile_pairs = setmetatable({ status = "raw-next-visible" }, {
     __pairs = function()
         error("hostile-pairs")
     end,
@@ -172,5 +202,21 @@ assert(copied_publish == false)
 assert(string.find(copied_publish_reason, "state%-copy%-failed") ~= nil)
 assert(files[status.statePath] == state_before_copy_failure)
 assert(files[status.statePath .. ".tmp"] == nil)
+
+local public_published, public_publish_detail, public_state_projection =
+    ledger:publish_public({
+        releaseId = "public-state-projection",
+        hostile = hostile_pairs,
+        runtimeCallback = function()
+            return "must-not-cross-json-boundary"
+        end,
+    })
+assert(public_published == true)
+assert(public_publish_detail == "published")
+assert(public_state_projection.redactedCount == 1)
+local public_state = Json.decode(files[status.statePath])
+assert(public_state.releaseId == "public-state-projection")
+assert(public_state.hostile.status == "raw-next-visible")
+assert(public_state.runtimeCallback == nil)
 
 print("PASS external companion ledger transaction stream and failure-safe replacement")

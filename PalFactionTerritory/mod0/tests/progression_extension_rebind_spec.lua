@@ -53,11 +53,16 @@ local old_quest_sequence = old_quests.sequence
 local old_world_revision = old_world.revision
 local old_ending_revision = old_endings.revision
 
-local restored = progression:restore_snapshot(
-    progression:export_snapshot()
-)
+local legacy_snapshot = progression:export_snapshot()
+legacy_snapshot.schemaVersion = "1.0.0"
+legacy_snapshot.processedReputationOperations = nil
+legacy_snapshot.extensionMigrationProbe = { preserved = true }
+local restored = progression:restore_snapshot(legacy_snapshot)
 assert(restored.ok and restored.reason == "snapshot-restored")
 assert(restored.reboundListenerCount == 5)
+assert(restored.migration.fromSchemaVersion == "1.0.0")
+assert(progression.state.schemaVersion == "1.1.0")
+assert(progression.state.extensionMigrationProbe.preserved == true)
 assert(progression.state ~= old_root)
 assert(reconciliation.state == progression.state.palReconciliation)
 assert(quests.state == progression.state.contentQuests)

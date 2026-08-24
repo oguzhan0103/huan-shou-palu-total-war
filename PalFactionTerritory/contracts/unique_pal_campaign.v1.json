@@ -1,6 +1,6 @@
 {
-  "schemaVersion": "1.0.0",
-  "apiVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
+  "apiVersion": "1.1.0",
   "contentPackSchema": "pwft.unique-pal-campaign.pack.v1",
   "contentStatus": "mechanics_only_player_content_required",
   "storyContentIncluded": false,
@@ -11,6 +11,7 @@
     "replacementBossSlotAllowed": true,
     "requiredStrengthProfile": "raid-slab",
     "nativeSpawnConfirmationRequiredBeforeOpening": true,
+    "authoritativeDefeatClosesWithoutOwnershipTransfer": true,
     "captureRequiredForPlayerOwnership": true
   },
   "openingPolicy": {
@@ -30,6 +31,7 @@
   },
   "authorityPolicy": {
     "bossSpawnConfirmation": "pwft.native-unique-pal-boss-spawn.v1",
+    "bossDefeatConfirmation": "pwft.native-unique-pal-boss-defeat.v1",
     "captureConfirmation": "pwft.native-unique-pal-capture.v1",
     "destructionWarResult": "pwft.unique-pal-war-result.v1",
     "ransomPaymentConfirmation": "pwft.native-ransom-payment.v1",
@@ -84,10 +86,14 @@
     "contentBundleAtomicRegistration": "implemented-offline-verified",
     "sidecarRestoreRebind": "implemented-offline-verified",
     "bossSpawnerRedirection": "pending-native-asset-evidence",
-    "raidSlabStatApplication": "pending-native-provider",
-    "playerDefenseRaidPresentation": "descriptor-ready-native-route-pending",
-    "factionSpawnSuppression": "policy-ready-native-provider-pending",
-    "merchantRansomUiAndPayment": "contract-ready-native-provider-pending",
+    "bossProviderBus": "implemented-offline-verified",
+    "verifiedBossBindingContract": "implemented-offline-verified-content-bindings-pending",
+    "raidSlabStatApplication": "provider-contract-ready-native-binding-pending",
+    "playerDefenseRaidPresentation": "world-effect-provider-bus-ready-native-route-pending",
+    "factionSpawnSuppression": "world-effect-provider-bus-ready-native-binding-pending",
+    "emptyCityAndMerchantFilter": "world-effect-provider-bus-ready-native-binding-pending",
+    "backgroundWarPresentation": "world-effect-provider-bus-ready-native-presenter-pending",
+    "merchantRansomUiPaymentAndPalDelivery": "world-effect-provider-bus-ready-native-provider-pending",
     "liveAcceptance": "not-run"
   }
 }

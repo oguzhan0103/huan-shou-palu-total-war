@@ -1,6 +1,6 @@
 local FactionApi = {}
 
-local API_VERSION = "1.0.0"
+local API_VERSION = "1.1.0"
 
 local function require_non_empty_string(value, name)
     assert(type(value) == "string" and value ~= "", name .. " must be a non-empty string")
@@ -9,6 +9,11 @@ end
 
 local function require_positive_number(value, name)
     assert(type(value) == "number" and value > 0, name .. " must be positive")
+    return value
+end
+
+local function require_non_zero_number(value, name)
+    assert(type(value) == "number" and value ~= 0, name .. " must be non-zero")
     return value
 end
 
@@ -22,7 +27,8 @@ local function changed(outcome)
         or outcome.reason == "diplomacy-hostility-cleared" then
         return true
     end
-    return type(outcome.applied) == "number" and outcome.applied > 0
+    return outcome.operationRecorded == true
+        or (type(outcome.applied) == "number" and outcome.applied ~= 0)
 end
 
 local function notify(instance, faction_id, outcome)
@@ -56,7 +62,11 @@ function FactionApi.create(progression, on_change)
             automaticCommerceDiplomacyRecovery = true,
             joinPreview = true,
             registeredJoinInteraction = true,
-            reputationDecrease = false,
+            reputationDecrease = true,
+            reputationDeltaContract = true,
+            reputationOperationSignatures = true,
+            automaticRankDemotion = true,
+            permissionRevocation = true,
             taskAwards = true,
             defenseAwards = true,
             commerceAwards = true,
@@ -129,17 +139,41 @@ function FactionApi:clear_affiliation_hostility(
     return outcome
 end
 
+function FactionApi:apply_reputation_delta(
+    faction_id,
+    delta,
+    operation
+)
+    require_non_empty_string(faction_id, "faction ID")
+    require_non_zero_number(delta, "reputation delta")
+    assert(type(operation) == "table", "reputation operation is required")
+    require_non_empty_string(operation.source, "reputation source")
+    require_non_empty_string(operation.operationId, "reputation operation ID")
+    require_non_empty_string(operation.authority, "reputation authority")
+    require_non_empty_string(operation.reasonCode, "reputation reason code")
+    local outcome = self.progression:apply_reputation_delta(
+        faction_id,
+        operation.source,
+        delta,
+        operation
+    )
+    notify(self, faction_id, outcome)
+    return outcome
+end
+
 function FactionApi:award_task(faction_id, amount, completion_id)
     require_non_empty_string(faction_id, "faction ID")
     require_positive_number(amount, "task reputation award")
     require_non_empty_string(completion_id, "task completion ID")
-    local outcome = self.progression:grant_reputation(
+    local outcome = self.progression:apply_reputation_delta(
         faction_id,
         "task",
         amount,
         {
+            operationId = "task:" .. completion_id,
+            authority = "pwft.task-award.v1",
+            reasonCode = "task-completed",
             contextId = completion_id,
-            eventId = "task:" .. completion_id,
         }
     )
     notify(self, faction_id, outcome)
@@ -150,13 +184,15 @@ function FactionApi:award_defense(faction_id, amount, resolution_id)
     require_non_empty_string(faction_id, "faction ID")
     require_positive_number(amount, "defense reputation award")
     require_non_empty_string(resolution_id, "defense resolution ID")
-    local outcome = self.progression:grant_reputation(
+    local outcome = self.progression:apply_reputation_delta(
         faction_id,
         "defense",
         amount,
         {
+            operationId = "defense:" .. resolution_id,
+            authority = "pwft.defense-award.v1",
+            reasonCode = "defense-resolved",
             contextId = resolution_id,
-            eventId = "defense:" .. resolution_id,
         }
     )
     notify(self, faction_id, outcome)
@@ -179,13 +215,15 @@ function FactionApi:award_commerce(
             or type(commerce_context) == "table",
         "commerce context must be a table"
     )
-    local outcome = self.progression:grant_reputation(
+    local outcome = self.progression:apply_reputation_delta(
         faction_id,
         "commerce",
         amount,
         {
+            operationId = "commerce:" .. transaction_id,
+            authority = "pwft.commerce-award.v1",
+            reasonCode = "commerce-confirmed",
             contextId = transaction_id,
-            eventId = "commerce:" .. transaction_id,
             windowId = commerce_window_id,
             diplomacyRecoveryEligible =
                 commerce_context ~= nil

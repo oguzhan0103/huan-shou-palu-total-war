@@ -28,6 +28,7 @@ local provider = {
     },
 }
 assert(bus:register_provider(provider).ok)
+assert(bus:status().fullyCapableProviderCount == 1)
 assert(bus:register_provider(provider).reason
     == "native-strategic-provider-already-registered")
 
@@ -64,6 +65,10 @@ local bindings = {
 for _, binding in ipairs(bindings) do
     assert(bus:bind_actor(binding).ok)
 end
+local binding_counts = bus:status().bindingCountByKind
+assert(binding_counts["unique-pal"] == 1)
+assert(binding_counts["city-anchor"] == 1)
+assert(binding_counts["city-boss"] == 1)
 
 local function event(kind, id, operation, binding, extra)
     local value = {

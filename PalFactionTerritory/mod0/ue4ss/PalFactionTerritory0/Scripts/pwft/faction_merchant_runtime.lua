@@ -95,8 +95,10 @@ function FactionMerchantRuntime.create(
     commerce_contract,
     faction_api,
     commerce_bridge,
-    native_adapter
+    native_adapter,
+    options
 )
+    options = options or {}
     validate_contract(commerce_contract)
     assert(type(faction_api) == "table", "faction API is required")
     assert(type(commerce_bridge) == "table", "commerce bridge is required")
@@ -126,12 +128,14 @@ function FactionMerchantRuntime.create(
         factionApi = faction_api,
         commerceBridge = commerce_bridge,
         adapter = native_adapter,
+        spawnPolicyResolver = options.spawnPolicyResolver,
         merchants = merchants,
         fixedSpawnCount = 0,
         caravanDispatchCount = 0,
         guardSpawnCount = 0,
         recalledCaravanCount = 0,
         marketDeactivateCount = 0,
+        spawnSuppressionCount = 0,
         activeCaravanEventIds = {},
         completedCaravanEventIds = {},
         capabilities = {
@@ -148,6 +152,26 @@ function FactionMerchantRuntime.create(
             PalworldSaveMutation = false,
         },
     }, { __index = FactionMerchantRuntime })
+end
+
+function FactionMerchantRuntime:_spawn_policy(faction_id, spawn_kind)
+    if type(self.spawnPolicyResolver) ~= "function" then
+        return result(true, "merchant-spawn-policy-unbound", {
+            suppressSpawn = false,
+        })
+    end
+    local ok, policy = pcall(
+        self.spawnPolicyResolver,
+        faction_id,
+        spawn_kind
+    )
+    if not ok or type(policy) ~= "table" then
+        return result(false, "merchant-spawn-policy-failed", {
+            suppressSpawn = true,
+            detail = tostring(policy),
+        })
+    end
+    return policy
 end
 
 function FactionMerchantRuntime:bind_existing_fixed(
@@ -285,7 +309,18 @@ function FactionMerchantRuntime:activate_market(
     local skipped = {}
     for _, merchant in ipairs(self.contract.factions) do
         local record = self.merchants[merchant.factionId]
-        if merchant.existingRuntimeBinding ~= nil then
+        local policy = self:_spawn_policy(
+            merchant.factionId,
+            "merchant-guild-counter"
+        )
+        if policy.ok ~= true or policy.suppressSpawn == true then
+            self.spawnSuppressionCount = self.spawnSuppressionCount + 1
+            table.insert(skipped, {
+                factionId = merchant.factionId,
+                reason = policy.reason
+                    or "destroyed-faction-spawn-suppressed",
+            })
+        elseif merchant.existingRuntimeBinding ~= nil then
             table.insert(skipped, {
                 factionId = merchant.factionId,
                 reason = "existing-runtime-binding:"
@@ -407,6 +442,18 @@ function FactionMerchantRuntime:dispatch_caravan(
     end
     if self.adapter == nil then
         return result(false, "native-merchant-adapter-pending")
+    end
+    local spawn_policy = self:_spawn_policy(
+        faction_id,
+        "visiting-caravan"
+    )
+    if spawn_policy.ok ~= true or spawn_policy.suppressSpawn == true then
+        self.spawnSuppressionCount = self.spawnSuppressionCount + 1
+        return result(false,
+            spawn_policy.reason or "destroyed-faction-spawn-suppressed", {
+                factionId = faction_id,
+                suppressed = true,
+            })
     end
     local faction = self.factionApi:faction_status(faction_id)
     if faction == nil or faction.kind ~= "Human" then
@@ -565,6 +612,42 @@ function FactionMerchantRuntime:recall_caravan(faction_id, reason)
     })
 end
 
+function FactionMerchantRuntime:deactivate_faction(faction_id, reason)
+    local record = self.merchants[
+        require_non_empty_string(faction_id, "faction ID")
+    ]
+    if record == nil then
+        return result(false, "unknown-commerce-faction")
+    end
+    local recalled = self:recall_caravan(faction_id, reason)
+    if not recalled.ok then return recalled end
+    local fixed_removed = false
+    if record.fixedActor ~= nil and record.fixedOwned then
+        if type(self.commerceBridge.unregister_vendor_actor) == "function" then
+            pcall(
+                self.commerceBridge.unregister_vendor_actor,
+                self.commerceBridge,
+                record.fixedActor
+            )
+        end
+        pcall(self.adapter.despawn, self.adapter,
+            record.fixedActor, reason or "faction-deactivated")
+        for _, actor in ipairs(record.fixedGuardActors) do
+            pcall(self.adapter.despawn, self.adapter,
+                actor, reason or "faction-deactivated")
+        end
+        record.fixedActor = nil
+        record.fixedOwned = false
+        record.fixedGuardActors = {}
+        fixed_removed = true
+    end
+    return result(true, "faction-merchant-runtime-deactivated", {
+        factionId = faction_id,
+        fixedRemoved = fixed_removed,
+        caravanRecalled = recalled.reason ~= "no-active-caravan",
+    })
+end
+
 function FactionMerchantRuntime:on_relation_changed(
     faction_id
 )
@@ -646,6 +729,8 @@ function FactionMerchantRuntime:status()
             self.recalledCaravanCount,
         marketDeactivateCount =
             self.marketDeactivateCount,
+        spawnPolicyBound = type(self.spawnPolicyResolver) == "function",
+        spawnSuppressionCount = self.spawnSuppressionCount,
     }
 end
 

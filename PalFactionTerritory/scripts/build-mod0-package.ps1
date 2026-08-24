@@ -1,5 +1,6 @@
 param(
-    [string]$OutputRoot = ""
+    [string]$OutputRoot = "",
+    [string]$ReleaseVersion = "1.0.5"
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,7 +14,10 @@ if ($LASTEXITCODE -ne 0) {
     throw "Mod 0 verification failed; package was not created."
 }
 
-$ReleaseName = "PalFactionTerritory0-v1.0.4-build24575825-runtime-source"
+if ($ReleaseVersion -notmatch '^\d+\.\d+\.\d+$') {
+    throw "ReleaseVersion must use semantic x.y.z form."
+}
+$ReleaseName = "PalFactionTerritory0-v$ReleaseVersion-build24575825-runtime-source"
 $OutputRoot = [System.IO.Path]::GetFullPath($OutputRoot)
 New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
 $StageRoot = Join-Path $OutputRoot "$ReleaseName-staging"
@@ -47,19 +51,34 @@ Copy-Item -LiteralPath (Join-Path $ProjectRoot "tools\validate_content_pack.lua"
 $StagedCompanion = Join-Path $StageRoot "Companion"
 Copy-Item -LiteralPath (Join-Path $ProjectRoot "companion") `
     -Destination $StagedCompanion -Recurse
-Copy-Item -LiteralPath (Join-Path (Split-Path -Parent $ProjectRoot) "INSTALL.md") `
+Copy-Item -LiteralPath (Join-Path $ProjectRoot "INSTALL.md") `
     -Destination (Join-Path $StageRoot "INSTALL.md")
+$ReadmeCandidates = @(
+    Get-ChildItem -LiteralPath $ProjectRoot -File -Filter "*v$ReleaseVersion*.md"
+)
+if ($ReadmeCandidates.Count -ne 1) {
+    throw "Expected exactly one v$ReleaseVersion player guide at the project root."
+}
+$ReadmeFirst = $ReadmeCandidates[0].FullName
+$ReadmeFirstName = $ReadmeCandidates[0].Name
+Copy-Item -LiteralPath $ReadmeFirst `
+    -Destination (Join-Path $StageRoot $ReadmeFirstName)
+
+$PlayerToolsRoot = Join-Path $ProjectRoot "player-tools"
+$PlayerToolFiles = @(Get-ChildItem -LiteralPath $PlayerToolsRoot -File)
+if ($PlayerToolFiles.Count -ne 4) {
+    throw "Expected four reviewed player-tool files, found $($PlayerToolFiles.Count)."
+}
+$PlayerToolNames = @($PlayerToolFiles | ForEach-Object { $_.Name })
+foreach ($PlayerTool in $PlayerToolFiles) {
+    Copy-Item -LiteralPath $PlayerTool.FullName `
+        -Destination (Join-Path $StageRoot $PlayerTool.Name)
+}
 $StagedContracts = Join-Path $StageRoot "AuthorSDK\contracts"
 New-Item -ItemType Directory -Path $StagedContracts -Force | Out-Null
-foreach ($ContractName in @(
-    "content_pack.v1.json",
-    "content_bundle.v1.json",
-    "pal_reconciliation.v1.json",
-    "strategic_world.v1.json",
-    "unique_pal_campaign.v1.json",
-    "ending_routes.v1.json"
-)) {
-    Copy-Item -LiteralPath (Join-Path $ProjectRoot "contracts\$ContractName") -Destination $StagedContracts
+foreach ($ContractFile in Get-ChildItem -LiteralPath `
+    (Join-Path $ProjectRoot "contracts") -Filter "*.json" -File) {
+    Copy-Item -LiteralPath $ContractFile.FullName -Destination $StagedContracts
 }
 
 & (Join-Path $StagedAuthorSdkRoot "validate-content-pack.ps1") -PackPath $StagedAuthorSdk
@@ -81,8 +100,8 @@ $ManifestFiles = @(
 
 $Manifest = [ordered]@{
     schemaVersion = "1.0.0"
-    releaseId = "PalFactionTerritory0-v1.0.4-runtime-source"
-    releaseVersion = "1.0.4"
+    releaseId = "PalFactionTerritory0-v$ReleaseVersion-runtime-source"
+    releaseVersion = $ReleaseVersion
     expectedSteamBuildId = "24575825"
     installRelativeRoot = "Pal/Binaries/Win64/ue4ss"
     sourceOnly = $true
@@ -115,6 +134,7 @@ try {
         "Mods/PalFactionTerritory0/Scripts/pwft/localization_runtime.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/ending_runtime.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/ending_effect_provider_bus.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/ending_effect_native_production.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_api.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_commerce.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_defense.lua",
@@ -127,6 +147,7 @@ try {
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_join_native_presenter.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_join_native_router.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_npc_attitude_bus.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/faction_npc_attitude_native_production.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_merchant_runtime.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_progression.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/faction_resource_ledger.lua",
@@ -136,6 +157,7 @@ try {
         "Mods/PalFactionTerritory0/Scripts/pwft/human_defense_result_bridge.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/native_character_adapter.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/npc_leader_guard_orchestrator.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/npc_leader_guard_native_production.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/pal_discourse_runtime.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/pal_raid_result_adapter.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/pal_raid_native_binding.lua",
@@ -149,17 +171,35 @@ try {
         "Mods/PalFactionTerritory0/Scripts/pwft/quest_objective_router.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/registry.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/reward_policy.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/reward_delivery_bus.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/reward_item_native_adapter.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/runtime.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/settlement_raid.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/strategic_world_native_bus.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/strategic_world_native_production.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/strategic_world.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/unique_pal_campaign.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/unique_pal_boss_provider_bus.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/unique_pal_boss_native_production.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/unique_pal_world_effect_bus.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/unique_pal_world_effect_native_production.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/unique_pal_native_delivery_bridge.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/unique_pal_ransom_shop_bridge.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft_b7_unique_pals/content_module.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft_b7_unique_pals/unique_pal_campaign.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft_b7_unique_pals/world_effect_bindings.lua",
         "AuthorSDK/contracts/content_pack.v1.json",
         "AuthorSDK/contracts/content_bundle.v1.json",
         "AuthorSDK/contracts/pal_reconciliation.v1.json",
         "AuthorSDK/contracts/strategic_world.v1.json",
         "AuthorSDK/contracts/unique_pal_campaign.v1.json",
+        "AuthorSDK/contracts/unique_pal_boss_provider.v1.json",
+        "AuthorSDK/contracts/unique_pal_world_effects.v1.json",
+        "AuthorSDK/contracts/unique_pal_native_assets.v1.json",
         "AuthorSDK/contracts/ending_routes.v1.json",
+        "AuthorSDK/contracts/npc_leader_guard_native_production.v1.json",
+        "AuthorSDK/contracts/reward_delivery_native.v1.json",
+        "AuthorSDK/contracts/strategic_world_readiness.v1.json",
         "AuthorSDK/validate-content-pack.ps1",
         "AuthorSDK/validate_content_pack.lua",
         "AuthorSDK/minimal-content-pack/README.md",
@@ -180,8 +220,12 @@ try {
         "Companion/public/app.js",
         "Companion/public/styles.css",
         "INSTALL.md",
+        "Quick-Uninstall-PalFactionTerritory.ps1",
+        "Quick-Uninstall-PalFactionTerritory.cmd",
         "package-manifest.json"
     )
+    $RequiredEntries += $PlayerToolNames
+    $RequiredEntries += $ReadmeFirstName
     foreach ($RequiredEntry in $RequiredEntries) {
         if ($EntryNames -notcontains $RequiredEntry) {
             throw "Package is missing required entry: $RequiredEntry"

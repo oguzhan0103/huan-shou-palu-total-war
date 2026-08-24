@@ -14,12 +14,22 @@ local ContentRuntime = require("pwft.content_runtime")
 local ContentModuleLoader = require("pwft.content_module_loader")
 local EndingEffectProviderBus =
     require("pwft.ending_effect_provider_bus")
+local EndingEffectNativeProduction =
+    require("pwft.ending_effect_native_production")
 local EndingRuntime = require("pwft.ending_runtime")
 local FactionApi = require("pwft.faction_api")
+local FactionConsequenceRouter =
+    require("pwft.faction_consequence_router")
+local FactionConsequenceNativeBinding =
+    require("pwft.faction_consequence_native_binding")
 local FactionCommerce = require("pwft.faction_commerce")
 local FactionDefense = require("pwft.faction_defense")
 local FactionEconomy = require("pwft.faction_economy")
+local FactionDynamicEconomy =
+    require("pwft.faction_dynamic_economy")
 local FactionEconomyWar = require("pwft.faction_economy_war")
+local FactionEconomyWarLiveTest =
+    require("pwft.faction_economy_war_live_test")
 local FactionEconomyShopCatalog =
     require("pwft.faction_economy_shop_catalog")
 local FactionEconomyMerchantRuntime =
@@ -29,8 +39,11 @@ local FactionEconomyMerchantPresence =
 local FactionGuard = require("pwft.faction_guard")
 local FactionNpcAttitudeBus =
     require("pwft.faction_npc_attitude_bus")
+local FactionNpcAttitudeNativeProduction =
+    require("pwft.faction_npc_attitude_native_production")
 local HumanDefenseResultBridge =
     require("pwft.human_defense_result_bridge")
+local TaskDefenseClosure = require("pwft.task_defense_closure")
 local HostileCommerceLiveTest =
     require("pwft.hostile_commerce_live_test")
 local FactionJoin = require("pwft.faction_join")
@@ -47,6 +60,8 @@ local NativeCharacterAdapter =
     require("pwft.native_character_adapter")
 local NpcLeaderGuardOrchestrator =
     require("pwft.npc_leader_guard_orchestrator")
+local NpcLeaderGuardNativeProduction =
+    require("pwft.npc_leader_guard_native_production")
 local LocalizationRuntime = require("pwft.localization_runtime")
 local PalReconciliation = require("pwft.pal_reconciliation")
 local PalDiscourseRuntime =
@@ -71,11 +86,40 @@ local QuestRuntime = require("pwft.quest_runtime")
 local QuestObjectiveRouter = require("pwft.quest_objective_router")
 local RayneMerchant = require("pwft.rayne_merchant")
 local RewardPolicy = require("pwft.reward_policy")
+local RewardDeliveryBus = require("pwft.reward_delivery_bus")
+local RewardItemNativeAdapter =
+    require("pwft.reward_item_native_adapter")
+local RewardDeliveryLiveTest =
+    require("pwft.reward_delivery_live_test")
 local SettlementRaid = require("pwft.settlement_raid")
 local StrategicWorld = require("pwft.strategic_world")
 local StrategicWorldNativeBus =
     require("pwft.strategic_world_native_bus")
+local StrategicWorldNativeProduction =
+    require("pwft.strategic_world_native_production")
+local StrategicWorldReadiness =
+    require("pwft.strategic_world_readiness")
 local UniquePalCampaign = require("pwft.unique_pal_campaign")
+local UniquePalBossProviderBus =
+    require("pwft.unique_pal_boss_provider_bus")
+local UniquePalBossNativeProduction =
+    require("pwft.unique_pal_boss_native_production")
+local UniquePalWorldEffectBus =
+    require("pwft.unique_pal_world_effect_bus")
+local UniquePalWorldEffectNativeProduction =
+    require("pwft.unique_pal_world_effect_native_production")
+local UniquePalNativeDeliveryBridge =
+    require("pwft.unique_pal_native_delivery_bridge")
+local UniquePalNativeDeliveryAdapter =
+    require("pwft.unique_pal_native_delivery_adapter")
+local UniquePalNativeDeliveryProduction =
+    require("pwft.unique_pal_native_delivery_production")
+local UniquePalNativeDeliveryProbe =
+    require("pwft.unique_pal_native_delivery_probe")
+local UniquePalNativeDeliveryLiveTest =
+    require("pwft.unique_pal_native_delivery_live_test")
+local UniquePalRansomShopBridge =
+    require("pwft.unique_pal_ransom_shop_bridge")
 local WorldBalance = require("pwft.world_balance")
 
 local PREFIX = "[PalFactionTerritory0]"
@@ -1082,10 +1126,10 @@ local function register_console_commands(config, registry, policy, state)
                 log_to_console(ar, "USAGE pwft.progress join <humanFactionId>")
                 return true
             end
-            local outcome = state.factionProgression:join(faction_id)
-            if outcome.ok then
-                refresh_after_progression_change(faction_id)
-            end
+            local outcome = state.factionApi:join_human(
+                faction_id,
+                "operator-console-confirmed"
+            )
             log_to_console(ar, string.format(
                 "PROGRESSION_JOIN faction=%s ok=%s reason=%s rank=%s",
                 tostring(faction_id),
@@ -1094,36 +1138,10 @@ local function register_console_commands(config, registry, policy, state)
                 tostring(outcome.rankId or "none")
             ))
         elseif operation == "grant" then
-            local faction_id = parts[3]
-            local source = parts[4]
-            local amount = tonumber(parts[5])
-            if faction_id == nil or source == nil or amount == nil then
-                log_to_console(ar, "USAGE pwft.progress grant <humanFactionId> task|defense|commerce <positiveAmount> [commerceWindowId]")
-                return true
-            end
-            local outcome = state.factionProgression:grant_reputation(
-                faction_id,
-                source,
-                amount,
-                {
-                    windowId = parts[6],
-                    contextId = "console-offline-probe",
-                }
+            log_to_console(
+                ar,
+                "PROGRESSION_GRANT_DISABLED reason=authoritative-operation-required"
             )
-            if outcome.ok and outcome.applied ~= nil and outcome.applied > 0 then
-                refresh_after_progression_change(faction_id)
-            end
-            log_to_console(ar, string.format(
-                "PROGRESSION_GRANT faction=%s source=%s ok=%s reason=%s requested=%s applied=%s after=%s rank=%s",
-                tostring(faction_id),
-                tostring(source),
-                tostring(outcome.ok),
-                outcome.reason,
-                tostring(outcome.requested or amount),
-                tostring(outcome.applied or 0),
-                tostring(outcome.after or "unchanged"),
-                tostring(outcome.rankId or "none")
-            ))
         elseif operation == "reconcile" then
             local faction_id = parts[3]
             if faction_id == nil then
@@ -1154,7 +1172,7 @@ local function register_console_commands(config, registry, policy, state)
                 #gate.missingPalFriendly
             ))
         else
-            log_to_console(ar, "USAGE pwft.progress status [factionId]|join <humanFactionId>|grant <humanFactionId> task|defense|commerce <positiveAmount> [commerceWindowId]|reconcile <palFactionId>|gate")
+            log_to_console(ar, "USAGE pwft.progress status [factionId]|join <humanFactionId>|reconcile <palFactionId>|gate")
         end
         return true
     end)
@@ -2762,10 +2780,13 @@ local function schedule_economy_merchant_presence_poll(state, generation)
         -- ExecuteWithDelay calls made from an ExecuteInGameThread callback can
         -- silently stop after the first hop on the live Palworld build.
         if presence.generation ~= generation then
-            if type(state.callbacks.economyMerchantPresencePolls)
-                == "table" then
-                state.callbacks.economyMerchantPresencePolls[generation] = nil
-            end
+            -- Do not release this Lua closure from inside its own LoopAsync
+            -- invocation.  UE4SS 3.0.1 still consults the registry ref while
+            -- unwinding the native timer; clearing the last strong reference
+            -- here turns that ref into "Ref was not function" and removes the
+            -- shared EngineTick hook.  The number of boot-world generations
+            -- is bounded, so retaining the fenced closure for the process
+            -- lifetime is the safe trade-off.
             return true
         end
         ExecuteInGameThread(game_callback)
@@ -2835,6 +2856,100 @@ local function start_economy_merchant_presence(
     schedule_economy_merchant_presence_poll(state, generation)
 end
 
+local function schedule_unique_pal_native_delivery_poll(state, generation)
+    if state.uniquePalDeliveryPollScheduledGeneration == generation then
+        return
+    end
+    if type(LoopAsync) ~= "function"
+        or type(ExecuteInGameThread) ~= "function" then
+        log("UNIQUE_PAL_NATIVE_DELIVERY_POLL_UNAVAILABLE scheduler-api")
+        return
+    end
+    state.uniquePalDeliveryPollScheduledGeneration = generation
+    local interval_ms = 1000
+    local poll_state = {
+        tickCount = 0,
+        lastPendingCount = nil,
+        lastConfirmedCount = nil,
+    }
+    local game_callback = function()
+        if state.inGameWorldReady ~= true
+            or state.inGameWorldGeneration ~= generation
+            or state.nativeWorldGeneration ~= generation then
+            return
+        end
+        poll_state.tickCount = poll_state.tickCount + 1
+        local probes = state.callbacks.mainWorldPostloadProbes or {}
+        local probe = probes[generation]
+        if poll_state.tickCount >= 10
+            and probe ~= nil
+            and probe.executed ~= true
+            and type(probe.gameThread) == "function" then
+            probe.executed = true
+            probe.gameThread()
+            log(string.format(
+                "MAIN_WORLD_POSTLOAD_PROBE_EXECUTED generation=%d tick=%d route=unique-pal-delivery-game-callback unregister=false",
+                generation,
+                poll_state.tickCount
+            ))
+        end
+        local bus = state.uniquePalWorldEffectBus
+        local bridge = state.uniquePalNativeDeliveryBridge
+        if bus == nil or bridge == nil
+            or type(bus.retry_pending_kind) ~= "function"
+            or type(bridge.process_all_pending) ~= "function" then
+            return
+        end
+        local retried = bus:retry_pending_kind("pal-delivery")
+        local pumped = bridge:process_all_pending()
+        local status = bridge:status()
+        local should_log = poll_state.tickCount <= 3
+            or (tonumber(retried.attemptedCount) or 0) > 0
+            or (tonumber(pumped.attemptedCount) or 0) > 0
+            or poll_state.lastPendingCount ~= status.pendingDeliveryCount
+            or poll_state.lastConfirmedCount ~= status.confirmedDeliveryCount
+        if should_log then
+            log(string.format(
+                "UNIQUE_PAL_NATIVE_DELIVERY_POLL tick=%d generation=%d busAttempted=%d bridgeAttempted=%d pending=%d confirmed=%d busReason=%s bridgeReason=%s",
+                poll_state.tickCount,
+                generation,
+                tonumber(retried.attemptedCount) or 0,
+                tonumber(pumped.attemptedCount) or 0,
+                tonumber(status.pendingDeliveryCount) or 0,
+                tonumber(status.confirmedDeliveryCount) or 0,
+                tostring(retried.reason or "none"),
+                tostring(pumped.reason or "none")
+            ))
+        end
+        poll_state.lastPendingCount = status.pendingDeliveryCount
+        poll_state.lastConfirmedCount = status.confirmedDeliveryCount
+    end
+    local callback = function()
+        if state.nativeWorldGeneration ~= generation then
+            -- Never unregister a LoopAsync closure on UE4SS 3.0.1. Its
+            -- callback-release path can invalidate the shared EngineTick Lua
+            -- registry. Old generations stay alive as cheap fenced no-ops
+            -- until process exit.
+            return false
+        end
+        ExecuteInGameThread(game_callback)
+        return false
+    end
+    state.callbacks.uniquePalNativeDeliveryPolls =
+        state.callbacks.uniquePalNativeDeliveryPolls or {}
+    state.callbacks.uniquePalNativeDeliveryPolls[generation] = callback
+    state.callbacks.uniquePalNativeDeliveryGameCallbacks =
+        state.callbacks.uniquePalNativeDeliveryGameCallbacks or {}
+    state.callbacks.uniquePalNativeDeliveryGameCallbacks[generation] =
+        game_callback
+    LoopAsync(interval_ms, callback)
+    log(string.format(
+        "UNIQUE_PAL_NATIVE_DELIVERY_POLL_READY mode=LoopAsync generation=%d intervalMs=%d oneShotDelay=false",
+        generation,
+        interval_ms
+    ))
+end
+
 local function activate_in_game_world_services(
     config,
     registry,
@@ -2846,19 +2961,11 @@ local function activate_in_game_world_services(
     state.inGameWorldReady = true
     state.inGameWorldGeneration = generation
     start_economy_merchant_presence(config, state, source)
-
-    if state.mainWorldProbeScheduledGeneration == generation then
-        return
-    end
-    state.mainWorldProbeScheduledGeneration = generation
-    if type(ExecuteWithDelay) ~= "function"
-        or type(ExecuteInGameThread) ~= "function" then
-        log("MAIN_WORLD_POSTLOAD_PROBE_UNAVAILABLE scheduler-api")
-        return
-    end
-
-    ExecuteWithDelay(10000, function()
-        ExecuteInGameThread(function()
+    if state.mainWorldProbeScheduledGeneration ~= generation then
+        state.mainWorldProbeScheduledGeneration = generation
+        state.callbacks.mainWorldPostloadProbes =
+            state.callbacks.mainWorldPostloadProbes or {}
+        local game_thread_callback = function()
             if state.inGameWorldReady ~= true
                 or state.inGameWorldGeneration ~= generation
                 or state.nativeWorldGeneration ~= generation then
@@ -2896,13 +3003,21 @@ local function activate_in_game_world_services(
                     config.rayneMerchant.spawnDelayMs
                 )
             end
-        end)
-    end)
-    log(string.format(
-        "MAIN_WORLD_POSTLOAD_PROBE_SCHEDULED generation=%d delayMs=10000 source=%s",
-        generation,
-        tostring(source or "unknown")
-    ))
+        end
+        -- Piggyback on the B7 delivery pump's durable game-thread callback.
+        -- Creating a second one-shot ExecuteInGameThread/LoopAsync callback
+        -- corrupts UE4SS 3.0.1's shared EngineTick registry when it is freed.
+        state.callbacks.mainWorldPostloadProbes[generation] = {
+            executed = false,
+            gameThread = game_thread_callback,
+        }
+        log(string.format(
+            "MAIN_WORLD_POSTLOAD_PROBE_SCHEDULED mode=delivery-poll-game-callback generation=%d afterTicks=10 unregister=false source=%s",
+            generation,
+            tostring(source or "unknown")
+        ))
+    end
+    schedule_unique_pal_native_delivery_poll(state, generation)
 end
 
 local function register_guard_console_command(state)
@@ -3080,42 +3195,71 @@ local function register_agent_dialogue_runtime(config, state)
         operator:publish_status("scheduler-unavailable")
         return
     end
-    local function schedule()
-        local callback
-        callback = function()
-            ExecuteInGameThread(function()
-                local ok, outcome = pcall(function()
-                    return operator:tick()
-                end)
-                if not ok then
-                    log("AGENT_DIALOGUE_POLL_ERROR error=" .. tostring(outcome))
-                elseif outcome.reason ~= "operator-idle"
-                    and outcome.reason ~= "agent-response-pending" then
-                    log(string.format(
-                        "AGENT_DIALOGUE_POLL ok=%s reason=%s request=%s mutation=false",
-                        tostring(outcome.ok),
-                        tostring(outcome.reason),
-                        tostring(outcome.requestId or "none")
-                    ))
-                end
-                if not use_loop_async then
-                    schedule()
-                end
+    local function schedule(generation)
+        local game_callback = function()
+            if operator.generation ~= generation then
+                return
+            end
+            local ok, outcome = pcall(function()
+                return operator:tick()
             end)
+            if not ok then
+                log("AGENT_DIALOGUE_POLL_ERROR error=" .. tostring(outcome))
+            elseif outcome.reason ~= "operator-idle"
+                and outcome.reason ~= "agent-response-pending" then
+                log(string.format(
+                    "AGENT_DIALOGUE_POLL ok=%s reason=%s request=%s mutation=false",
+                    tostring(outcome.ok),
+                    tostring(outcome.reason),
+                    tostring(outcome.requestId or "none")
+                ))
+            end
+            if not use_loop_async
+                and operator.generation == generation then
+                schedule(generation)
+            end
+        end
+        local callback = function()
+            if operator.generation ~= generation then
+                -- UE4SS 3.0.1 may still consult the Lua registry reference
+                -- while unwinding this stale LoopAsync timer.  Keep every
+                -- world-generation closure strongly referenced for the
+                -- process lifetime, exactly as the merchant-presence loop
+                -- does, so a Title -> MainWorld transition cannot remove the
+                -- shared EngineTick hook with "Ref was not function".
+                return true
+            end
+            ExecuteInGameThread(game_callback)
             return false
         end
-        state.callbacks.agentDialoguePoll = callback
+        state.callbacks.agentDialoguePolls =
+            state.callbacks.agentDialoguePolls or {}
+        state.callbacks.agentDialoguePolls[generation] =
+            state.callbacks.agentDialoguePolls[generation] or {}
+        table.insert(
+            state.callbacks.agentDialoguePolls[generation],
+            callback
+        )
+        state.callbacks.agentDialogueGameCallbacks =
+            state.callbacks.agentDialogueGameCallbacks or {}
+        state.callbacks.agentDialogueGameCallbacks[generation] =
+            state.callbacks.agentDialogueGameCallbacks[generation] or {}
+        table.insert(
+            state.callbacks.agentDialogueGameCallbacks[generation],
+            game_callback
+        )
         if use_loop_async then
             LoopAsync(poll_interval, callback)
         else
             ExecuteWithDelay(poll_interval, callback)
         end
     end
-    operator:on_world_loaded()
-    schedule()
+    local generation = operator:on_world_loaded()
+    schedule(generation)
     log(string.format(
-        "AGENT_DIALOGUE_RUNTIME_READY bridge=true operator=true pollMs=%d command=pwft.dialogue externalInput=true playerConfirmation=F3 mutation=false",
-        poll_interval
+        "AGENT_DIALOGUE_RUNTIME_READY bridge=true operator=true pollMs=%d generation=%d command=pwft.dialogue externalInput=true playerConfirmation=F3 mutation=false",
+        poll_interval,
+        generation
     ))
 end
 
@@ -3258,6 +3402,584 @@ local function register_guard_live_test(config, state)
     ))
 end
 
+local function register_unique_pal_native_delivery_live_test(
+    config,
+    state
+)
+    local qa = config.uniquePalNativeDeliveryLiveTest
+    if qa.enabled ~= true then
+        log("UNIQUE_PAL_NATIVE_DELIVERY_LIVE_TEST_DISABLED config=false")
+        return
+    end
+    if state.uniquePalNativeDeliveryLiveTest == nil
+        or type(RegisterKeyBind) ~= "function"
+        or Key == nil
+        or Key[qa.key] == nil
+        or ModifierKey == nil
+        or ModifierKey.CONTROL == nil then
+        log("UNIQUE_PAL_NATIVE_DELIVERY_LIVE_TEST_UNAVAILABLE harness-or-keybind-api")
+        return
+    end
+    local callback = function()
+        local execute = function()
+            local started = state.uniquePalNativeDeliveryLiveTest
+                :start(state.nativeWorldGeneration)
+            log(string.format(
+                "UNIQUE_PAL_NATIVE_DELIVERY_LIVE_TEST_TRIGGER ok=%s reason=%s delivery=%s individual=%s generation=%d mutation=true",
+                tostring(started.ok == true),
+                tostring(started.reason),
+                tostring(started.deliveryId or "none"),
+                tostring(started.individualKey or "none"),
+                state.nativeWorldGeneration
+            ))
+        end
+        if type(ExecuteInGameThread) == "function" then
+            ExecuteInGameThread(execute)
+        else
+            execute()
+        end
+    end
+    state.callbacks.uniquePalNativeDeliveryLiveTest = callback
+    RegisterKeyBind(
+        Key[qa.key],
+        { ModifierKey.CONTROL },
+        callback
+    )
+    log(string.format(
+        "UNIQUE_PAL_NATIVE_DELIVERY_LIVE_TEST_READY key=Ctrl+%s species=%s level=%d maxAttempts=%d retryMs=%d qaOnly=true directContainerMutation=false",
+        qa.key,
+        qa.speciesId,
+        qa.level,
+        qa.maxAttempts,
+        qa.retryDelayMs
+    ))
+end
+
+local function register_unique_pal_boss_live_test(config, state)
+    local production = config.uniquePalBossNativeProduction
+    local qa = production and production.qa or nil
+    if type(qa) ~= "table" or qa.enabled ~= true then
+        log("UNIQUE_PAL_BOSS_LIVE_TEST_DISABLED config=false")
+        return
+    end
+    if state.uniquePalBossNativeProduction == nil
+        or type(RegisterKeyBind) ~= "function"
+        or Key == nil
+        or Key[qa.openKey] == nil
+        or Key[qa.captureKey] == nil
+        or Key[qa.timeoutKey] == nil
+        or Key[qa.cycleKey] == nil
+        or Key[qa.weakenKey] == nil
+        or Key[qa.suppressionProbeKey] == nil
+        or ModifierKey == nil
+        or ModifierKey.CONTROL == nil then
+        log("UNIQUE_PAL_BOSS_LIVE_TEST_UNAVAILABLE harness-or-keybind-api")
+        return
+    end
+    local selected_ids = {}
+    if type(qa.uniquePalIds) == "table" then
+        for _, unique_pal_id in ipairs(qa.uniquePalIds) do
+            if type(unique_pal_id) == "string" and unique_pal_id ~= "" then
+                selected_ids[#selected_ids + 1] = unique_pal_id
+            end
+        end
+    end
+    if #selected_ids == 0 then selected_ids[1] = qa.uniquePalId end
+    local selected_index = 1
+    for index, unique_pal_id in ipairs(selected_ids) do
+        if unique_pal_id == qa.uniquePalId then selected_index = index end
+    end
+    local function selected_unique_pal_id()
+        return selected_ids[selected_index]
+    end
+    local function select_unique_pal_id(unique_pal_id)
+        for index, candidate in ipairs(selected_ids) do
+            if candidate == unique_pal_id then
+                selected_index = index
+                return true
+            end
+        end
+        return false
+    end
+    local function execute_and_log(operation, callback)
+        local outcome = callback()
+        local status = state.uniquePalBossNativeProduction:status()
+        local selected_unique_pal = selected_unique_pal_id()
+        local campaign_status = state.uniquePalCampaign
+            :campaign_status(selected_unique_pal)
+        local bus_status = state.uniquePalBossProviderBus:status()
+        log(string.format(
+            "UNIQUE_PAL_BOSS_LIVE_TEST operation=%s uniquePal=%s ok=%s reason=%s phase=%s event=%s tick=%s active=%s bindings=%d records=%d spawns=%d spawnRetries=%d/%d captures=%d defeats=%d timeouts=%d suppressed=%d allowed=%d suppressionProbes=%d/%d cleanups=%d busApplied=%d busPending=%d generation=%d lastError=%s",
+            operation,
+            selected_unique_pal,
+            tostring(outcome and outcome.ok == true),
+            tostring(outcome and outcome.reason or "no-result"),
+            tostring(campaign_status and campaign_status.phase
+                or "unavailable"),
+            tostring(campaign_status and campaign_status.eventId
+                or "none"),
+            tostring(state.uniquePalCampaign:status().logicalTick),
+            tostring(status.active),
+            status.bindingCount,
+            status.activeRecordCount,
+            status.spawnConfirmedCount,
+            status.spawnRetryAttemptCount,
+            status.spawnRetryScheduledCount,
+            status.captureConfirmedCount,
+            status.defeatConfirmedCount,
+            status.timeoutConfirmedCount,
+            status.suppressedBossCount,
+            status.allowedUniqueBossCount,
+            status.suppressionProbePassCount,
+            status.suppressionProbeCount,
+            status.cleanupCount,
+            bus_status.appliedDeliveryCount,
+            bus_status.pendingDeliveryCount,
+            status.worldGeneration,
+            tostring(status.lastError or "none")
+        ))
+        return outcome
+    end
+    local operations = {
+        Open = function()
+            return state.uniquePalBossNativeProduction:force_open(
+                selected_unique_pal_id()
+            )
+        end,
+        Capture = function()
+            return state.uniquePalBossNativeProduction:capture_active(
+                selected_unique_pal_id()
+            )
+        end,
+        Timeout = function()
+            return state.uniquePalBossNativeProduction:force_timeout(
+                selected_unique_pal_id()
+            )
+        end,
+        Weaken = function()
+            return state.uniquePalBossNativeProduction:weaken_active(
+                selected_unique_pal_id()
+            )
+        end,
+        SuppressionProbe = function()
+            return state.uniquePalBossNativeProduction
+                :spawn_suppression_probe(qa.suppressionProbeCharacterId)
+        end,
+        Status = function()
+            return { ok = true, reason = "unique-pal-live-test-status" }
+        end,
+        Funds = function()
+            if state.rewardDeliveryLiveTest == nil
+                or type(state.rewardDeliveryLiveTest.run) ~= "function" then
+                return {
+                    ok = false,
+                    reason = "reward-delivery-live-test-unavailable",
+                }
+            end
+            return state.rewardDeliveryLiveTest:run()
+        end,
+        JoinTarget = function()
+            local campaign_status = state.uniquePalCampaign
+                :campaign_status(selected_unique_pal_id())
+            if campaign_status == nil then
+                return {
+                    ok = false,
+                    reason = "unknown-unique-pal-campaign",
+                }
+            end
+            local target = campaign_status.definition.target
+            local faction_id = target.kind == "faction" and target.id
+                or target.affectedFactionIds[1]
+            if faction_id == nil then
+                return {
+                    ok = false,
+                    reason = "unique-pal-target-has-no-human-faction",
+                }
+            end
+            local joined = state.factionProgression:join(faction_id)
+            joined.targetFactionId = faction_id
+            joined.qaOnly = true
+            return joined
+        end,
+        DeclareWar = function()
+            if state.uniquePalWorldEffectNativeProduction == nil then
+                return {
+                    ok = false,
+                    reason = "unique-pal-world-effect-production-unavailable",
+                }
+            end
+            return state.uniquePalWorldEffectNativeProduction:declare_war(
+                selected_unique_pal_id(),
+                true,
+                "qa-command-file"
+            )
+        end,
+        Ransom = function()
+            if state.uniquePalWorldEffectNativeProduction == nil then
+                return {
+                    ok = false,
+                    reason = "unique-pal-world-effect-production-unavailable",
+                }
+            end
+            return state.uniquePalWorldEffectNativeProduction
+                :request_nearest_ransom()
+        end,
+        Delivery = function()
+            if state.uniquePalWorldEffectBus == nil
+                or state.uniquePalNativeDeliveryBridge == nil
+                or type(state.uniquePalWorldEffectBus.retry_pending)
+                    ~= "function"
+                or type(state.uniquePalNativeDeliveryBridge
+                    .process_all_pending) ~= "function" then
+                return {
+                    ok = false,
+                    reason = "unique-pal-native-delivery-pump-unavailable",
+                }
+            end
+            local retried = state.uniquePalWorldEffectBus
+                :retry_pending_kind("pal-delivery")
+            local processed = state.uniquePalNativeDeliveryBridge
+                :process_all_pending()
+            local status = state.uniquePalNativeDeliveryBridge:status()
+            log(string.format(
+                "UNIQUE_PAL_NATIVE_DELIVERY_COMMAND retryOk=%s retryReason=%s processOk=%s processReason=%s attempted=%d confirmed=%d pending=%d rejected=%d bridgePending=%d bridgeApplied=%d last=%s qaOnly=true",
+                tostring(retried.ok == true),
+                tostring(retried.reason),
+                tostring(processed.ok == true),
+                tostring(processed.reason),
+                tonumber(processed.attemptedCount) or 0,
+                tonumber(processed.confirmedCount) or 0,
+                tonumber(processed.pendingCount) or 0,
+                tonumber(processed.rejectedCount) or 0,
+                tonumber(status.pendingDeliveryCount) or 0,
+                tonumber(status.appliedDeliveryCount) or 0,
+                tostring(processed.lastDeliveryReason or "none")
+            ))
+            return {
+                ok = retried.ok == true and processed.ok == true,
+                reason = processed.reason,
+                retry = retried,
+                process = processed,
+                pendingDeliveryCount = status.pendingDeliveryCount,
+                appliedDeliveryCount = status.appliedDeliveryCount,
+            }
+        end,
+    }
+    local function bind(key_name, operation, callback)
+        local handler = function()
+            local execute = function()
+                execute_and_log(operation, callback)
+            end
+            if type(ExecuteInGameThread) == "function" then
+                ExecuteInGameThread(execute)
+            else
+                execute()
+            end
+        end
+        state.callbacks["uniquePalBossLiveTest" .. operation] =
+            handler
+        if qa.requireControlModifier == false then
+            RegisterKeyBind(Key[key_name], handler)
+        else
+            RegisterKeyBind(
+                Key[key_name],
+                { ModifierKey.CONTROL },
+                handler
+            )
+        end
+    end
+    bind(qa.openKey, "Open", function()
+        return operations.Open()
+    end)
+    bind(qa.captureKey, "Capture", function()
+        return operations.Capture()
+    end)
+    bind(qa.timeoutKey, "Timeout", function()
+        return operations.Timeout()
+    end)
+    bind(qa.weakenKey, "Weaken", function()
+        return operations.Weaken()
+    end)
+    bind(qa.suppressionProbeKey, "SuppressionProbe", function()
+        return operations.SuppressionProbe()
+    end)
+    bind(qa.cycleKey, "Cycle", function()
+        selected_index = selected_index % #selected_ids + 1
+        return {
+            ok = true,
+            reason = "unique-pal-live-test-selection-cycled",
+            uniquePalId = selected_unique_pal_id(),
+        }
+    end)
+    if qa.commandFileEnabled == true then
+        local command_path = qa.commandFilePath
+        local poll_interval = tonumber(qa.commandPollIntervalMs) or 250
+        if type(command_path) ~= "string" or command_path == "" then
+            log("UNIQUE_PAL_BOSS_COMMAND_FILE_UNAVAILABLE path")
+        else
+            local last_sequence = nil
+            local command_names = {
+                open = "Open",
+                capture = "Capture",
+                timeout = "Timeout",
+                weaken = "Weaken",
+                probe = "SuppressionProbe",
+                status = "Status",
+                funds = "Funds",
+                join = "JoinTarget",
+                war = "DeclareWar",
+                ransom = "Ransom",
+                delivery = "Delivery",
+            }
+            local function read_command()
+                local handle = io.open(command_path, "rb")
+                if handle == nil then return nil end
+                local payload = handle:read("*a") or ""
+                handle:close()
+                local sequence, command, unique_pal_id = payload:match(
+                    "^%s*([%w%._%-]+)|([%a]+)|([%w%._%-]+)%s*$"
+                )
+                if sequence == nil then
+                    return nil
+                end
+                return sequence, command, unique_pal_id
+            end
+            local function dispatch_if_new(sequence, command, unique_pal_id)
+                if sequence == nil or sequence == last_sequence then
+                    return false
+                end
+                last_sequence = sequence
+                local normalized = string.lower(command)
+                local operation = command_names[normalized]
+                if not select_unique_pal_id(unique_pal_id) then
+                    log(string.format(
+                        "UNIQUE_PAL_BOSS_COMMAND_FILE_RESULT sequence=%s command=%s uniquePal=%s ok=false reason=unknown-unique-pal",
+                        sequence, normalized, unique_pal_id
+                    ))
+                    return true
+                end
+                if operation == nil then
+                    log(string.format(
+                        "UNIQUE_PAL_BOSS_COMMAND_FILE_RESULT sequence=%s command=%s uniquePal=%s ok=false reason=unknown-command",
+                        sequence, normalized, unique_pal_id
+                    ))
+                    return true
+                end
+                local ok, outcome = pcall(function()
+                    return execute_and_log(operation, operations[operation])
+                end)
+                log(string.format(
+                    "UNIQUE_PAL_BOSS_COMMAND_FILE_RESULT sequence=%s command=%s uniquePal=%s ok=%s reason=%s",
+                    sequence,
+                    normalized,
+                    unique_pal_id,
+                    tostring(ok and outcome and outcome.ok == true),
+                    tostring(ok and outcome and outcome.reason
+                        or outcome or "no-result")
+                ))
+                return true
+            end
+            local function poll_once()
+                local sequence, command, unique_pal_id = read_command()
+                return dispatch_if_new(sequence, command, unique_pal_id)
+            end
+            local function poll()
+                local sequence, command, unique_pal_id = read_command()
+                if sequence == nil or sequence == last_sequence then
+                    return false
+                end
+                -- Do not consume the sequence until this callback actually
+                -- reaches the game thread. If UE4SS drops its shared
+                -- EngineTick callback, the native UserWidget hook below can
+                -- still consume the same command synchronously.
+                ExecuteInGameThread(function()
+                    dispatch_if_new(sequence, command, unique_pal_id)
+                end)
+                return false
+            end
+            state.callbacks.uniquePalBossCommandFilePollOnce = poll_once
+            state.callbacks.uniquePalBossCommandFilePoll = poll
+            -- M remains a useful fallback when the shared EngineTick dies,
+            -- but Palworld opens its native world map after the key callback
+            -- and can cover a shop presented by the same command.  Give the
+            -- explicitly QA-only command file one non-native synchronous
+            -- trigger so UI-producing commands (notably ransom) execute
+            -- without racing the map.  Formal config keeps this entire
+            -- harness disabled.
+            if Key.F2 ~= nil then
+                local command_key_handler = function()
+                    local ok, dispatched = pcall(poll_once)
+                    if not ok then
+                        log(string.format(
+                            "UNIQUE_PAL_BOSS_COMMAND_KEY_TRIGGER_FAILED key=F2 error=%s",
+                            tostring(dispatched)
+                        ))
+                    elseif dispatched == true then
+                        log("UNIQUE_PAL_BOSS_COMMAND_KEY_TRIGGER key=F2 dispatched=true qaOnly=true")
+                    end
+                end
+                state.callbacks.uniquePalBossCommandFileKeyTrigger =
+                    command_key_handler
+                RegisterKeyBind(Key.F2, command_key_handler)
+                log("UNIQUE_PAL_BOSS_COMMAND_KEY_READY key=F2 qaOnly=true")
+            end
+            if type(LoopAsync) == "function"
+                and type(ExecuteInGameThread) == "function" then
+                LoopAsync(poll_interval, poll)
+            else
+                log("UNIQUE_PAL_BOSS_COMMAND_FILE_ASYNC_UNAVAILABLE native-widget-fallback-only")
+            end
+            log(string.format(
+                "UNIQUE_PAL_BOSS_COMMAND_FILE_READY path=%s pollMs=%d nativeWidgetFallback=true qaOnly=true",
+                command_path,
+                poll_interval
+            ))
+        end
+    end
+    log(string.format(
+        "UNIQUE_PAL_BOSS_LIVE_TEST_READY uniquePal=%s choices=%d open=%s%s capture=%s%s timeout=%s%s weaken=%s%s cycle=%s%s suppression=%s%s probeCharacter=%s destructive=true qaOnly=true",
+        selected_unique_pal_id(),
+        #selected_ids,
+        qa.requireControlModifier == false and "" or "Ctrl+",
+        qa.openKey,
+        qa.requireControlModifier == false and "" or "Ctrl+",
+        qa.captureKey,
+        qa.requireControlModifier == false and "" or "Ctrl+",
+        qa.timeoutKey,
+        qa.requireControlModifier == false and "" or "Ctrl+",
+        qa.weakenKey,
+        qa.requireControlModifier == false and "" or "Ctrl+",
+        qa.cycleKey,
+        qa.requireControlModifier == false and "" or "Ctrl+",
+        qa.suppressionProbeKey,
+        qa.suppressionProbeCharacterId
+    ))
+end
+
+local function register_unique_pal_world_effect_live_test(config, state)
+    local production_config =
+        config.uniquePalWorldEffectNativeProduction
+    local qa = production_config and production_config.qa or nil
+    if type(qa) ~= "table" or qa.enabled ~= true then
+        log("UNIQUE_PAL_WORLD_EFFECT_LIVE_TEST_DISABLED config=false")
+        return
+    end
+    if state.uniquePalWorldEffectNativeProduction == nil
+        or type(RegisterKeyBind) ~= "function"
+        or Key == nil
+        or Key[qa.joinTargetKey] == nil
+        or Key[qa.warKey] == nil
+        or ModifierKey == nil
+        or ModifierKey.CONTROL == nil then
+        log("UNIQUE_PAL_WORLD_EFFECT_LIVE_TEST_UNAVAILABLE harness-or-keybind-api")
+        return
+    end
+    local function report(operation, outcome)
+        local campaign_status = state.uniquePalCampaign
+            :campaign_status(qa.uniquePalId)
+        local target = campaign_status and campaign_status.definition
+            and campaign_status.definition.target or nil
+        local target_status = target and state.uniquePalCampaign
+            :target_status(target.kind, target.id) or nil
+        local production_status =
+            state.uniquePalWorldEffectNativeProduction:status()
+        log(string.format(
+            "UNIQUE_PAL_WORLD_EFFECT_LIVE_TEST operation=%s uniquePal=%s ok=%s reason=%s owner=%s:%s target=%s:%s targetStatus=%s activeWar=%s route=%s declarations=%d backgroundResults=%d defenseRequests=%d defenseResults=%d spawnSuppressions=%d emptyCities=%d merchantFilters=%d ransomOffers=%d generation=%d lastError=%s",
+            operation,
+            qa.uniquePalId,
+            tostring(outcome and outcome.ok == true),
+            tostring(outcome and outcome.reason or "no-result"),
+            tostring(campaign_status and campaign_status.owner
+                and campaign_status.owner.kind or "none"),
+            tostring(campaign_status and campaign_status.owner
+                and campaign_status.owner.id or "none"),
+            tostring(target and target.kind or "none"),
+            tostring(target and target.id or "none"),
+            tostring(target_status and target_status.status or "none"),
+            tostring(campaign_status and campaign_status.activeWarId
+                or "none"),
+            tostring(campaign_status and campaign_status.activeWar
+                and campaign_status.activeWar.route or "none"),
+            production_status.warDeclarationCount,
+            production_status.backgroundResolutionCount,
+            production_status.playerDefenseRequestCount,
+            production_status.playerDefenseResolutionCount,
+            production_status.spawnSuppressionCount,
+            production_status.emptyCityCount,
+            production_status.merchantFilterCount,
+            production_status.ransomOfferCount,
+            production_status.worldGeneration,
+            tostring(production_status.lastError or "none")
+        ))
+    end
+    local function bind(key_name, operation, callback)
+        local handler = function()
+            local execute = function()
+                local ok, outcome = pcall(callback)
+                if not ok then
+                    outcome = {
+                        ok = false,
+                        reason = "qa-callback-failed:" .. tostring(outcome),
+                    }
+                end
+                report(operation, outcome)
+            end
+            if type(ExecuteInGameThread) == "function" then
+                ExecuteInGameThread(execute)
+            else
+                execute()
+            end
+        end
+        state.callbacks["uniquePalWorldEffectLiveTest" .. operation] =
+            handler
+        if qa.requireControlModifier == false then
+            RegisterKeyBind(Key[key_name], handler)
+        else
+            RegisterKeyBind(
+                Key[key_name],
+                { ModifierKey.CONTROL },
+                handler
+            )
+        end
+    end
+    bind(qa.joinTargetKey, "JoinTarget", function()
+        local campaign_status = state.uniquePalCampaign
+            :campaign_status(qa.uniquePalId)
+        if campaign_status == nil then
+            return { ok = false, reason = "unknown-unique-pal-campaign" }
+        end
+        local target = campaign_status.definition.target
+        local faction_id = target.kind == "faction" and target.id
+            or target.affectedFactionIds[1]
+        if faction_id == nil then
+            return {
+                ok = false,
+                reason = "unique-pal-target-has-no-human-faction",
+            }
+        end
+        local joined = state.factionProgression:join(faction_id)
+        joined.targetFactionId = faction_id
+        joined.qaOnly = true
+        return joined
+    end)
+    bind(qa.warKey, "DeclareWar", function()
+        return state.uniquePalWorldEffectNativeProduction:declare_war(
+            qa.uniquePalId,
+            qa.forceAttackerWin == true,
+            "qa-live-test"
+        )
+    end)
+    log(string.format(
+        "UNIQUE_PAL_WORLD_EFFECT_LIVE_TEST_READY uniquePal=%s joinTarget=%s%s declareWar=%s%s forcedAttackerWin=%s qaOnly=true sidecarWrites=true PalworldSaveWrites=0",
+        qa.uniquePalId,
+        qa.requireControlModifier == false and "" or "Ctrl+",
+        qa.joinTargetKey,
+        qa.requireControlModifier == false and "" or "Ctrl+",
+        qa.warKey,
+        tostring(qa.forceAttackerWin == true)
+    ))
+end
+
 local function register_rayne_relation_live_test(config, policy, state)
     local qa = config.rayneMerchant.relationLiveTest
     if qa == nil or qa.enabled ~= true then
@@ -3329,7 +4051,7 @@ end
 local function register_economy_merchant_interaction_router(state)
     if type(RegisterKeyBind) ~= "function"
         or Key == nil
-        or Key.F6 == nil then
+        or Key.F8 == nil then
         log("ECONOMY_MERCHANT_INTERACTION_ROUTER_UNAVAILABLE keybind-api")
         return
     end
@@ -3345,20 +4067,103 @@ local function register_economy_merchant_interaction_router(state)
                 return
             end
             local outcome = state.factionEconomyMerchantRuntime
-                :interact_nearest(pawn, 350)
-            if outcome.ok
-                or outcome.reason ~= "no-economy-merchant-in-range" then
-                log(string.format(
-                    "ECONOMY_MERCHANT_INTERACTION_ROUTED ok=%s reason=%s faction=%s actor=%s distance=%s route=%s detail=%s",
-                    tostring(outcome.ok),
-                    tostring(outcome.reason),
-                    tostring(outcome.factionId or "none"),
-                    safe_full_name(outcome.actor),
-                    tostring(outcome.distance or "none"),
-                    tostring(outcome.route or "none"),
-                    tostring(outcome.detail or "none")
-                ))
+                :interact_nearest(pawn, 700)
+            if not outcome.ok
+                and outcome.reason == "no-economy-merchant-in-range" then
+                local rayne = state.rayneMerchant
+                local actor = rayne and rayne.actor
+                local faction_id = rayne
+                        and rayne.config
+                        and rayne.config.factionId
+                    or "pwft.faction.rayne_syndicate"
+                local relation_record = state.relations[faction_id]
+                local relation = type(relation_record) == "table"
+                        and relation_record.state
+                    or relation_record
+                    or "Friendly"
+                if relation == "Hostile" then
+                    outcome = {
+                        ok = false,
+                        reason = "rayne-merchant-hostile",
+                        factionId = faction_id,
+                        actor = actor,
+                    }
+                elseif not is_valid_object(actor) then
+                    outcome = {
+                        ok = false,
+                        reason = "rayne-merchant-unavailable",
+                        factionId = faction_id,
+                        actor = actor,
+                    }
+                else
+                    local distance_ok, distance_squared = pcall(function()
+                        return actor:GetSquaredDistanceTo(pawn)
+                    end)
+                    local distance_number = distance_ok
+                            and tonumber(distance_squared)
+                        or nil
+                    local distance = distance_ok
+                            and distance_number
+                            and math.sqrt(math.max(0, distance_number))
+                        or nil
+                    if distance == nil or distance > 700 then
+                        outcome = {
+                            ok = false,
+                            reason = "rayne-merchant-out-of-range",
+                            factionId = faction_id,
+                            actor = actor,
+                            distance = distance,
+                        }
+                    else
+                        local interaction = nil
+                        pcall(function()
+                            interaction = actor.BP_NPCInteractionComponent
+                        end)
+                        if not is_valid_object(interaction) then
+                            outcome = {
+                                ok = false,
+                                reason = "rayne-merchant-interaction-unavailable",
+                                factionId = faction_id,
+                                actor = actor,
+                                distance = distance,
+                            }
+                        else
+                            -- Build 24575825 declares two native arguments:
+                            -- Other and EPalInteractiveObjectIndicatorType.
+                            -- The regular overlap route supplies Talk (39);
+                            -- deterministic F8 dispatch must do the same.
+                            local talk_indicator_type = 39
+                            local opened, detail = pcall(function()
+                                return interaction:OnTriggerInteract(
+                                    pawn,
+                                    talk_indicator_type
+                                )
+                            end)
+                            outcome = {
+                                ok = opened,
+                                reason = opened
+                                        and "rayne-native-pal-shop-dispatched"
+                                    or "rayne-native-pal-shop-dispatch-failed",
+                                factionId = faction_id,
+                                actor = actor,
+                                distance = distance,
+                                route = "PalNPCInteractionComponent.OnTriggerInteract(Talk)",
+                                detail = detail,
+                            }
+                        end
+                    end
+                end
             end
+            log(string.format(
+                "ECONOMY_MERCHANT_INTERACTION_ROUTED ok=%s reason=%s faction=%s actor=%s distance=%s route=%s detail=%s",
+                tostring(outcome.ok),
+                tostring(outcome.reason),
+                tostring(outcome.factionId or "none"),
+                safe_full_name(outcome.actor),
+                tostring(outcome.distance or "none"),
+                tostring(outcome.route or "none"),
+                tostring(outcome.detail or "none")
+            ))
         end
         if type(ExecuteInGameThread) == "function" then
             ExecuteInGameThread(apply)
@@ -3370,10 +4175,14 @@ local function register_economy_merchant_interaction_router(state)
     -- Keep the Merchant Guild interaction route on its own key.  Palworld's
     -- ordinary F action is context-sensitive (beds, containers, workbenches)
     -- and consumes the key before UE4SS when one of those indicators is
-    -- active.  F6 remains deterministic without replacing native actions.
-    RegisterKeyBind(Key.F6, callback)
+    -- active.  F8 remains deterministic without replacing native actions.
+    -- F1/F2 are the faction-join confirmation pair, F5/F11/F12 are registered
+    -- later by PalFactionTerritoryQAHarness0, and F6 is owned by
+    -- PalMultiOtomo0. UE4SS resolves duplicate physical keys to the later
+    -- callback, so none of those keys can safely host this route.
+    RegisterKeyBind(Key.F8, callback)
     log(
-        "ECONOMY_MERCHANT_INTERACTION_ROUTER_READY key=F6 radius=350 route=refresh_merchant_shop->PalHUDService.Push(WBP_ItemShop_C,native-parameter) darkTraderPalShopBypassed=true"
+        "ECONOMY_MERCHANT_INTERACTION_ROUTER_READY key=F8 radius=700 route=economy-item-shop-or-rayne-native-pal-shop hostileRayneBlocked=true"
     )
 end
 
@@ -4285,6 +5094,172 @@ local function begin_progression_identity_probe(config, state)
     )
 end
 
+local function register_economy_war_live_test(config, state)
+    local qa = config.factionCommerce.economyWarLiveTest
+    if type(qa) ~= "table" or qa.enabled ~= true then
+        log("ECONOMY_WAR_LIVE_TEST_DISABLED config=false")
+        return
+    end
+    if state.factionEconomyWarLiveTest == nil
+        or type(RegisterKeyBind) ~= "function"
+        or Key == nil
+        or Key[qa.key] == nil
+        or ModifierKey == nil
+        or ModifierKey.CONTROL == nil then
+        log("ECONOMY_WAR_LIVE_TEST_UNAVAILABLE runtime-or-keybind-api")
+        return
+    end
+    local callback = function()
+        local apply = function()
+            if state.progressionStore == nil
+                or state.progressionStore.enabled ~= true then
+                log(
+                    "ECONOMY_WAR_LIVE_TEST_BLOCKED reason=progression-sidecar-not-ready mutations=0"
+                )
+                return
+            end
+            local outcome = state.factionEconomyWarLiveTest:advance()
+            local snapshot = outcome.snapshot
+                or state.factionEconomyWarLiveTest:status().snapshot
+                or {}
+            local native = outcome.nativeRefresh or {}
+            log(string.format(
+                "ECONOMY_WAR_LIVE_TEST_STEP run=%s ok=%s reason=%s phase=%s step=%s quantity=%s band=%s direction=%s sellPrice=%s stock=%s procurementPrice=%s procurementQuota=%s conflict=%s supplier=%s ledgerRevision=%s merchantActive=%s merchant=%s sameMerchant=%s nativeOk=%s nativeReason=%s persistence=%s restartRequired=%s story=false palworldSaveWrites=0",
+                tostring(qa.runId),
+                tostring(outcome.ok),
+                tostring(outcome.reason),
+                tostring(snapshot.phase or "none"),
+                tostring(outcome.stepCount or "none"),
+                tostring(snapshot.quantity or "none"),
+                tostring(snapshot.supplyBand or "none"),
+                tostring(snapshot.direction or "none"),
+                tostring(snapshot.sellPrice or "none"),
+                tostring(snapshot.stock or "none"),
+                tostring(snapshot.procurementPrice or "none"),
+                tostring(snapshot.procurementQuota or "none"),
+                tostring(snapshot.conflictStatus or "none"),
+                tostring(snapshot.supplierFactionId or "none"),
+                tostring(snapshot.resourceLedgerRevision or "none"),
+                tostring(snapshot.merchantActiveCount or "none"),
+                tostring(snapshot.merchantActorIdentity or "none"),
+                tostring(native.sameMerchantActor),
+                tostring(native.ok),
+                tostring(native.reason or "none"),
+                tostring(snapshot.persistenceConfirmed == true),
+                tostring(outcome.restartRequired == true)
+            ))
+        end
+        if type(ExecuteInGameThread) == "function" then
+            ExecuteInGameThread(apply)
+        else
+            apply()
+        end
+    end
+    state.callbacks.economyWarLiveTest = callback
+    RegisterKeyBind(
+        Key[qa.key],
+        { ModifierKey.CONTROL },
+        callback
+    )
+    local status = state.factionEconomyWarLiveTest:status()
+    log(string.format(
+        "ECONOMY_WAR_LIVE_TEST_READY key=Ctrl+%s run=%s phase=%s faction=%s resource=%s product=%s nativeMerchantRequired=%s restartGate=true story=false palworldSaveWrites=0",
+        qa.key,
+        qa.runId,
+        status.phase,
+        qa.factionId,
+        qa.resourceId,
+        qa.productItemId,
+        tostring(qa.nativeMerchantRequired == true)
+    ))
+end
+
+local function begin_unique_pal_native_delivery_probe(config, state)
+    local probe_config = config.uniquePalNativeDeliveryProbe
+    local probe = state.uniquePalNativeDeliveryProbe
+    if probe_config.enabled ~= true then
+        log("UNIQUE_PAL_NATIVE_DELIVERY_PROBE_DISABLED config=false")
+        return false
+    end
+    if type(ExecuteWithDelay) ~= "function" then
+        log("UNIQUE_PAL_NATIVE_DELIVERY_PROBE_UNAVAILABLE ExecuteWithDelay missing")
+        return false
+    end
+    local generation = state.nativeWorldGeneration
+    probe:bind_world(generation)
+    for attempt, delay_ms in ipairs(probe_config.retryDelaysMs) do
+        local attempt_number = attempt
+        local attempt_delay_ms = delay_ms
+        local callback = function()
+            local current = probe:status()
+            if current.worldBound ~= true
+                or current.worldGeneration ~= generation then
+                log(string.format(
+                    "UNIQUE_PAL_NATIVE_DELIVERY_PROBE_STALE attempt=%d requestedGeneration=%d currentGeneration=%d",
+                    attempt_number,
+                    generation,
+                    current.worldGeneration
+                ))
+                return
+            end
+            if current.successCount > 0
+                and current.lastResult ~= nil
+                and current.lastResult.worldGeneration == generation then
+                return
+            end
+            local outcome = probe:probe(generation)
+            log(string.format(
+                "UNIQUE_PAL_NATIVE_DELIVERY_PROBE_RESULT attempt=%d ok=%s reason=%s generation=%d readOnly=true mutation=false",
+                attempt_number,
+                tostring(outcome.ok == true),
+                tostring(outcome.reason),
+                generation
+            ))
+        end
+        state.callbacks[
+            "uniquePalNativeDeliveryProbe" .. attempt_number
+        ] =
+            callback
+        ExecuteWithDelay(attempt_delay_ms, callback)
+    end
+    log(string.format(
+        "UNIQUE_PAL_NATIVE_DELIVERY_PROBE_SCHEDULED generation=%d attempts=%d build=%s readOnly=true",
+        generation,
+        #probe_config.retryDelaysMs,
+        probe_config.buildId
+    ))
+    return true
+end
+
+local function dispatch_unique_pal_command_from_map_widget(state, widget)
+    local poll_once = state.callbacks
+        and state.callbacks.uniquePalBossCommandFilePollOnce
+    if type(poll_once) ~= "function" then
+        return false
+    end
+    local widget_name = safe_full_name(widget)
+    if string.find(widget_name, "WBP_Map_", 1, true) == nil then
+        return false
+    end
+    local ok, dispatched = pcall(poll_once)
+    if not ok then
+        log(string.format(
+            "UNIQUE_PAL_BOSS_COMMAND_WIDGET_TRIGGER_FAILED widget=%s error=%s",
+            widget_name,
+            tostring(dispatched)
+        ))
+        return false
+    end
+    if dispatched == true then
+        log(string.format(
+            "UNIQUE_PAL_BOSS_COMMAND_WIDGET_TRIGGER widget=%s dispatched=true qaOnly=true",
+            widget_name
+        ))
+        return true
+    end
+    return false
+end
+
 local function register_runtime_probes(config, registry, policy, state)
     -- Map-body polling runs after this setup.  Retain the exact startup inputs
     -- so that the delayed map-loaded callback can install the proper warning
@@ -4296,7 +5271,7 @@ local function register_runtime_probes(config, registry, policy, state)
         try_register_hook(
             state,
             "/Script/Pal.PalUIWorldMap:CreateWorldMapData",
-            function(_, map_type)
+            function(context, map_type)
                 local ok, error_message = pcall(function()
                     state.mapCreateCount = state.mapCreateCount + 1
                     log(string.format(
@@ -4305,6 +5280,10 @@ local function register_runtime_probes(config, registry, policy, state)
                         safe_to_string(safe_param_get(map_type)),
                         state.mapMode
                     ))
+                    dispatch_unique_pal_command_from_map_widget(
+                        state,
+                        safe_param_get(context)
+                    )
                     -- The title-screen probe intentionally finds no world-map
                     -- widget.  Re-scan only after the native map factory runs,
                     -- so the test-save session records the real Image_MapMask
@@ -4338,6 +5317,7 @@ local function register_runtime_probes(config, registry, policy, state)
             function(context)
                 local widget = safe_param_get(context)
                 local widget_name = safe_full_name(widget)
+                dispatch_unique_pal_command_from_map_widget(state, widget)
                 if string.find(widget_name, "WBP_Map_IconFTTower_C", 1, true) ~= nil
                     or string.find(widget_name, "WBP_Map_Base_C", 1, true) ~= nil then
                     local ready = ensure_map_fast_travel_selection_hooks(config, registry, policy, state)
@@ -4357,6 +5337,19 @@ local function register_runtime_probes(config, registry, policy, state)
         -- click-time hostile-destination guard.
         if type(RegisterKeyBind) == "function" then
             local map_open_observer = function()
+                local poll_once = state.callbacks
+                    and state.callbacks.uniquePalBossCommandFilePollOnce
+                if type(poll_once) == "function" then
+                    local ok, dispatched = pcall(poll_once)
+                    if not ok then
+                        log(string.format(
+                            "UNIQUE_PAL_BOSS_COMMAND_MAP_KEY_TRIGGER_FAILED error=%s",
+                            tostring(dispatched)
+                        ))
+                    elseif dispatched == true then
+                        log("UNIQUE_PAL_BOSS_COMMAND_MAP_KEY_TRIGGER dispatched=true qaOnly=true")
+                    end
+                end
                 schedule_map_widget_probe(state, 750)
             end
             state.callbacks.nativeMapOpenObserver = map_open_observer
@@ -4378,6 +5371,7 @@ local function register_runtime_probes(config, registry, policy, state)
             "/Script/UMG.UserWidget:Construct",
             function(context)
                 local widget = safe_param_get(context)
+                dispatch_unique_pal_command_from_map_widget(state, widget)
                 observe_place_name_hook_activation(config, registry, policy, state, widget)
             end
         )
@@ -4438,8 +5432,12 @@ local function register_runtime_probes(config, registry, policy, state)
             .nativeRaidResultBindingEnabled == true
     if (config.factionCommerce.economyMerchantPresence.enabled == true
         or config.palReconciliation.agentBridge.enabled == true
+        or config.uniquePalNativeDeliveryProbe.enabled == true
         or config.factionNpcAttitudes ~= nil
-        or config.npcLeaderGuards ~= nil)
+        or config.npcLeaderGuards ~= nil
+        or registry.progression.contract.reputationSources
+            .consequence.routingPolicy.nativeDamageBinding
+            .probeEnabled == true)
         and type(RegisterLoadMapPreHook) == "function" then
         local load_map_pre_callback = function()
             state.nativeWorldGeneration =
@@ -4451,13 +5449,95 @@ local function register_runtime_probes(config, registry, policy, state)
                 state.agentDialogueOperator:on_world_unloading()
             end
             if state.strategicWorldNativeBus ~= nil then
+                if state.strategicWorldNativeProduction ~= nil then
+                    state.strategicWorldNativeProduction:unbind_world(
+                        "runtime-world-unloading"
+                    )
+                end
                 state.strategicWorldNativeBus:unbind_world()
             end
+            if state.uniquePalBossProviderBus ~= nil then
+                if state.uniquePalBossNativeProduction ~= nil then
+                    state.uniquePalBossNativeProduction:unbind_world(
+                        "runtime-world-unloading"
+                    )
+                end
+                state.uniquePalBossProviderBus:unbind_world(
+                    "runtime-world-unloading"
+                )
+            end
+            if state.uniquePalWorldEffectBus ~= nil then
+                if state.uniquePalWorldEffectNativeProduction ~= nil then
+                    state.uniquePalWorldEffectNativeProduction:unbind_world(
+                        "runtime-world-unloading"
+                    )
+                end
+                if state.uniquePalNativeDeliveryBridge ~= nil then
+                    state.uniquePalNativeDeliveryBridge:unbind_world(
+                        "runtime-world-unloading"
+                    )
+                end
+                if state.uniquePalRansomShopBridge ~= nil then
+                    state.uniquePalRansomShopBridge:unbind_world(
+                        "runtime-world-unloading"
+                    )
+                end
+                state.uniquePalWorldEffectBus:unbind_world(
+                    "runtime-world-unloading"
+                )
+            end
+            if state.uniquePalNativeDeliveryProbe ~= nil then
+                state.uniquePalNativeDeliveryProbe:unbind_world(
+                    "runtime-world-unloading"
+                )
+            end
+            if state.uniquePalNativeDeliveryLiveTest ~= nil then
+                state.uniquePalNativeDeliveryLiveTest:unbind_world(
+                    "runtime-world-unloading"
+                )
+            end
+            if state.uniquePalNativeDeliveryAdapter ~= nil
+                and state.uniquePalNativeDeliveryAdapter:status()
+                    .worldBound == true then
+                state.uniquePalNativeDeliveryAdapter:unbind_world(
+                    "runtime-world-unloading"
+                )
+            end
+            if state.factionConsequenceNativeBinding ~= nil then
+                state.factionConsequenceNativeBinding:unbind_world(
+                    "runtime-world-unloading"
+                )
+            end
+            if state.factionConsequenceRouter ~= nil then
+                state.factionConsequenceRouter:unbind_world(
+                    "runtime-world-unloading"
+                )
+            end
             if state.factionNpcAttitudeBus ~= nil then
+                if state.factionNpcAttitudeNativeProduction ~= nil then
+                    state.factionNpcAttitudeNativeProduction:unbind_world(
+                        "runtime-world-unloading"
+                    )
+                end
                 state.factionNpcAttitudeBus:clear_world()
             end
+            if state.endingEffectNativeProduction ~= nil then
+                state.endingEffectNativeProduction:unbind_world(
+                    "runtime-world-unloading"
+                )
+            end
             if state.npcLeaderGuardOrchestrator ~= nil then
+                if state.npcLeaderGuardNativeProduction ~= nil then
+                    state.npcLeaderGuardNativeProduction:unbind_world(
+                        "runtime-world-unloading"
+                    )
+                end
                 state.npcLeaderGuardOrchestrator:clear_world()
+            end
+            if state.rewardDeliveryBus ~= nil then
+                state.rewardDeliveryBus:unbind_world(
+                    "runtime-world-unloading"
+                )
             end
             local presence = state.factionEconomyMerchantPresence
             if presence == nil then
@@ -4482,6 +5562,7 @@ local function register_runtime_probes(config, registry, policy, state)
     if (config.enableTowerBindingProbe
         or identity_probe_enabled
         or native_raid_hook_retry_enabled
+        or config.uniquePalNativeDeliveryProbe.enabled == true
         or (config.factionCommerce.economyMerchantPresence
             .enabled == true)
         or config.palReconciliation.agentBridge.enabled == true
@@ -4494,6 +5575,18 @@ local function register_runtime_probes(config, registry, policy, state)
             end
             if state.agentDialogueOperator ~= nil then
                 state.agentDialogueOperator:on_world_loaded()
+            end
+            if state.rewardDeliveryBus ~= nil then
+                local reward_bound = state.rewardDeliveryBus:bind_world(
+                    state.nativeWorldGeneration
+                )
+                log(string.format(
+                    "REWARD_DELIVERY_WORLD_BOUND ok=%s reason=%s generation=%d failedProviders=%d",
+                    tostring(reward_bound.ok == true),
+                    tostring(reward_bound.reason),
+                    state.nativeWorldGeneration,
+                    #(reward_bound.failedProviderIds or {})
+                ))
             end
             if state.endingEffectProviderBus ~= nil then
                 local replay = state.endingEffectProviderBus
@@ -4509,6 +5602,35 @@ local function register_runtime_probes(config, registry, policy, state)
                     tonumber(replay.pendingCount) or 0
                 ))
             end
+            if state.contentModuleLoader ~= nil then
+                local reactivated = state.contentModuleLoader:reactivate(
+                    "load-map-post:g"
+                        .. tostring(state.nativeWorldGeneration)
+                )
+                log(string.format(
+                    "CONTENT_MODULE_WORLD_REACTIVATE ok=%s reason=%s generation=%d failed=%d",
+                    tostring(reactivated.ok == true),
+                    tostring(reactivated.reason),
+                    state.nativeWorldGeneration,
+                    tonumber(reactivated.failedCount) or 0
+                ))
+            end
+            if state.strategicWorldReadiness ~= nil then
+                local readiness = state.strategicWorldReadiness:evaluate(
+                    "world-reactivated:g"
+                        .. tostring(state.nativeWorldGeneration)
+                )
+                log(string.format(
+                    "B7_STRATEGIC_WORLD_READINESS ready=%s phase=%s passed=%d blocked=%d contentBlocked=%d runtimeBlocked=%d generation=%d liveEvidenceRequired=true liveAccepted=false saveWrites=false",
+                    tostring(readiness.readyForLiveAcceptance == true),
+                    tostring(readiness.phase),
+                    tonumber(readiness.passedCount) or 0,
+                    tonumber(readiness.blockedCount) or 0,
+                    tonumber(readiness.contentBlockedCount) or 0,
+                    tonumber(readiness.runtimeBlockedCount) or 0,
+                    tonumber(state.nativeWorldGeneration) or 0
+                ))
+            end
             if state.settlementRaid ~= nil then
                 state.settlementRaid:on_world_loaded("load-map-post")
             end
@@ -4519,6 +5641,9 @@ local function register_runtime_probes(config, registry, policy, state)
             if identity_probe_enabled then
                 begin_progression_identity_probe(config, state)
             end
+            if config.uniquePalNativeDeliveryProbe.enabled == true then
+                begin_unique_pal_native_delivery_probe(config, state)
+            end
             if not identity_probe_enabled then
                 log(
                     "MAIN_WORLD_SERVICES_DEFERRED reason=identity-probe-disabled"
@@ -4528,9 +5653,10 @@ local function register_runtime_probes(config, registry, policy, state)
         state.callbacks.loadMapPost = load_map_post_callback
         RegisterLoadMapPostHook(load_map_post_callback)
         log(string.format(
-            "WORLD_LOAD_CALLBACK_READY towerProbe=%s towerDelayMs=10000 progressionIdentityProbe=%s merchantPresence=%s readOnly=true",
+            "WORLD_LOAD_CALLBACK_READY towerProbe=%s towerDelayMs=10000 progressionIdentityProbe=%s nativeDeliveryProbe=%s merchantPresence=%s readOnly=true",
             tostring(config.enableTowerBindingProbe),
             tostring(identity_probe_enabled),
+            tostring(config.uniquePalNativeDeliveryProbe.enabled == true),
             tostring(config.factionCommerce
                 .economyMerchantPresence.enabled == true)
         ))
@@ -4545,6 +5671,27 @@ function Runtime.start(config, registry, policy)
     assert(type(config.rayneMerchant) == "table", "rayne merchant must be explicitly configured")
     assert(type(config.settlementRaid) == "table", "settlement raid must be explicitly configured")
     assert(type(config.factionProgression) == "table", "faction progression must be explicitly configured")
+    assert(type(config.uniquePalNativeDeliveryProbe) == "table", "unique-Pal native delivery probe must be explicitly configured")
+    assert(type(config.uniquePalNativeDeliveryProbe.enabled) == "boolean", "unique-Pal native delivery probe flag is required")
+    assert(config.uniquePalNativeDeliveryProbe.readOnly == true, "unique-Pal native delivery probe must remain read-only")
+    assert(config.uniquePalNativeDeliveryProbe.buildId == config.expectedSteamBuildId, "unique-Pal native delivery probe Build ID drifted")
+    assert(type(config.uniquePalNativeDeliveryProbe.objectDumpSha256) == "string" and #config.uniquePalNativeDeliveryProbe.objectDumpSha256 == 64, "unique-Pal native delivery probe ObjectDump hash is required")
+    assert(type(config.uniquePalNativeDeliveryProbe.retryDelaysMs) == "table" and #config.uniquePalNativeDeliveryProbe.retryDelaysMs > 0, "unique-Pal native delivery probe retry delays are required")
+    assert(type(config.uniquePalNativeDeliveryLiveTest) == "table", "unique-Pal native delivery live-test configuration is required")
+    assert(type(config.uniquePalNativeDeliveryLiveTest.enabled) == "boolean", "unique-Pal native delivery live-test flag is required")
+    assert(config.uniquePalNativeDeliveryLiveTest.buildId == config.expectedSteamBuildId, "unique-Pal native delivery live-test Build ID drifted")
+    assert(config.uniquePalNativeDeliveryLiveTest.objectDumpSha256 == config.uniquePalNativeDeliveryProbe.objectDumpSha256, "unique-Pal native delivery live-test ObjectDump hash drifted")
+    assert(type(config.uniquePalNativeDeliveryLiveTest.speciesId) == "string" and config.uniquePalNativeDeliveryLiveTest.speciesId ~= "", "unique-Pal native delivery live-test species is required")
+    assert(type(config.uniquePalNativeDeliveryLiveTest.level) == "number" and config.uniquePalNativeDeliveryLiveTest.level >= 1, "unique-Pal native delivery live-test level is invalid")
+    assert(type(config.uniquePalNativeDeliveryLiveTest.retryDelayMs) == "number" and config.uniquePalNativeDeliveryLiveTest.retryDelayMs > 0, "unique-Pal native delivery live-test retry delay is invalid")
+    assert(type(config.uniquePalNativeDeliveryLiveTest.maxAttempts) == "number" and config.uniquePalNativeDeliveryLiveTest.maxAttempts > 0, "unique-Pal native delivery live-test attempt limit is invalid")
+    assert(type(config.uniquePalNativeDeliveryProduction) == "table", "unique-Pal native delivery production configuration is required")
+    assert(type(config.uniquePalNativeDeliveryProduction.enabled) == "boolean", "unique-Pal native delivery production flag is required")
+    assert(config.uniquePalNativeDeliveryProduction.buildId == config.expectedSteamBuildId, "unique-Pal native delivery production Build ID drifted")
+    assert(config.uniquePalNativeDeliveryProduction.objectDumpSha256 == config.uniquePalNativeDeliveryProbe.objectDumpSha256, "unique-Pal native delivery production ObjectDump hash drifted")
+    assert(type(config.uniquePalNativeDeliveryProduction.deliveryLevel) == "number" and config.uniquePalNativeDeliveryProduction.deliveryLevel >= 1, "unique-Pal native delivery production level is invalid")
+    assert(type(config.uniquePalNativeDeliveryProduction.approvedSpeciesByUniquePalId) == "table", "unique-Pal native delivery production whitelist is required")
+    assert(config.uniquePalNativeDeliveryProduction.approvedSpeciesByUniquePalId["pwft.unique.feybreak"] == nil, "tentative Feybreak unique Pal must remain fail-closed")
     assert(config.factionProgression.enabled == true, "faction progression core must be enabled")
     assert(type(config.palReconciliation) == "table", "Pal reconciliation must be explicitly configured")
     assert(config.palReconciliation.enabled == true, "Pal reconciliation core must be enabled")
@@ -4582,6 +5729,8 @@ function Runtime.start(config, registry, policy)
     assert(type(config.factionCommerce.nativeCharacterAdapter.merchantDefaultActionClassPath) == "string" and config.factionCommerce.nativeCharacterAdapter.merchantDefaultActionClassPath ~= "", "merchant salesperson action class is required")
     assert(type(config.factionCommerce.economyMerchantLiveTest) == "table", "economy merchant live-test configuration is required")
     assert(type(config.factionCommerce.economyMerchantLiveTest.enabled) == "boolean", "economy merchant live-test flag is required")
+    assert(type(config.factionCommerce.economyWarLiveTest) == "table", "economy-war live-test configuration is required")
+    assert(type(config.factionCommerce.economyWarLiveTest.enabled) == "boolean", "economy-war live-test flag is required")
     assert(type(config.factionCommerce.commerceWindowLiveTest) == "table", "commerce window live-test configuration is required")
     assert(type(config.factionCommerce.commerceWindowLiveTest.enabled) == "boolean", "commerce window live-test flag is required")
     assert(type(config.factionCommerce.hostileCommerceLiveTest) == "table", "hostile commerce live-test configuration is required")
@@ -4611,6 +5760,16 @@ function Runtime.start(config, registry, policy)
     assert(config.factionProgression.persistence.enabled == true, "external progression sidecar must be enabled")
     assert(config.factionProgression.persistence.deferredIdentity == true, "external progression sidecar must wait for native identity")
     assert(type(config.factionProgression.persistence.companionLedgerEnabled) == "boolean", "companion ledger flag is required")
+    assert(type(config.rewardItemNativeProduction) == "table", "reward item native production configuration is required")
+    assert(type(config.rewardItemNativeProduction.enabled) == "boolean", "reward item native production enabled flag is required")
+    assert(config.rewardItemNativeProduction.currentBuildVerified == true, "reward item native route must be verified for the current Build")
+    assert(config.rewardItemNativeProduction.buildId == config.expectedSteamBuildId, "reward item native Build ID drifted")
+    assert(type(config.rewardItemNativeProduction.objectDumpSha256) == "string" and #config.rewardItemNativeProduction.objectDumpSha256 == 64, "reward item ObjectDump hash is invalid")
+    assert(type(config.rewardItemNativeProduction.providerId) == "string" and config.rewardItemNativeProduction.providerId ~= "", "reward item provider ID is required")
+    assert(type(config.rewardItemNativeProduction.authoritySource) == "string" and config.rewardItemNativeProduction.authoritySource ~= "", "reward item authority is required")
+    assert(type(config.rewardItemNativeProduction.routeKey) == "string" and config.rewardItemNativeProduction.routeKey ~= "", "reward item native route key is required")
+    assert(type(config.rewardItemNativeLiveTest) == "table", "reward item live-test configuration is required")
+    assert(type(config.rewardItemNativeLiveTest.enabled) == "boolean", "reward item live-test enabled flag is required")
     assert(config.enableSaveWrites == false, "Mod 0 must not write save data")
 
     local state = make_state(config, registry)
@@ -4663,7 +5822,8 @@ function Runtime.start(config, registry, policy)
                     .. tostring(background_flush_reason)
             )
         end
-        return state.companionLedger:publish({
+        local published, detail, projection =
+            state.companionLedger:publish_public({
             releaseId = config.releaseId,
             expectedSteamBuildId = config.expectedSteamBuildId,
             reason = reason or "state-refresh",
@@ -4685,8 +5845,36 @@ function Runtime.start(config, registry, policy)
             strategicWorldNativeBus = state.strategicWorldNativeBus
                     and state.strategicWorldNativeBus:status()
                 or nil,
+            strategicWorldReadiness = state.strategicWorldReadiness
+                    and state.strategicWorldReadiness:status()
+                or nil,
             uniquePalCampaign = state.uniquePalCampaign
                     and state.uniquePalCampaign:status()
+                or nil,
+            uniquePalBossProviderBus = state.uniquePalBossProviderBus
+                    and state.uniquePalBossProviderBus:status()
+                or nil,
+            uniquePalBossNativeProduction =
+                state.uniquePalBossNativeProduction
+                    and state.uniquePalBossNativeProduction:status()
+                or nil,
+            uniquePalWorldEffectBus = state.uniquePalWorldEffectBus
+                    and state.uniquePalWorldEffectBus:status()
+                or nil,
+            uniquePalWorldEffectNativeProduction =
+                state.uniquePalWorldEffectNativeProduction
+                    and state.uniquePalWorldEffectNativeProduction:status()
+                or nil,
+            uniquePalNativeDeliveryBridge =
+                state.uniquePalNativeDeliveryBridge
+                    and state.uniquePalNativeDeliveryBridge:status()
+                or nil,
+            factionConsequences = state.factionConsequenceRouter
+                    and state.factionConsequenceRouter:status()
+                or nil,
+            factionConsequenceNativeBinding =
+                state.factionConsequenceNativeBinding
+                    and state.factionConsequenceNativeBinding:status()
                 or nil,
             endingEffectProviderBus = state.endingEffectProviderBus
                     and state.endingEffectProviderBus:status()
@@ -4694,10 +5882,54 @@ function Runtime.start(config, registry, policy)
             rewardPolicy = state.rewardPolicy
                     and state.rewardPolicy:status()
                 or nil,
-            backgroundRaids = state.backgroundRaidRecorder:status(),
-        })
+            rewardDelivery = state.rewardDeliveryBus
+                    and state.rewardDeliveryBus:status()
+                or nil,
+            rewardItemNativeAdapter = state.rewardItemNativeAdapter
+                    and state.rewardItemNativeAdapter:status()
+                or nil,
+                backgroundRaids = state.backgroundRaidRecorder:status(),
+            })
+        if projection ~= nil and projection.redactedCount > 0 then
+            local first = projection.redactions[1] or {}
+            log(string.format(
+                "COMPANION_STATE_PUBLIC_PROJECTION redactions=%d reason=%s firstPath=%s firstReason=%s",
+                projection.redactedCount,
+                tostring(reason or "state-refresh"),
+                tostring(first.path or "none"),
+                tostring(first.reason or "none")
+            ))
+        end
+        return published, detail
     end
     state.publishCompanionState = publish_companion_state
+
+    local function record_companion_event(event, context)
+        if state.companionLedger == nil
+            or not state.companionLedger:status().active then
+            return false, "companion-profile-not-active"
+        end
+        local recorded, detail, projection =
+            state.companionLedger:record_public(event)
+        if not recorded then
+            log(string.format(
+                "COMPANION_EVENT_DEFERRED context=%s reason=%s",
+                tostring(context or "unknown"),
+                tostring(detail)
+            ))
+        elseif projection ~= nil
+            and projection.redactedCount > 0 then
+            local first = projection.redactions[1] or {}
+            log(string.format(
+                "COMPANION_EVENT_PUBLIC_PROJECTION context=%s redactions=%d firstPath=%s firstReason=%s",
+                tostring(context or "unknown"),
+                projection.redactedCount,
+                tostring(first.path or "none"),
+                tostring(first.reason or "none")
+            ))
+        end
+        return recorded, detail, projection
+    end
 
     local function on_faction_state_changed(
         faction_id,
@@ -4705,6 +5937,52 @@ function Runtime.start(config, registry, policy)
         faction_status
     )
             sync_progression_relations(policy, state)
+            if type(outcome) == "table"
+                and outcome.demoted == true then
+                log(string.format(
+                    "FACTION_RANK_DEMOTED faction=%s before=%s after=%s reputation=%s reason=%s",
+                    tostring(faction_id),
+                    tostring(outcome.beforeRankId or "none"),
+                    tostring(outcome.rankId or "none"),
+                    tostring(outcome.after),
+                    tostring(outcome.reasonCode or outcome.reason)
+                ))
+            end
+            if state.factionGuard ~= nil then
+                local guard_reconciliation = nil
+                if type(faction_id) == "string" then
+                    guard_reconciliation = state.factionGuard
+                        :reconcile_entitlement(
+                            faction_id,
+                            "reputation-entitlement-revoked"
+                        )
+                elseif type(outcome) == "table"
+                    and outcome.type == "progression-restored" then
+                    guard_reconciliation = state.factionGuard
+                        :reconcile_all_entitlements(
+                            "progression-restore-entitlement-revoked"
+                        )
+                end
+                if type(outcome) == "table" then
+                    outcome.guardReconciliation =
+                        guard_reconciliation
+                end
+                if guard_reconciliation ~= nil
+                    and guard_reconciliation.ok ~= true then
+                    log(
+                        "FACTION_GUARD_ENTITLEMENT_RECONCILIATION_PARTIAL reason="
+                            .. tostring(guard_reconciliation.reason)
+                    )
+                end
+            end
+            if state.questRuntime ~= nil then
+                local quest_reconciliation = state.questRuntime
+                    :reconcile_access(faction_id)
+                if type(outcome) == "table" then
+                    outcome.questAccessReconciliation =
+                        quest_reconciliation
+                end
+            end
             if state.progressionStore.enabled then
                 local save_result = state.progressionStore:save(
                     state.factionProgression:export_snapshot()
@@ -4718,12 +5996,12 @@ function Runtime.start(config, registry, policy)
             end
             if state.companionLedger ~= nil
                 and state.companionLedger:status().active then
-                state.companionLedger:record({
+                record_companion_event({
                     type = "progression-changed",
                     factionId = faction_id,
                     outcome = outcome,
                     faction = faction_status,
-                })
+                }, "progression-changed")
                 publish_companion_state("progression-changed")
             end
             if state.rayneMerchant ~= nil
@@ -4768,6 +6046,14 @@ function Runtime.start(config, registry, policy)
                 end
             end
             if state.factionNpcAttitudeBus ~= nil
+                and faction_id == nil
+                and type(outcome) == "table"
+                and outcome.type == "progression-restored" then
+                state.factionNpcAttitudeBus:refresh_faction(nil, {
+                    trigger = "progression-restored",
+                })
+            end
+            if state.factionNpcAttitudeBus ~= nil
                 and type(outcome) == "table"
                 and outcome.type == "ending-committed" then
                 state.factionNpcAttitudeBus:refresh_faction(nil, {
@@ -4775,15 +6061,92 @@ function Runtime.start(config, registry, policy)
                 })
             end
     end
+    local function on_faction_consequence_recorded(
+        faction_id,
+        outcome,
+        faction_status
+    )
+        -- FactionApi has already run the full relation/permission/UI
+        -- reconciliation callback.  This second, narrow callback persists the
+        -- router's idempotency ledger without replaying those side effects.
+        if state.progressionStore.enabled then
+            local save_result = state.progressionStore:save(
+                state.factionProgression:export_snapshot()
+            )
+            if not save_result.ok then
+                log(
+                    "FACTION_CONSEQUENCE_SAVE_FAILED reason="
+                        .. tostring(save_result.reason)
+                )
+            end
+        end
+        if state.companionLedger ~= nil
+            and state.companionLedger:status().active then
+            record_companion_event({
+                type = "faction-consequence-recorded",
+                factionId = faction_id,
+                outcome = outcome,
+                faction = faction_status,
+            }, "faction-consequence-recorded")
+            publish_companion_state("faction-consequence-recorded")
+        end
+    end
     state.factionApi = FactionApi.create(
         state.factionProgression,
         on_faction_state_changed
     )
     _G.PWFT_FACTION_API_V1 = state.factionApi
+    state.factionConsequenceRouter =
+        FactionConsequenceRouter.create(
+            state.factionApi,
+            { onChange = on_faction_consequence_recorded }
+        )
+    _G.PWFT_FACTION_CONSEQUENCE_API_V1 =
+        state.factionConsequenceRouter
+    state.factionConsequenceNativeBinding =
+        FactionConsequenceNativeBinding.create(
+            state.factionConsequenceRouter,
+            {
+                logger = log,
+                localPlayerActor = function()
+                    local _, _, _, pawn =
+                        find_local_player_transform()
+                    return pawn
+                end,
+            }
+        )
+    state.factionConsequenceNativeBindingStart =
+        state.factionConsequenceNativeBinding:start()
+    _G.PWFT_FACTION_CONSEQUENCE_NATIVE_BINDING_V1 =
+        state.factionConsequenceNativeBinding
+    local function on_resource_ledger_changed(
+        faction_id,
+        event
+    )
+        on_faction_state_changed(faction_id, event, nil)
+        local merchant_runtime =
+            state.factionEconomyMerchantRuntime
+        if merchant_runtime ~= nil
+            and type(merchant_runtime.refresh_dynamic_market)
+                == "function" then
+            local refreshed = merchant_runtime
+                :refresh_dynamic_market(faction_id)
+            log(string.format(
+                "FACTION_DYNAMIC_MARKET_RESOURCE_REFRESH faction=%s event=%s operation=%s ok=%s reason=%s revision=%s active=%s",
+                tostring(faction_id),
+                tostring(event and event.type or "unknown"),
+                tostring(event and event.operationId or "none"),
+                tostring(refreshed.ok),
+                tostring(refreshed.reason),
+                tostring(refreshed.resourceLedgerRevision or "none"),
+                tostring(refreshed.active == true)
+            ))
+        end
+    end
     state.factionResourceLedger = FactionResourceLedger.create(
         state.factionProgression,
         registry.economy,
-        { onChange = on_faction_state_changed }
+        { onChange = on_resource_ledger_changed }
     )
     state.factionEconomyWar = FactionEconomyWar.create(
         state.factionProgression,
@@ -4794,10 +6157,92 @@ function Runtime.start(config, registry, policy)
         state.factionProgression,
         {
             authority = "pwft.authoritative-reward-outcome.v1",
-            nativeAdapterEnabled = false,
+            nativeAdapterEnabled =
+                config.rewardItemNativeProduction.enabled == true,
             onChange = on_faction_state_changed,
         }
     )
+    state.rewardItemNativeAdapter = RewardItemNativeAdapter.create(
+        config.rewardItemNativeProduction
+    )
+    state.rewardDeliveryBus = RewardDeliveryBus.create(
+        state.factionProgression,
+        state.rewardPolicy,
+        {
+            onChange = on_faction_state_changed,
+            requirePersistenceFence = true,
+            persistFence = function(snapshot)
+                if not state.progressionStore.enabled then
+                    return {
+                        ok = false,
+                        reason =
+                            "native-world-player-identity-pending",
+                    }
+                end
+                return state.progressionStore:save(snapshot)
+            end,
+            identityResolver = function()
+                return state.progressionIdentity
+                    and state.progressionIdentity.value or nil
+            end,
+            retryDelayMs =
+                config.rewardItemNativeProduction.retryDelayMs,
+            maxVerifyAttempts =
+                config.rewardItemNativeProduction.maxVerifyAttempts,
+            schedule = function(delay_ms, callback)
+                if type(ExecuteWithDelay) ~= "function"
+                    or type(ExecuteInGameThread) ~= "function" then
+                    return false
+                end
+                local delayed = function()
+                    ExecuteInGameThread(callback)
+                end
+                state.callbacks.rewardDeliveryScheduled =
+                    state.callbacks.rewardDeliveryScheduled or {}
+                table.insert(
+                    state.callbacks.rewardDeliveryScheduled,
+                    delayed
+                )
+                ExecuteWithDelay(delay_ms, delayed)
+                return true
+            end,
+        }
+    )
+    state.rewardDeliveryProviderRegistration =
+        state.rewardDeliveryBus:register_provider({
+            providerId =
+                config.rewardItemNativeProduction.providerId,
+            authoritySource =
+                config.rewardItemNativeProduction.authoritySource,
+            rewardKind = "item",
+            buildId = config.rewardItemNativeProduction.buildId,
+            routeKey = config.rewardItemNativeProduction.routeKey,
+            currentBuildVerified = true,
+            serverAuthoritativeGrant = true,
+            exactInventoryReadback = true,
+            stablePlayerIdentity = true,
+            modelAuthority = false,
+        }, state.rewardItemNativeAdapter)
+    assert(state.rewardDeliveryProviderRegistration.ok,
+        state.rewardDeliveryProviderRegistration.reason)
+    state.rewardDeliveryLiveTest = RewardDeliveryLiveTest.create(
+        state.rewardDeliveryBus,
+        state.rewardPolicy,
+        config.rewardItemNativeLiveTest,
+        { logger = log }
+    )
+    state.rewardDeliveryLiveTestStart =
+        state.rewardDeliveryLiveTest:start()
+    if config.rewardItemNativeLiveTest.enabled == true then
+        log(string.format(
+            "REWARD_DELIVERY_LIVE_TEST_START ok=%s reason=%s key=%s restorationRequired=true",
+            tostring(state.rewardDeliveryLiveTestStart.ok == true),
+            tostring(state.rewardDeliveryLiveTestStart.reason),
+            tostring(state.rewardDeliveryLiveTest:status().key)
+        ))
+    else
+        log("REWARD_DELIVERY_LIVE_TEST_DISABLED config=false")
+    end
     state.palReconciliation = PalReconciliation.create(
         registry.palReconciliation,
         state.factionProgression,
@@ -4922,16 +6367,157 @@ function Runtime.start(config, registry, policy)
         state.strategicWorld,
         { onChange = on_faction_state_changed }
     )
+    state.strategicWorldNativeProduction =
+        StrategicWorldNativeProduction.create(
+            state.strategicWorldNativeBus,
+            { logger = log }
+        )
     state.uniquePalCampaign = UniquePalCampaign.create(
         state.factionProgression,
         state.strategicWorld,
         {
             playerId = "local-player",
             onChange = function(event)
+                local world_effect_delivery = nil
+                local native_boss_delivery = nil
+                if state.uniquePalWorldEffectBus ~= nil then
+                    world_effect_delivery =
+                        state.uniquePalWorldEffectBus
+                            :handle_campaign_event(event)
+                end
+                if state.uniquePalBossProviderBus ~= nil then
+                    native_boss_delivery =
+                        state.uniquePalBossProviderBus
+                            :handle_campaign_event(event)
+                end
+                if state.uniquePalWorldEffectNativeProduction ~= nil then
+                    event.nativeWorldEffectObservation =
+                        state.uniquePalWorldEffectNativeProduction
+                            :observe_campaign_event(event)
+                end
+                event.worldEffectDelivery = world_effect_delivery
+                event.nativeBossDelivery = native_boss_delivery
                 on_faction_state_changed(nil, event, nil)
             end,
         }
     )
+    state.uniquePalBossProviderBus =
+        UniquePalBossProviderBus.create(
+            state.uniquePalCampaign,
+            {
+                onChange = function(event)
+                    on_faction_state_changed(nil, event, nil)
+                end,
+            }
+        )
+    state.uniquePalBossNativeProduction =
+        UniquePalBossNativeProduction.create(
+            state.uniquePalBossProviderBus,
+            state.uniquePalCampaign,
+            config.uniquePalBossNativeProduction,
+            {
+                logger = log,
+                strategicWorldNativeProduction =
+                    state.strategicWorldNativeProduction,
+            }
+        )
+    state.uniquePalWorldEffectBus =
+        UniquePalWorldEffectBus.create(
+            state.uniquePalCampaign,
+            {
+                onChange = function(event)
+                    on_faction_state_changed(nil, event, nil)
+                end,
+            }
+        )
+    state.uniquePalNativeDeliveryBridge =
+        UniquePalNativeDeliveryBridge.create(
+            state.uniquePalWorldEffectBus,
+            {
+                logger = log,
+            }
+        )
+    state.uniquePalNativeDeliveryProbe =
+        UniquePalNativeDeliveryProbe.create({
+            buildId = config.uniquePalNativeDeliveryProbe.buildId,
+            objectDumpSha256 = config.uniquePalNativeDeliveryProbe
+                .objectDumpSha256,
+            readOnly = config.uniquePalNativeDeliveryProbe.readOnly,
+            logger = log,
+        })
+    state.uniquePalNativeDeliveryAdapter =
+        UniquePalNativeDeliveryAdapter.create({
+            buildId = config.uniquePalNativeDeliveryProduction.buildId,
+            objectDumpSha256 = config.uniquePalNativeDeliveryProduction
+                .objectDumpSha256,
+            allowMutatingDelivery = config
+                .uniquePalNativeDeliveryProduction.enabled == true,
+            deliveryLevel = config.uniquePalNativeDeliveryProduction
+                .deliveryLevel,
+            logger = log,
+        })
+    state.uniquePalNativeDeliveryProduction =
+        UniquePalNativeDeliveryProduction.create(
+            state.uniquePalNativeDeliveryBridge,
+            state.uniquePalNativeDeliveryAdapter,
+            state.uniquePalWorldEffectBus,
+            config.uniquePalNativeDeliveryProduction
+        )
+    state.uniquePalNativeDeliveryLiveTestAdapter = nil
+    state.uniquePalNativeDeliveryLiveTest = nil
+    if config.uniquePalNativeDeliveryLiveTest.enabled == true then
+        assert(type(ExecuteWithDelay) == "function",
+            "native Pal delivery live test requires ExecuteWithDelay")
+        state.uniquePalNativeDeliveryLiveTestAdapter =
+            UniquePalNativeDeliveryAdapter.create({
+                buildId = config.uniquePalNativeDeliveryLiveTest.buildId,
+                objectDumpSha256 = config.uniquePalNativeDeliveryLiveTest
+                    .objectDumpSha256,
+                allowMutatingDelivery = true,
+                deliveryLevel = config.uniquePalNativeDeliveryLiveTest.level,
+                logger = log,
+            })
+        state.uniquePalNativeDeliveryLiveTest =
+            UniquePalNativeDeliveryLiveTest.create(
+                state.uniquePalNativeDeliveryLiveTestAdapter,
+                {
+                    enabled = true,
+                    buildId = config
+                        .uniquePalNativeDeliveryLiveTest.buildId,
+                    speciesId = config
+                        .uniquePalNativeDeliveryLiveTest.speciesId,
+                    retryDelayMs = config
+                        .uniquePalNativeDeliveryLiveTest.retryDelayMs,
+                    maxAttempts = config
+                        .uniquePalNativeDeliveryLiveTest.maxAttempts,
+                    schedule = ExecuteWithDelay,
+                    logger = log,
+                }
+            )
+    end
+    state.uniquePalRansomShopBridge =
+        UniquePalRansomShopBridge.create(
+            state.uniquePalWorldEffectBus,
+            { logger = log }
+        )
+    state.uniquePalWorldEffectNativeProduction =
+        UniquePalWorldEffectNativeProduction.create(
+            state.uniquePalWorldEffectBus,
+            state.uniquePalCampaign,
+            state.uniquePalNativeDeliveryProduction,
+            state.uniquePalRansomShopBridge,
+            config.uniquePalWorldEffectNativeProduction,
+            {
+                logger = log,
+                schedule = function(delay_ms, callback)
+                    if type(ExecuteWithDelay) ~= "function" then
+                        return false
+                    end
+                    ExecuteWithDelay(delay_ms, callback)
+                    return true
+                end,
+            }
+        )
     state.endingRuntime = EndingRuntime.create(
         state.factionProgression,
         state.strategicWorld,
@@ -4945,6 +6531,12 @@ function Runtime.start(config, registry, policy)
         state.endingRuntime,
         config.factionNpcAttitudes
     )
+    state.factionNpcAttitudeNativeProduction =
+        FactionNpcAttitudeNativeProduction.create(
+            state.factionNpcAttitudeBus,
+            config.factionNpcAttitudeNativeProduction,
+            { logger = log }
+        )
     state.npcLeaderGuardOrchestrator =
         NpcLeaderGuardOrchestrator.create(
             state.factionApi,
@@ -4961,11 +6553,20 @@ function Runtime.start(config, registry, policy)
         state.endingRuntime,
         { onChange = on_faction_state_changed }
     )
+    state.endingEffectNativeProduction =
+        EndingEffectNativeProduction.create(
+            state.endingEffectProviderBus,
+            state.endingRuntime,
+            state.strategicWorld,
+            state.factionNpcAttitudeBus,
+            { logger = log }
+        )
     state.contentActionRuntime = ContentActionRuntime.create(
         state.factionApi,
         state.strategicWorld,
         state.endingRuntime,
-        state.contentPackRegistry
+        state.contentPackRegistry,
+        state.factionConsequenceRouter
     )
     state.contentRuntime = ContentRuntime.create(
         state.factionProgression,
@@ -4977,6 +6578,8 @@ function Runtime.start(config, registry, policy)
             palDiscourseRuntime = state.palDiscourseRuntime,
             localizationRuntime = state.localizationRuntime,
             contentActionRuntime = state.contentActionRuntime,
+            factionConsequenceRouter =
+                state.factionConsequenceRouter,
             rewardPolicy = state.rewardPolicy,
             npcLeaderGuardOrchestrator =
                 state.npcLeaderGuardOrchestrator,
@@ -4991,16 +6594,45 @@ function Runtime.start(config, registry, policy)
     _G.PWFT_ENDING_API_V1 = state.endingRuntime
     _G.PWFT_STRATEGIC_WORLD_NATIVE_BUS_V1 =
         state.strategicWorldNativeBus
+    _G.PWFT_STRATEGIC_WORLD_NATIVE_PRODUCTION_V1 =
+        state.strategicWorldNativeProduction
     _G.PWFT_UNIQUE_PAL_CAMPAIGN_V1 = state.uniquePalCampaign
+    _G.PWFT_UNIQUE_PAL_BOSS_PROVIDER_BUS_V1 =
+        state.uniquePalBossProviderBus
+    _G.PWFT_UNIQUE_PAL_BOSS_NATIVE_PRODUCTION_V1 =
+        state.uniquePalBossNativeProduction
+    _G.PWFT_UNIQUE_PAL_WORLD_EFFECT_BUS_V1 =
+        state.uniquePalWorldEffectBus
+    _G.PWFT_UNIQUE_PAL_NATIVE_DELIVERY_BRIDGE_V1 =
+        state.uniquePalNativeDeliveryBridge
+    _G.PWFT_UNIQUE_PAL_NATIVE_DELIVERY_PROBE_V1 =
+        state.uniquePalNativeDeliveryProbe
+    _G.PWFT_UNIQUE_PAL_NATIVE_DELIVERY_PRODUCTION_V1 =
+        state.uniquePalNativeDeliveryProduction
+    _G.PWFT_UNIQUE_PAL_NATIVE_DELIVERY_LIVE_TEST_V1 =
+        state.uniquePalNativeDeliveryLiveTest
+    _G.PWFT_UNIQUE_PAL_RANSOM_SHOP_BRIDGE_V1 =
+        state.uniquePalRansomShopBridge
+    _G.PWFT_UNIQUE_PAL_WORLD_EFFECT_NATIVE_PRODUCTION_V1 =
+        state.uniquePalWorldEffectNativeProduction
     _G.PWFT_ENDING_EFFECT_PROVIDER_BUS_V1 =
         state.endingEffectProviderBus
+    _G.PWFT_ENDING_EFFECT_NATIVE_PRODUCTION_V1 =
+        state.endingEffectNativeProduction
     _G.PWFT_FACTION_RESOURCE_LEDGER_V1 =
         state.factionResourceLedger
     _G.PWFT_FACTION_ECONOMY_WAR_V1 = state.factionEconomyWar
     _G.PWFT_REWARD_POLICY_V1 = state.rewardPolicy
+    _G.PWFT_REWARD_DELIVERY_V1 = state.rewardDeliveryBus
+    _G.PWFT_REWARD_ITEM_NATIVE_ADAPTER_V1 =
+        state.rewardItemNativeAdapter
+    _G.PWFT_REWARD_DELIVERY_LIVE_TEST_V1 =
+        state.rewardDeliveryLiveTest
     _G.PWFT_CONTENT_ACTION_API_V1 = state.contentActionRuntime
     _G.PWFT_FACTION_NPC_ATTITUDE_API_V1 =
         state.factionNpcAttitudeBus
+    _G.PWFT_FACTION_NPC_ATTITUDE_NATIVE_PRODUCTION_V1 =
+        state.factionNpcAttitudeNativeProduction
     _G.PWFT_NPC_LEADER_GUARD_API_V1 =
         state.npcLeaderGuardOrchestrator
     _G.PWFT_LOCALIZATION_RESOLVER_V1 =
@@ -5018,11 +6650,36 @@ function Runtime.start(config, registry, policy)
             contentActionRuntime = state.contentActionRuntime,
             factionResourceLedger = state.factionResourceLedger,
             factionEconomyWar = state.factionEconomyWar,
+            factionConsequenceNativeBinding =
+                state.factionConsequenceNativeBinding,
             strategicWorldNativeBus = state.strategicWorldNativeBus,
+            strategicWorldNativeProduction =
+                state.strategicWorldNativeProduction,
             uniquePalCampaign = state.uniquePalCampaign,
+            uniquePalBossProviderBus =
+                state.uniquePalBossProviderBus,
+            uniquePalBossNativeProduction =
+                state.uniquePalBossNativeProduction,
+            uniquePalWorldEffectBus =
+                state.uniquePalWorldEffectBus,
+            uniquePalNativeDeliveryBridge =
+                state.uniquePalNativeDeliveryBridge,
+            uniquePalNativeDeliveryProduction =
+                state.uniquePalNativeDeliveryProduction,
+            uniquePalRansomShopBridge =
+                state.uniquePalRansomShopBridge,
+            uniquePalWorldEffectNativeProduction =
+                state.uniquePalWorldEffectNativeProduction,
             endingEffectProviderBus = state.endingEffectProviderBus,
+            endingEffectNativeProduction =
+                state.endingEffectNativeProduction,
             rewardPolicy = state.rewardPolicy,
+            rewardDeliveryBus = state.rewardDeliveryBus,
+            rewardItemNativeAdapter =
+                state.rewardItemNativeAdapter,
             factionNpcAttitudeBus = state.factionNpcAttitudeBus,
+            factionNpcAttitudeNativeProduction =
+                state.factionNpcAttitudeNativeProduction,
             npcLeaderGuardOrchestrator =
                 state.npcLeaderGuardOrchestrator,
             palReconciliation = state.palReconciliation,
@@ -5038,6 +6695,36 @@ function Runtime.start(config, registry, policy)
         state.contentModuleLoader:load()
     _G.PWFT_CONTENT_MODULE_LOADER_V1 =
         state.contentModuleLoader
+    state.strategicWorldReadiness = StrategicWorldReadiness.create({
+        contentModuleLoader = state.contentModuleLoader,
+        strategicWorld = state.strategicWorld,
+        endingRuntime = state.endingRuntime,
+        strategicWorldNativeBus = state.strategicWorldNativeBus,
+        uniquePalBossProviderBus = state.uniquePalBossProviderBus,
+        uniquePalBossNativeProduction =
+            state.uniquePalBossNativeProduction,
+        uniquePalWorldEffectBus = state.uniquePalWorldEffectBus,
+        uniquePalNativeDeliveryBridge =
+            state.uniquePalNativeDeliveryBridge,
+        uniquePalNativeDeliveryProduction =
+            state.uniquePalNativeDeliveryProduction,
+        factionNpcAttitudeBus = state.factionNpcAttitudeBus,
+        endingEffectProviderBus = state.endingEffectProviderBus,
+    })
+    _G.PWFT_STRATEGIC_WORLD_READINESS_V1 =
+        state.strategicWorldReadiness
+    local b7_readiness = state.strategicWorldReadiness:evaluate(
+        "content-modules-loaded"
+    )
+    log(string.format(
+        "B7_STRATEGIC_WORLD_READINESS ready=%s phase=%s passed=%d blocked=%d contentBlocked=%d runtimeBlocked=%d liveEvidenceRequired=true liveAccepted=false saveWrites=false",
+        tostring(b7_readiness.readyForLiveAcceptance == true),
+        tostring(b7_readiness.phase),
+        tonumber(b7_readiness.passedCount) or 0,
+        tonumber(b7_readiness.blockedCount) or 0,
+        tonumber(b7_readiness.contentBlockedCount) or 0,
+        tonumber(b7_readiness.runtimeBlockedCount) or 0
+    ))
     for _, source in ipairs(
         state.palDiscourseRuntime:export_native_raid_sources()
     ) do
@@ -5158,8 +6845,12 @@ function Runtime.start(config, registry, policy)
     state.factionJoinNativeStartError = join_native_error
     _G.PWFT_FACTION_JOIN_NATIVE_ROUTER_V1 =
         state.factionJoinNativeRouter
-    state.factionEconomy = FactionEconomy.create(
+    state.factionEconomyStatic = FactionEconomy.create(
         registry.economy
+    )
+    state.factionEconomy = FactionDynamicEconomy.create(
+        state.factionEconomyStatic,
+        state.factionResourceLedger
     )
     state.factionEconomyShops =
         FactionEconomyShopCatalog.create(
@@ -5202,16 +6893,22 @@ function Runtime.start(config, registry, policy)
         {
             logger = log,
             eventSink = function(event)
+                local ransom_result = state.uniquePalRansomShopBridge
+                    :handle_commerce_event(event)
+                if event.settlementKind == "unique-pal-ransom" then
+                    log(string.format(
+                        "UNIQUE_PAL_RANSOM_COMMERCE_RESULT ok=%s reason=%s transaction=%s reputation=0",
+                        tostring(ransom_result.ok == true),
+                        tostring(ransom_result.reason),
+                        tostring(event.transactionId)
+                    ))
+                end
                 if state.companionLedger ~= nil
                     and state.companionLedger:status().active then
-                    local recorded, record_reason =
-                        state.companionLedger:record(event)
-                    if not recorded then
-                        log(
-                            "COMPANION_COMMERCE_EVENT_DEFERRED stage=record reason="
-                                .. tostring(record_reason)
-                        )
-                    end
+                    record_companion_event(
+                        event,
+                        "commerce-" .. tostring(event.type or "unknown")
+                    )
                     local published, publish_reason =
                         publish_companion_state("commerce-event")
                     if not published then
@@ -5221,6 +6918,24 @@ function Runtime.start(config, registry, policy)
                         )
                     end
                 end
+            end,
+            priceResolver = function(
+                shop_id,
+                product_id,
+                quantity,
+                faction_id
+            )
+                return state.uniquePalRansomShopBridge:resolve_price(
+                    shop_id,
+                    product_id,
+                    quantity,
+                    faction_id
+                )
+            end,
+            buyPolicyResolver = function(pending)
+                return state.uniquePalRansomShopBridge:buy_policy(
+                    pending
+                )
             end,
             nativeSaleReplicationProbeEnabled =
                 config.factionCommerce
@@ -5244,6 +6959,55 @@ function Runtime.start(config, registry, policy)
         {
             authoritySource = "pwft.attendance-human-defense.v1",
             reputationAward = 50,
+        }
+    )
+    state.taskDefenseClosure = TaskDefenseClosure.create(
+        state.humanDefenseResultBridge,
+        state.questObjectiveRouter,
+        {
+            onChange = function(event)
+                log(string.format(
+                    "TASK_DEFENSE_CLOSURE type=%s event=%s faction=%s settlement=%s territory=%s participated=%s won=%s credited=%s applied=%s defense=%s quest=%s transitions=%s replayed=%s ok=%s reason=%s story=false saveWrites=0",
+                    tostring(event.type or "unknown"),
+                    tostring(event.eventId or "none"),
+                    tostring(event.factionId or "none"),
+                    tostring(event.settlementId or "none"),
+                    tostring(event.territoryId or "none"),
+                    tostring(event.playerParticipated == true),
+                    tostring(event.playerSideWon == true),
+                    tostring(event.credited == true),
+                    tostring(event.defenseApplied or 0),
+                    tostring(event.defenseReason or "none"),
+                    tostring(event.questReason or "none"),
+                    tostring(event.questTransitionCount or 0),
+                    tostring(event.questReplayed == true),
+                    tostring(event.ok == true),
+                    tostring(event.reason or "none")
+                ))
+                record_companion_event({
+                    type = event.type,
+                    eventId = event.eventId,
+                    resolutionId = event.resolutionId,
+                    factionId = event.factionId,
+                    settlementId = event.settlementId,
+                    territoryId = event.territoryId,
+                    playerParticipated = event.playerParticipated == true,
+                    playerSideWon = event.playerSideWon == true,
+                    credited = event.credited == true,
+                    defenseApplied = tonumber(event.defenseApplied) or 0,
+                    defenseReason = event.defenseReason,
+                    questDispatched = event.questDispatched == true,
+                    questOk = event.questOk == true,
+                    questReason = event.questReason,
+                    questTransitionCount =
+                        tonumber(event.questTransitionCount) or 0,
+                    questReplayed = event.questReplayed == true,
+                    ok = event.ok == true,
+                    reason = event.reason,
+                    storyContentIncluded = false,
+                    saveWrites = false,
+                }, "task-defense-closure")
+            end,
         }
     )
     state.factionGuard = FactionGuard.create(state.factionApi)
@@ -5326,11 +7090,80 @@ function Runtime.start(config, registry, policy)
             end
         end
     end
+    local function strategic_spawn_policy(faction_id, spawn_kind)
+        local unique_pal_policy =
+            state.uniquePalWorldEffectBus:faction_spawn_policy(
+                faction_id,
+                spawn_kind
+            )
+        if unique_pal_policy.ok ~= true
+            or unique_pal_policy.suppressSpawn == true then
+            return unique_pal_policy
+        end
+        return state.endingEffectNativeProduction
+            :faction_spawn_policy(faction_id, spawn_kind)
+    end
+    state.npcLeaderGuardNativeProduction =
+        NpcLeaderGuardNativeProduction.create(
+            state.npcLeaderGuardOrchestrator,
+            state.nativeCharacterAdapter,
+            config.npcLeaderGuardNativeProduction,
+            {
+                logger = log,
+                spawnPolicyResolver = strategic_spawn_policy,
+            }
+        )
+    local native_leader_guard_archetypes = {}
+    for _, definition in ipairs(
+        config.npcLeaderGuardNativeProduction.archetypes or {}
+    ) do
+        native_leader_guard_archetypes[
+            #native_leader_guard_archetypes + 1
+        ] = definition
+    end
+    -- Every human faction already has one Build-verified guard character in
+    -- the commerce registry. Reuse that proven palette as the mechanics-only
+    -- default; content packs may register additional archetypes explicitly.
+    for _, faction_definition in ipairs(registry.commerce.factions) do
+        local character_id = faction_definition.guardCharacterIds[1]
+        local class_path =
+            faction_definition.guardCharacterClassPaths[1]
+        if character_id ~= nil and class_path ~= nil then
+            native_leader_guard_archetypes[
+                #native_leader_guard_archetypes + 1
+            ] = {
+                archetypeId = faction_definition.factionId
+                    .. ".default-guard",
+                characterId = character_id,
+                characterClassPath = class_path,
+            }
+        end
+    end
+    local native_leader_guard_activation =
+        state.npcLeaderGuardNativeProduction:activate(
+            native_leader_guard_archetypes
+        )
+    assert(native_leader_guard_activation.ok,
+        "native NPC leader guard production activation failed:"
+            .. tostring(native_leader_guard_activation.reason))
+    _G.PWFT_NPC_LEADER_GUARD_NATIVE_PRODUCTION_V1 =
+        state.npcLeaderGuardNativeProduction
+    if state.contentModuleLoader ~= nil
+        and type(state.contentModuleLoader.context) == "table" then
+        state.contentModuleLoader.context
+            .npcLeaderGuardNativeProduction =
+                state.npcLeaderGuardNativeProduction
+    end
     state.factionMerchantRuntime = FactionMerchantRuntime.create(
         registry.commerce,
         state.factionApi,
         state.commerceBridge,
-        state.nativeCharacterAdapter
+        state.nativeCharacterAdapter,
+        {
+            spawnPolicyResolver = function(faction_id, spawn_kind)
+                return strategic_spawn_policy(faction_id, spawn_kind)
+            end,
+        }
     )
     state.factionEconomyMerchantRuntime =
         FactionEconomyMerchantRuntime.create(
@@ -5343,8 +7176,58 @@ function Runtime.start(config, registry, policy)
                 activationAuthorized =
                     config.factionCommerce
                         .nativeEconomyMerchantSpawnEnabled,
+                spawnPolicyResolver = function(faction_id, spawn_kind)
+                    return strategic_spawn_policy(faction_id, spawn_kind)
+                end,
             }
         )
+    state.uniquePalWorldEffectNativeProduction:set_merchant_runtimes(
+        state.factionMerchantRuntime,
+        state.factionEconomyMerchantRuntime
+    )
+    state.endingEffectNativeProduction:set_merchant_runtimes(
+        state.factionMerchantRuntime,
+        state.factionEconomyMerchantRuntime
+    )
+    state.factionEconomyWarLiveTest = nil
+    if config.factionCommerce.economyWarLiveTest.enabled == true then
+        state.factionEconomyWarLiveTest =
+            FactionEconomyWarLiveTest.create(
+                state.factionProgression,
+                state.factionResourceLedger,
+                state.factionEconomy,
+                state.factionEconomyWar,
+                state.factionEconomyMerchantRuntime,
+                {
+                    runId = config.factionCommerce
+                        .economyWarLiveTest.runId,
+                    factionId = config.factionCommerce
+                        .economyWarLiveTest.factionId,
+                    resourceId = config.factionCommerce
+                        .economyWarLiveTest.resourceId,
+                    productItemId = config.factionCommerce
+                        .economyWarLiveTest.productItemId,
+                    initialQuantity = config.factionCommerce
+                        .economyWarLiveTest.initialQuantity,
+                    firstReduction = config.factionCommerce
+                        .economyWarLiveTest.firstReduction,
+                    secondReduction = config.factionCommerce
+                        .economyWarLiveTest.secondReduction,
+                    nativeMerchantRequired = config.factionCommerce
+                        .economyWarLiveTest.nativeMerchantRequired,
+                    persist = function(snapshot)
+                        if state.progressionStore == nil
+                            or state.progressionStore.enabled ~= true then
+                            return {
+                                ok = false,
+                                reason = "progression-sidecar-not-ready",
+                            }
+                        end
+                        return state.progressionStore:save(snapshot)
+                    end,
+                }
+            )
+    end
     state.factionEconomyMerchantPresence =
         FactionEconomyMerchantPresence.create(
             state.factionEconomyMerchantRuntime,
@@ -5364,6 +7247,27 @@ function Runtime.start(config, registry, policy)
     )
     local faction_ui_bound, faction_ui_bind_reason =
         state.factionUiPresenter:start()
+    local function reactivate_content_after_progression_restore(reason)
+        if state.contentModuleLoader == nil then
+            return true, "content-loader-unavailable"
+        end
+        local reactivated = state.contentModuleLoader:reactivate(reason)
+        if not reactivated.ok then
+            log(
+                "CONTENT_MODULE_POST_RESTORE_REACTIVATION_FAILED reason="
+                    .. tostring(reactivated.reason)
+            )
+            return false, reactivated.reason
+        end
+        log(string.format(
+            "CONTENT_MODULE_POST_RESTORE_REACTIVATED reason=%s generation=%s activated=%s failed=%s",
+            tostring(reason),
+            tostring(reactivated.generation),
+            tostring(reactivated.activatedCount),
+            tostring(reactivated.failedCount)
+        ))
+        return true, reactivated.reason
+    end
     state.onProgressionIdentityReady = function(identity)
         if state.progressionStore.enabled
             and state.progressionStore.profileKey
@@ -5388,11 +7292,41 @@ function Runtime.start(config, registry, policy)
         if restored ~= nil then
             local current = state.factionProgression:status()
             if current.revision == 0 then
-                state.factionProgression:restore_snapshot(
+                local restore_ok, restore_result = pcall(
+                    state.factionProgression.restore_snapshot,
+                    state.factionProgression,
                     restored.snapshot
                 )
+                -- Progression restore listeners intentionally invalidate
+                -- world-scoped native providers.  Re-register all content
+                -- after both an applied restore and a transactional rollback;
+                -- otherwise the services keep local definitions while the
+                -- provider buses have zero live bindings.
+                local content_ok, content_reason =
+                    reactivate_content_after_progression_restore(
+                        restore_ok
+                            and "progression-restore-applied"
+                            or "progression-restore-rollback"
+                    )
+                if not content_ok then
+                    return false,
+                        "post-restore-content-reactivation-failed:"
+                            .. tostring(content_reason)
+                end
+                if not restore_ok then
+                    log(
+                        "FACTION_PROGRESSION_RESTORE_REJECTED error="
+                            .. tostring(restore_result)
+                    )
+                    return false, "sidecar-restore-rejected"
+                end
                 sync_progression_relations(policy, state)
                 restore_source = restored.source
+                on_faction_state_changed(nil, {
+                    type = "progression-restored",
+                    source = restore_source,
+                    migration = restore_result.migration,
+                }, nil)
             else
                 restore_source = "live-state-newer-than-sidecar"
             end
@@ -5425,11 +7359,11 @@ function Runtime.start(config, registry, policy)
                     .. tostring(background_flush_reason)
             )
         end
-        state.companionLedger:record({
+        record_companion_event({
             type = "progression-sidecar-ready",
             restoreSource = restore_source,
             revision = state.factionProgression:status().revision,
-        })
+        }, "progression-sidecar-ready")
         publish_companion_state("identity-ready")
         if state.factionMerchantRuntime ~= nil then
             state.factionMerchantRuntime:refresh_relations()
@@ -5448,12 +7382,15 @@ function Runtime.start(config, registry, policy)
     end
     _G.PWFT_COMMERCE_API_V1 = state.factionCommerce
     _G.PWFT_ECONOMY_API_V1 = state.factionEconomy
+    _G.PWFT_FACTION_DYNAMIC_ECONOMY_V1 =
+        state.factionEconomy
     _G.PWFT_ECONOMY_SHOP_API_V1 =
         state.factionEconomyShops
     _G.PWFT_COMMERCE_BRIDGE_V1 = state.commerceBridge
     _G.PWFT_DEFENSE_API_V1 = state.factionDefense
     _G.PWFT_HUMAN_DEFENSE_RESULT_BRIDGE_V1 =
         state.humanDefenseResultBridge
+    _G.PWFT_TASK_DEFENSE_CLOSURE_V1 = state.taskDefenseClosure
     _G.PWFT_GUARD_API_V1 = state.factionGuard
     _G.PWFT_NATIVE_CHARACTER_ADAPTER_V1 =
         state.nativeCharacterAdapter
@@ -5475,6 +7412,38 @@ function Runtime.start(config, registry, policy)
         #registry.progression.palFactionIds,
         state.progressionStore.enabled and config.factionProgression.persistence.mode or "disabled",
         restore_source
+    ))
+    local consequence_status = state.factionConsequenceRouter:status()
+    log(string.format(
+        "FACTION_CONSEQUENCE_ROUTER_READY api=%s providers=%d reasons=%d bindings=%d events=%d generation=%d maxPenalty=%d exactActorClass=%s nativeConfirm=%s modelDispatch=%s saveWrites=false",
+        consequence_status.apiVersion,
+        consequence_status.providerCount,
+        consequence_status.reasonRouteCount,
+        consequence_status.activeBindingCount,
+        consequence_status.processedEventCount,
+        consequence_status.worldGeneration,
+        consequence_status.maximumPenaltyPerEvent,
+        tostring(consequence_status.exactActorAndClassBinding),
+        tostring(consequence_status.nativeConfirmationRequired),
+        tostring(consequence_status.modelMayDispatch)
+    ))
+    local native_consequence_status =
+        state.factionConsequenceNativeBinding:status()
+    log(string.format(
+        "FACTION_CONSEQUENCE_NATIVE_READY api=%s hook=%s probe=%s settlement=%s sourceBuild=%s hostBuild=%s currentSignature=%s registered=%d observed=%d settled=%d broadScan=%s saveWrites=false gate=%s",
+        native_consequence_status.apiVersion,
+        tostring(native_consequence_status.hookReady),
+        tostring(native_consequence_status.probeEnabled),
+        tostring(native_consequence_status.settlementEnabled),
+        native_consequence_status.sourceBuildId,
+        native_consequence_status.currentHostBuildId,
+        tostring(native_consequence_status
+            .currentHostSignatureVerified),
+        native_consequence_status.registeredActorCount,
+        native_consequence_status.observedCount,
+        native_consequence_status.settledCount,
+        tostring(native_consequence_status.broadActorScan),
+        native_consequence_status.settlementGate
     ))
     local pal_reconciliation_status =
         state.palReconciliation:status()
@@ -5581,6 +7550,22 @@ function Runtime.start(config, registry, policy)
     local strategic_world_status = state.strategicWorld:status()
     local unique_pal_campaign_status =
         state.uniquePalCampaign:status()
+    local unique_pal_boss_provider_status =
+        state.uniquePalBossProviderBus:status()
+    local unique_pal_boss_native_production_status =
+        state.uniquePalBossNativeProduction:status()
+    local unique_pal_world_effect_status =
+        state.uniquePalWorldEffectBus:status()
+    local unique_pal_world_effect_production_status =
+        state.uniquePalWorldEffectNativeProduction:status()
+    local unique_pal_native_delivery_status =
+        state.uniquePalNativeDeliveryBridge:status()
+    local unique_pal_native_delivery_production_status =
+        state.uniquePalNativeDeliveryProduction:status()
+    local unique_pal_native_delivery_probe_status =
+        state.uniquePalNativeDeliveryProbe:status()
+    local unique_pal_ransom_shop_status =
+        state.uniquePalRansomShopBridge:status()
     local content_pack_status = state.contentPackRegistry:status()
     local content_runtime_status = state.contentRuntime:status()
     local localization_status = state.localizationRuntime:status()
@@ -5621,13 +7606,15 @@ function Runtime.start(config, registry, policy)
         localization_status.fallbackLocale
     ))
     log(string.format(
-        "CONTENT_MODULE_LOADER_READY api=%s enabled=%s configured=%d registered=%d activated=%d failed=%d internalRequire=%s crossModGlobals=%s story=false",
+        "CONTENT_MODULE_LOADER_READY api=%s enabled=%s configured=%d registered=%d activated=%d failed=%d reactivations=%d reactivationFailures=%d internalRequire=%s crossModGlobals=%s story=false",
         content_module_status.apiVersion,
         tostring(content_module_status.enabled),
         content_module_status.configuredModuleCount,
         content_module_status.registeredCount,
         content_module_status.activatedCount,
         content_module_status.failedCount,
+        content_module_status.reactivationCount,
+        content_module_status.reactivationFailureCount,
         tostring(content_module_status.internalRequireOnly),
         tostring(content_module_status.crossModGlobalsRequired)
     ))
@@ -5661,6 +7648,125 @@ function Runtime.start(config, registry, policy)
         unique_pal_campaign_status.ransomAuthority,
         tostring(unique_pal_campaign_status.capabilities.nativeBossMutation),
         tostring(unique_pal_campaign_status.capabilities.nativeCurrencyMutation)
+    ))
+    log(string.format(
+        "UNIQUE_PAL_BOSS_PROVIDER_READY api=%s providers=%d handlers=%d bindings=%d pending=%d generation=%d exactVerifiedBindingsOnly=%s modelAuthority=%s directUEMutation=%s saveWrites=false",
+        unique_pal_boss_provider_status.apiVersion,
+        unique_pal_boss_provider_status.providerCount,
+        unique_pal_boss_provider_status.activeProviderHandlerCount,
+        unique_pal_boss_provider_status.activeBindingCount,
+        unique_pal_boss_provider_status.pendingDeliveryCount,
+        unique_pal_boss_provider_status.worldGeneration,
+        tostring(unique_pal_boss_provider_status.exactVerifiedBindingsOnly),
+        tostring(unique_pal_boss_provider_status.modelAuthority),
+        tostring(unique_pal_boss_provider_status.directUEMutation)
+    ))
+    log(string.format(
+        "UNIQUE_PAL_BOSS_NATIVE_PRODUCTION_READY api=%s enabled=%s active=%s build=%s bindings=%d hooks=%d scheduler=%s tickMs=%d schedules=%d spawns=%d captures=%d defeats=%d timeouts=%d route=%s exactActor=true broadScan=false story=false",
+        unique_pal_boss_native_production_status.apiVersion,
+        tostring(unique_pal_boss_native_production_status.enabled),
+        tostring(unique_pal_boss_native_production_status.active),
+        unique_pal_boss_native_production_status.buildId,
+        unique_pal_boss_native_production_status.bindingCount,
+        unique_pal_boss_native_production_status.hookCount,
+        tostring(unique_pal_boss_native_production_status
+            .automaticSchedulerEnabled),
+        unique_pal_boss_native_production_status.tickIntervalMs,
+        unique_pal_boss_native_production_status.scheduleCount,
+        unique_pal_boss_native_production_status
+            .spawnConfirmedCount,
+        unique_pal_boss_native_production_status
+            .captureConfirmedCount,
+        unique_pal_boss_native_production_status
+            .defeatConfirmedCount,
+        unique_pal_boss_native_production_status
+            .timeoutConfirmedCount,
+        unique_pal_boss_native_production_status.nativeSpawnRoute
+    ))
+    log(string.format(
+        "UNIQUE_PAL_WORLD_EFFECT_READY api=%s providers=%d handlers=%d bindings=%d pending=%d offers=%d generation=%d exactBoundActorsOnly=%s broadActorScan=%s modelAuthority=%s saveWrites=false",
+        unique_pal_world_effect_status.apiVersion,
+        unique_pal_world_effect_status.providerCount,
+        unique_pal_world_effect_status.activeProviderHandlerCount,
+        unique_pal_world_effect_status.activeTargetBindingCount,
+        unique_pal_world_effect_status.pendingDeliveryCount,
+        unique_pal_world_effect_status.ransomOfferCount,
+        unique_pal_world_effect_status.worldGeneration,
+        tostring(unique_pal_world_effect_status.exactBoundActorsOnly),
+        tostring(unique_pal_world_effect_status.broadActorScan),
+        tostring(unique_pal_world_effect_status.modelAuthority)
+    ))
+    log(string.format(
+        "UNIQUE_PAL_WORLD_EFFECT_PRODUCTION_READY api=%s active=%s build=%s targets=%d deliveries=%d merchants=%s raid=%s scheduledWars=%d declarations=%d backgroundResults=%d defenseRequests=%d defenseResults=%d ransomOffers=%d ransomKey=%s cityBuildingsPreserved=true story=false saveWrites=false",
+        unique_pal_world_effect_production_status.apiVersion,
+        tostring(unique_pal_world_effect_production_status.active),
+        unique_pal_world_effect_production_status.buildId,
+        unique_pal_world_effect_production_status.targetBindingCount,
+        unique_pal_world_effect_production_status
+            .nativeDeliveryBindingCount,
+        tostring(unique_pal_world_effect_production_status
+            .merchantRuntimesBound),
+        tostring(unique_pal_world_effect_production_status
+            .settlementRaidBound),
+        unique_pal_world_effect_production_status.scheduledWarCount,
+        unique_pal_world_effect_production_status.warDeclarationCount,
+        unique_pal_world_effect_production_status
+            .backgroundResolutionCount,
+        unique_pal_world_effect_production_status
+            .playerDefenseRequestCount,
+        unique_pal_world_effect_production_status
+            .playerDefenseResolutionCount,
+        unique_pal_world_effect_production_status.ransomOfferCount,
+        unique_pal_world_effect_production_status
+            .ransomInteractionKey
+    ))
+    log(string.format(
+        "UNIQUE_PAL_NATIVE_DELIVERY_READY api=%s bindings=%d pending=%d applied=%d accepted=%d confirmed=%d rejected=%d route=%s exactIndividual=%s directContainerMutation=%s debugCapture=%s saveWrites=false",
+        unique_pal_native_delivery_status.apiVersion,
+        unique_pal_native_delivery_status.bindingCount,
+        unique_pal_native_delivery_status.pendingDeliveryCount,
+        unique_pal_native_delivery_status.appliedDeliveryCount,
+        unique_pal_native_delivery_status.acceptedDeliveryCount,
+        unique_pal_native_delivery_status.confirmedDeliveryCount,
+        unique_pal_native_delivery_status.rejectedDeliveryCount,
+        unique_pal_native_delivery_status.route,
+        tostring(unique_pal_native_delivery_status
+            .exactIndividualIdentityRequired),
+        tostring(unique_pal_native_delivery_status.directContainerMutation),
+        tostring(unique_pal_native_delivery_status.debugCaptureApiAllowed)
+    ))
+    log(string.format(
+        "UNIQUE_PAL_NATIVE_DELIVERY_PRODUCTION_READY api=%s enabled=%s build=%s approvedSpecies=%d contentBindings=%d registrations=%d worldRebinds=%d rejected=%d level=%d feybreak=false story=false directContainerMutation=false saveWrites=false",
+        unique_pal_native_delivery_production_status.apiVersion,
+        tostring(unique_pal_native_delivery_production_status.enabled),
+        unique_pal_native_delivery_production_status.buildId,
+        unique_pal_native_delivery_production_status.approvedSpeciesCount,
+        unique_pal_native_delivery_production_status.activeBindingCount,
+        unique_pal_native_delivery_production_status.registrationCount,
+        unique_pal_native_delivery_production_status.worldRebindCount,
+        unique_pal_native_delivery_production_status.rejectionCount,
+        unique_pal_native_delivery_production_status.deliveryLevel
+    ))
+    log(string.format(
+        "UNIQUE_PAL_NATIVE_DELIVERY_PROBE_READY api=%s enabled=%s build=%s attempts=%d successes=%d readOnly=%s create=false capture=false directContainerMutation=false saveWrites=false",
+        unique_pal_native_delivery_probe_status.apiVersion,
+        tostring(config.uniquePalNativeDeliveryProbe.enabled == true),
+        unique_pal_native_delivery_probe_status.buildId,
+        unique_pal_native_delivery_probe_status.attemptCount,
+        unique_pal_native_delivery_probe_status.successCount,
+        tostring(unique_pal_native_delivery_probe_status.readOnly)
+    ))
+    log(string.format(
+        "UNIQUE_PAL_RANSOM_SHOP_READY api=%s open=%d settled=%d confirmed=%d rejected=%d route=%s reputation=%d directCurrencyMutation=%s palDelivery=%s saveWrites=false",
+        unique_pal_ransom_shop_status.apiVersion,
+        unique_pal_ransom_shop_status.openOfferCount,
+        unique_pal_ransom_shop_status.settledOfferCount,
+        unique_pal_ransom_shop_status.confirmedPaymentCount,
+        unique_pal_ransom_shop_status.rejectedPaymentCount,
+        unique_pal_ransom_shop_status.paymentRoute,
+        unique_pal_ransom_shop_status.commerceReputationAward,
+        tostring(unique_pal_ransom_shop_status.directCurrencyMutation),
+        tostring(unique_pal_ransom_shop_status.palDeliveryIncluded)
     ))
     local ending_status = state.endingRuntime:status()
     log(string.format(
@@ -5701,6 +7807,18 @@ function Runtime.start(config, registry, policy)
         NPC_guard_status.activeDeploymentCount,
         tostring(NPC_guard_status.progressionSidecarIdempotency),
         tostring(NPC_guard_status.PalworldSaveMutation)
+    ))
+    local NPC_guard_native_status =
+        state.npcLeaderGuardNativeProduction:status()
+    log(string.format(
+        "NPC_LEADER_GUARD_NATIVE_READY api=%s active=%s archetypes=%d bindings=%d deployments=%d members=%d exact=true broadScan=false story=false saveWrites=%s",
+        NPC_guard_native_status.apiVersion,
+        tostring(NPC_guard_native_status.active),
+        NPC_guard_native_status.archetypeCount,
+        NPC_guard_native_status.bindingCount,
+        NPC_guard_native_status.deploymentCount,
+        NPC_guard_native_status.activeMemberCount,
+        tostring(NPC_guard_native_status.PalworldSaveMutation)
     ))
     log(string.format(
         "QUEST_OBJECTIVE_ROUTER_READY api=%s sources=%d kinds=%d events=%d tracked=%d modelDispatch=%s saveWrites=%s",
@@ -5832,7 +7950,7 @@ function Runtime.start(config, registry, policy)
                 if type(faction_id) ~= "string" or faction_id == "" then
                     return false, "settlement-human-faction-unresolved"
                 end
-                local opened = state.humanDefenseResultBridge:open({
+                local opened = state.taskDefenseClosure:open({
                     schemaVersion = "1.0.0",
                     routeKind = "human-settlement-defense",
                     authoritative = true,
@@ -5840,9 +7958,15 @@ function Runtime.start(config, registry, policy)
                     eventId = raid_start.raidEventId,
                     factionId = faction_id,
                     settlementId = raid_start.settlementId,
+                    territoryId =
+                        config.settlementRaid.settlement.islandId,
                     playerPresent = true,
                 })
-                return opened.ok, opened.reason
+                if not opened.ok then return opened.ok, opened.reason end
+                local unique_pal =
+                    state.uniquePalWorldEffectNativeProduction
+                        :on_attendance_start(raid_start)
+                return unique_pal.ok, unique_pal.reason
             end,
             attendanceCancelObserver = function(raid_cancel)
                 local territory = registry.islands[
@@ -5853,7 +7977,7 @@ function Runtime.start(config, registry, policy)
                 if type(faction_id) ~= "string" or faction_id == "" then
                     return false, "settlement-human-faction-unresolved"
                 end
-                local settled = state.humanDefenseResultBridge:settle({
+                local settled = state.taskDefenseClosure:settle({
                     schemaVersion = "1.0.0",
                     routeKind = "human-settlement-defense",
                     authoritative = true,
@@ -5863,10 +7987,16 @@ function Runtime.start(config, registry, policy)
                         .. ":human-defense-cancelled",
                     factionId = faction_id,
                     settlementId = raid_cancel.settlementId,
+                    territoryId =
+                        config.settlementRaid.settlement.islandId,
                     playerParticipated = false,
                     playerSideWon = false,
                 })
-                return settled.ok, settled.reason
+                if not settled.ok then return settled.ok, settled.reason end
+                local unique_pal =
+                    state.uniquePalWorldEffectNativeProduction
+                        :on_attendance_cancel(raid_cancel)
+                return unique_pal.ok, unique_pal.reason
             end,
             attendanceResultObserver = function(raid_result)
                 local territory = registry.islands[
@@ -5877,7 +8007,7 @@ function Runtime.start(config, registry, policy)
                 if type(faction_id) ~= "string" or faction_id == "" then
                     return false, "settlement-human-faction-unresolved"
                 end
-                local settled = state.humanDefenseResultBridge:settle({
+                local settled = state.taskDefenseClosure:settle({
                     schemaVersion = "1.0.0",
                     routeKind = "human-settlement-defense",
                     authoritative = true,
@@ -5887,30 +8017,22 @@ function Runtime.start(config, registry, policy)
                         .. ":human-defense",
                     factionId = faction_id,
                     settlementId = raid_result.settlementId,
+                    territoryId =
+                        config.settlementRaid.settlement.islandId,
                     playerParticipated =
                         raid_result.playerParticipated == true,
                     playerSideWon = raid_result.playerSideWon == true,
                 })
-                if settled.ok then
-                    state.questObjectiveRouter:dispatch({
-                        schemaVersion = "pwft.quest-objective-event.v1",
-                        eventId = raid_result.raidEventId
-                            .. ":quest-defense",
-                        authority = "pwft.defense.v1",
-                        source = "defense",
-                        kind = "completed",
-                        factionId = faction_id,
-                        territoryId =
-                            config.settlementRaid.settlement.islandId,
-                        outcome = raid_result.playerSideWon
-                                and "victory" or "defeat",
-                        playerParticipated =
-                            raid_result.playerParticipated == true,
-                    })
-                end
-                return settled.ok, settled.reason
+                if not settled.ok then return settled.ok, settled.reason end
+                local unique_pal =
+                    state.uniquePalWorldEffectNativeProduction
+                        :on_attendance_result(raid_result)
+                return unique_pal.ok, unique_pal.reason
             end,
         }
+    )
+    state.uniquePalWorldEffectNativeProduction:set_settlement_raid(
+        state.settlementRaid
     )
     _G.PWFT_ATTENDANCE_RAID_RESULT_BRIDGE_V1 =
         state.settlementRaid.attendanceResultBridge
@@ -5951,9 +8073,13 @@ function Runtime.start(config, registry, policy)
     register_guard_console_command(state)
     register_agent_dialogue_runtime(config, state)
     register_guard_live_test(config, state)
+    register_unique_pal_native_delivery_live_test(config, state)
+    register_unique_pal_boss_live_test(config, state)
+    register_unique_pal_world_effect_live_test(config, state)
     register_rayne_relation_live_test(config, policy, state)
     register_economy_merchant_interaction_router(state)
     register_economy_merchant_live_test(config, state)
+    register_economy_war_live_test(config, state)
     register_commerce_window_live_test(config, state)
     register_hostile_commerce_live_test(config, state)
     register_native_map_keybinds(config, registry, policy, state)

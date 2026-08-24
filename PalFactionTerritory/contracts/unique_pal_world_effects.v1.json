@@ -1,0 +1,174 @@
+{
+  "schemaVersion": "1.0.0",
+  "apiVersion": "1.0.0",
+  "providerApi": "PWFT_UNIQUE_PAL_WORLD_EFFECT_BUS_V1",
+  "contentStatus": "provider_ready_exact_target_bindings_required",
+  "storyContentIncluded": false,
+  "providerPolicy": {
+    "configuredTrustedContentModuleActivationOnly": true,
+    "idempotentDeliveryIdsRequired": true,
+    "generationFencedCallbacksRequired": true,
+    "handlersPersisted": false,
+    "bindingsPersisted": false,
+    "modelAuthority": false,
+    "inlineTextAuthority": false,
+    "directUEMutation": false,
+    "PalworldSaveMutation": false
+  },
+  "targetBindingPolicy": {
+    "requiredExactFields": [
+      "targetKind",
+      "targetId",
+      "PalworldBuildId",
+      "spawnKind",
+      "spawnerKey",
+      "actorClassKeys",
+      "nativeRouteKeys"
+    ],
+    "cityMustBelongToAffectedFaction": true,
+    "merchantCounterMustBelongToAffectedFaction": true,
+    "unknownSpawnerActorCityOrRouteFailsClosed": true,
+    "UObjectReferencesPersisted": false
+  },
+  "extinctionPolicy": {
+    "deliveryKinds": [
+      "world-spawn-suppression",
+      "loaded-actor-cleanup",
+      "empty-city",
+      "merchant-filter"
+    ],
+    "settlementNpcSpawnsSuppressed": true,
+    "patrolAndFactionCombatSpawnsSuppressed": true,
+    "loadedActorCleanupExactBindingsOnly": true,
+    "broadActorScanAllowed": false,
+    "buildingsPreserved": true,
+    "residentsAndFunctionNpcsSuppressed": true,
+    "mapActorDeletionAllowed": false,
+    "merchantGuildCounterFiltered": true,
+    "reapplyPersistentEffectsEachWorldGeneration": true
+  },
+  "warPolicy": {
+    "textPresentationDelivery": "war-notice",
+    "backgroundWar": {
+      "nativeActorsRequired": false,
+      "configuredDeterministicResolverRequired": true,
+      "authoritativeCallbackRequired": true,
+      "modelMayDecideResult": false
+    },
+    "playerDefense": {
+      "nativeRequestDelivery": "player-defense-request",
+      "providerRequestIdRequired": true,
+      "explicitPlayerParticipationRequired": true,
+      "explicitPlayerVictoryRequired": true,
+      "authoritativeCallbackRequired": true
+    },
+    "stableWarAndResolutionIdsRequired": true,
+    "duplicateSameSignatureIsIdempotent": true,
+    "duplicateChangedSignatureIsConflict": true
+  },
+  "ransomPolicy": {
+    "offerDerivedFromCoreQuoteOnly": true,
+    "exactCurrencyAndAmountRequired": true,
+    "nativeOfferIdRequired": true,
+    "nativePaymentRouteRequired": true,
+    "paidConfirmationRequired": true,
+    "logicalOwnerTransferAfterConfirmedPayment": true,
+    "nativePalDeliveryRequestAfterLogicalTransfer": true,
+    "nativePalDeliveryIdRequired": true,
+    "nativePalDeliveryAuthoritativeCallbackRequired": true,
+    "failedPalDeliveryRemainsRetryable": true,
+    "duplicatePaymentCannotTransferTwice": true,
+    "commerceReputationAward": 0,
+    "modelMayConfirmPaymentOrDelivery": false
+  },
+  "ransomShopBridgePolicy": {
+    "paymentChannel": "native-server-authoritative-shop-buy-result",
+    "exactMatchFields": [
+      "offerId",
+      "providerId",
+      "bindingId",
+      "worldGeneration",
+      "shopId",
+      "productId",
+      "merchantFactionId",
+      "currency",
+      "amount",
+      "buyQuantity",
+      "nativeOfferId",
+      "ransomPaymentKey"
+    ],
+    "singlePurchaseStockRequired": true,
+    "serverAuthoritativePriceRequired": true,
+    "serverAuthoritativePaymentResultRequired": true,
+    "commerceReputationAward": 0,
+    "directCurrencyMutation": false,
+    "paymentAndPalDeliveryRemainSeparate": true,
+    "worldUnloadClearsTransientOffers": true,
+    "currentNativeProductBindings": 0
+  },
+  "palDeliveryBridgePolicy": {
+    "bridgeApi": "PWFT_UNIQUE_PAL_NATIVE_DELIVERY_BRIDGE_V1",
+    "route": "verified-server-spawn-capture-storage-readback",
+    "exactMatchFields": [
+      "deliveryId",
+      "providerId",
+      "bindingId",
+      "worldGeneration",
+      "nativeDeliveryId",
+      "nativeIndividualKey",
+      "palDeliveryKey",
+      "uniquePalId",
+      "speciesId",
+      "playerId"
+    ],
+    "storageCapacityPreflightRequired": true,
+    "stableIndividualIdentityRequired": true,
+    "serverAuthoritativeSpawnRequired": true,
+    "serverAuthoritativeCaptureRequired": true,
+    "postCaptureStorageReadbackRequired": true,
+    "retryCannotCreateOrCaptureTwice": true,
+    "worldUnloadRollsBackUncommittedCreations": true,
+    "directContainerMutation": false,
+    "debugCaptureApiAllowed": false,
+    "currentNativeBindings": 0,
+    "currentBuildRouteStatus": "candidate-route-current-build-signature-and-live-storage-readback-pending"
+  },
+  "callbackPolicy": {
+    "kinds": [
+      "background-war",
+      "player-defense",
+      "ransom-payment",
+      "pal-delivery"
+    ],
+    "exactChecks": [
+      "providerId",
+      "authoritySource",
+      "bindingId",
+      "targetKey",
+      "nativeRouteKey",
+      "worldGeneration",
+      "warOrOfferId",
+      "nativeRequestId"
+    ],
+    "lateGenerationRejected": true
+  },
+  "persistencePolicy": {
+    "serializableProviderDefinitions": true,
+    "deliveryLedger": true,
+    "callbackSignatureLedger": true,
+    "ransomOfferLedger": true,
+    "worldGeneration": true,
+    "UObjectReferences": false
+  },
+  "currentImplementation": {
+    "worldEffectProviderBus": "implemented-offline-verified",
+    "runtimeAndContentModuleContext": "implemented-offline-verified",
+    "spawnSuppressionAndExactCleanup": "contract-ready-real-binding-pending",
+    "emptyCityAndMerchantFilter": "contract-ready-real-binding-pending",
+    "backgroundWarPresentationAndResult": "contract-ready-real-provider-pending",
+    "playerDefenseRaidAndResult": "contract-ready-real-provider-pending",
+    "ransomPayment": "native-itemshop-bridge-offline-verified-product-binding-pending",
+    "palDelivery": "transaction-bridge-offline-verified-native-binding-pending",
+    "liveAcceptance": "not-run"
+  }
+}

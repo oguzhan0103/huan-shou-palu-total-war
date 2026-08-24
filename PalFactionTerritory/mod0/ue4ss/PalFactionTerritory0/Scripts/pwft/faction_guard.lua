@@ -16,7 +16,7 @@ function FactionGuard.create(faction_api)
     assert(type(faction_api) == "table", "faction API is required")
     assert(type(faction_api.has_guard_access) == "function", "faction API lacks guard eligibility")
     return setmetatable({
-        version = "1.0.0",
+        version = "1.1.0",
         factionApi = faction_api,
         providers = {},
         active = {},
@@ -24,6 +24,8 @@ function FactionGuard.create(faction_api)
             leaderUnlock = true,
             lordAccess = true,
             oneActiveGuardPerFaction = true,
+            entitlementReconciliation = true,
+            automaticDemotionRecall = true,
             nativeProviderRequired = true,
             PalworldSaveMutation = false,
         },
@@ -133,6 +135,11 @@ function FactionGuard:recall(faction_id, reason)
         return result(true, "no-active-guard", { factionId = faction_id })
     end
     local provider = self.providers[faction_id]
+    if provider == nil then
+        return result(false, "guard-provider-missing-during-recall", {
+            factionId = faction_id,
+        })
+    end
     local provider_ok, provider_result = pcall(
         provider.recall,
         active.handle,
@@ -146,6 +153,61 @@ function FactionGuard:recall(faction_id, reason)
     end
     self.active[faction_id] = nil
     return result(true, "guard-recalled", { factionId = faction_id })
+end
+
+function FactionGuard:reconcile_entitlement(faction_id, reason)
+    require_non_empty_string(faction_id, "guard faction ID")
+    local active = self.active[faction_id]
+    if active == nil then
+        return result(true, "no-active-guard", {
+            factionId = faction_id,
+            revoked = false,
+        })
+    end
+    local entitlement = self:entitlement(faction_id)
+    if entitlement.ok then
+        return result(true, "guard-entitlement-retained", {
+            factionId = faction_id,
+            revoked = false,
+            rankId = entitlement.rankId,
+        })
+    end
+    local recalled = self:recall(
+        faction_id,
+        reason or "reputation-entitlement-revoked"
+    )
+    recalled.revoked = recalled.ok == true
+    recalled.entitlementReason = entitlement.reason
+    recalled.rankId = entitlement.rankId
+    return recalled
+end
+
+function FactionGuard:reconcile_all_entitlements(reason)
+    local outcomes = {}
+    local faction_ids = {}
+    for faction_id, _ in pairs(self.active) do
+        faction_ids[#faction_ids + 1] = faction_id
+    end
+    table.sort(faction_ids)
+    local revoked_count = 0
+    local failed_count = 0
+    for _, faction_id in ipairs(faction_ids) do
+        local outcome = self:reconcile_entitlement(faction_id, reason)
+        outcomes[#outcomes + 1] = outcome
+        if outcome.revoked then
+            revoked_count = revoked_count + 1
+        elseif not outcome.ok then
+            failed_count = failed_count + 1
+        end
+    end
+    return result(failed_count == 0, failed_count == 0
+        and "guard-entitlements-reconciled"
+        or "guard-entitlement-reconciliation-partial", {
+        checkedCount = #faction_ids,
+        revokedCount = revoked_count,
+        failedCount = failed_count,
+        outcomes = outcomes,
+    })
 end
 
 function FactionGuard:status()

@@ -263,6 +263,7 @@ function RewardPolicy.create(progression, options)
             deterministicMilestoneGuarantee = true,
             perChannelRewardCaps = true,
             operationIdempotency = true,
+            persistedOperationReplay = true,
             contentPackExtension = true,
             modelAuthority = false,
             directInventoryMutation = false,
@@ -437,6 +438,21 @@ function RewardPolicy:settle(input)
         if not called then self.lastNotificationError = tostring(message) end
     end
     return outcome
+end
+
+-- Duplicate settlement calls intentionally return no new intents so callers
+-- cannot accidentally grant the same reward twice.  Delivery providers that
+-- are recovering after a restart use this read-only operation record instead
+-- of recalculating the policy or asking settle() to emit a second intent.
+function RewardPolicy:operation_status(operation_id)
+    if type(operation_id) ~= "string" or operation_id == "" then
+        return nil
+    end
+    local record = self.state.operationSignatures[operation_id]
+    if type(record) ~= "table" or type(record.outcome) ~= "table" then
+        return nil
+    end
+    return copy(record.outcome)
 end
 
 function RewardPolicy:status(policy_id)

@@ -129,6 +129,7 @@ function FactionUiModel:faction_row(faction_id)
             status
         ),
         sourceTotals = copy(status.sourceTotals),
+        lastReputationChange = copy(status.lastReputationChange),
     }
     if status.kind == "Human" then
         local commerce = self.commerce:merchant_status(faction_id)

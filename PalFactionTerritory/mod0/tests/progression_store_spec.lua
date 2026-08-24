@@ -4,6 +4,8 @@ package.path = table.concat({
 }, ";")
 
 local Json = require("pwft.json")
+local Registry = require("pwft.registry")
+local Progression = require("pwft.faction_progression")
 local ProgressionStore = require("pwft.progression_store")
 
 local files = {}
@@ -107,4 +109,44 @@ local missing, load_error = store:load()
 assert(missing == nil)
 assert(string.find(load_error, "profile-key-mismatch", 1, true) ~= nil)
 
-print("PASS versioned progression sidecar store")
+local migration_store = ProgressionStore.create({
+    enabled = true,
+    mode = "mod-sidecar-json",
+    profileKey = "world-migration.player-001",
+    rootPath = "state",
+    now = function()
+        return 1722140001
+    end,
+}, filesystem)
+local legacy_progression = Progression.create(
+    Registry.progression
+):export_snapshot()
+legacy_progression.schemaVersion = "1.0.0"
+legacy_progression.processedReputationOperations = nil
+legacy_progression.extensionProbe = { preserved = "primary" }
+assert(migration_store:save(legacy_progression).ok)
+local legacy_primary = migration_store:load()
+assert(legacy_primary.source == "primary")
+local migrated_primary = Progression.create(
+    Registry.progression,
+    legacy_primary.snapshot
+)
+assert(migrated_primary:status().schemaVersion == "1.1.0")
+assert(migrated_primary:status().lastMigration.fromSchemaVersion == "1.0.0")
+assert(migrated_primary:export_snapshot().extensionProbe.preserved == "primary")
+
+local current_progression = migrated_primary:export_snapshot()
+current_progression.revision = current_progression.revision + 1
+assert(migration_store:save(current_progression).ok)
+files[migration_store.primaryPath] = "{broken"
+local legacy_backup = migration_store:load()
+assert(legacy_backup.source == "backup")
+local migrated_backup = Progression.create(
+    Registry.progression,
+    legacy_backup.snapshot
+)
+assert(migrated_backup:status().schemaVersion == "1.1.0")
+assert(migrated_backup:status().lastMigration.fromSchemaVersion == "1.0.0")
+assert(migrated_backup:export_snapshot().extensionProbe.preserved == "primary")
+
+print("PASS versioned progression sidecar store with primary/backup payload migration")

@@ -1,0 +1,150 @@
+{
+  "schemaVersion": "1.0.0",
+  "result": "PASS",
+  "gameBuild": "24575825",
+  "gameVersion": "1.0.3.101283",
+  "testDate": "2026-08-23",
+  "acceptanceGate": "b6-dynamic-economy-war-restart-closure",
+  "attemptHistory": {
+    "attemptCount": 2,
+    "firstAttemptResult": "FAIL_CLOSED",
+    "firstAttemptReason": "native-product-array-is-ue4ss-tarray-not-lua-table",
+    "staticMarketFallbackAvailable": true,
+    "fix": "bounded-native-array-iterator-prefers-GetArrayNum-and-one-based-indexing",
+    "secondAttemptResult": "PASS"
+  },
+  "nativeDynamicMarket": {
+    "activeCounters": 7,
+    "auditedDynamicItemIds": 9,
+    "unrelatedNativeRowsUntouched": true,
+    "initial": {
+      "ledgerRevision": 0,
+      "quantity": 150,
+      "supplyBand": "established",
+      "direction": "sell",
+      "sellPrice": 240,
+      "stock": 66
+    },
+    "limitedSale": {
+      "ledgerRevision": 1,
+      "quantity": 50,
+      "supplyBand": "limited",
+      "direction": "sell",
+      "sellPrice": 280,
+      "stock": 25,
+      "sameMerchant": true,
+      "nativeRefresh": true
+    },
+    "scarceProcurement": {
+      "ledgerRevision": 2,
+      "quantity": 49,
+      "supplyBand": "scarce",
+      "direction": "procure",
+      "procurementPrice": 290,
+      "procurementQuota": 62,
+      "nativeSellRows": 0,
+      "nativeProcurementSoldOutRows": 1,
+      "sameMerchant": true,
+      "nativeRefresh": true
+    }
+  },
+  "economyWar": {
+    "requesterFactionId": "pwft.faction.rayne_syndicate",
+    "resourceId": "metal_ore",
+    "supplierFactionId": "pwft.faction.pal_genetic_research_unit",
+    "transitions": [
+      "trade_requested",
+      "threat",
+      "war"
+    ],
+    "restartRequiredAtWar": true
+  },
+  "restartPersistence": {
+    "worldDirectory": "E0D5ECDC46B379829F8F31A729ACFD92",
+    "profileKey": "world-E0D5ECDC46B379829F8F31A729ACFD92.player-00000000000000000000000000000001",
+    "quantityAfterRestart": 49,
+    "conflictAfterRestart": "war",
+    "ledgerRevisionAfterRestart": 2,
+    "persistenceConfirmed": true,
+    "activeCountersAfterRestart": 7
+  },
+  "recovery": {
+    "quantityAfterSupplyRestore": 150,
+    "supplyBand": "established",
+    "sellPrice": 240,
+    "stock": 66,
+    "firstConflictResult": "ceasefire",
+    "finalConflictResult": "stable",
+    "sameMerchant": true,
+    "nativeRefresh": true,
+    "finalPhase": "complete",
+    "finalStepCount": 7
+  },
+  "safety": {
+    "storyContentIncluded": false,
+    "palworldSaveWritesByMod": 0,
+    "formalQaHotkeyEnabled": false,
+    "fixedMerchantDuplicatesObserved": 0,
+    "nativeCurrencyMutation": false
+  },
+  "operatorRecovery": {
+    "wrongWorldDirectory": "5FF2235E441EC9E50C9AFA97A6C7C4EE",
+    "b6HotkeyUsedInWrongWorld": false,
+    "wrongWorldRestoredFromPreflight": true,
+    "wrongWorldSidecarsQuarantined": 4
+  },
+  "automatedVerification": {
+    "dynamicEconomySpec": "PASS",
+    "economyWarLiveRouteSpec": "PASS",
+    "nativeContractFields": 13,
+    "fullVerification": "PASS",
+    "luaSourceFiles": 86,
+    "luaTests": 75,
+    "trackedTextFilesAtAcceptance": 420
+  },
+  "restore": {
+    "result": "PASS",
+    "gameRunning": false,
+    "saveSnapshotFiles": 384,
+    "saveCurrentFiles": 384,
+    "saveMissing": 0,
+    "saveExtra": 0,
+    "saveChanged": 0,
+    "stateSnapshotFiles": 12,
+    "stateCurrentFiles": 12,
+    "stateMissing": 0,
+    "stateExtra": 0,
+    "stateChanged": 0,
+    "extraSaveBackupsQuarantined": 33,
+    "formalDeploymentFiles": 84,
+    "formalQaHotkeyEnabled": false,
+    "levelSavSha256": "2579fdaf631690ab6d8ab7e9097881cb9dc365da116d022d1bc182e58cea9c69",
+    "levelMetaSavSha256": "4839cc7d8c52e31d511a05f3c817f80f1c6bc64154f6854c1940a6fa9cf5a1ff",
+    "steamCloudEnabled": true,
+    "steamCloudSynchronized": false,
+    "steamCloudUiStatus": "out-of-date",
+    "steamCloudOverwriteChoiceMade": false
+  },
+  "postAcceptanceCloudRecovery": {
+    "result": "PASS",
+    "recoveryMethod": "restart-steam-and-resume-sync",
+    "recoveryTimestamp": "2026-08-23T20:32:42+08:00",
+    "steamCloudUiStatus": "synchronized-checkmark",
+    "steamCloudLogResult": "Upload complete, result OK",
+    "gameRunning": false,
+    "palworldLaunchedForRecovery": false,
+    "steamCloudOverwriteChoiceMade": false,
+    "levelSavSha256": "2579fdaf631690ab6d8ab7e9097881cb9dc365da116d022d1bc182e58cea9c69",
+    "levelMetaSavSha256": "4839cc7d8c52e31d511a05f3c817f80f1c6bc64154f6854c1940a6fa9cf5a1ff",
+    "mainSaveHashesMatchAcceptance": true,
+    "cloudHistoryMayReconcileBackupFiles": true
+  },
+  "evidenceBoundary": {
+    "preRestartRawLogSha256": "4fb1e3a8536dcbfa33efea45b0ee672ef07937554ff8a9d2044420980ff4d3e2",
+    "postRestartRawLogSha256": "46b46cf9e001d98ce59fc6bf0227b3f8cb771a0da1634672aff4fddf98ab0c7f",
+    "rawLogsStateSavesAndQuarantinePrivate": true,
+    "positiveRouteObservedInLiveRun": true,
+    "negativeBoundariesCoveredByAutomatedTests": true,
+    "userAcceptance": "not-performed"
+  }
+}

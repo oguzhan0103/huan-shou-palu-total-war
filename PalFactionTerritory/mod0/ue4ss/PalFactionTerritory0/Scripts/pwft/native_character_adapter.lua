@@ -95,6 +95,180 @@ local function safe_unwrap(value)
     return value
 end
 
+local function for_each_native_array(array, callback)
+    array = safe_unwrap(array)
+    if array == nil then
+        return false, "array-unavailable"
+    end
+
+    -- Current Palworld/UE4SS returns reflected TArray properties as userdata,
+    -- so Lua pairs() is invalid.  Use the same fixed-length indexed route as
+    -- the already live-accepted Rayne merchant implementation.  Keeping the
+    -- callback in ordinary Lua control flow also avoids UE4SS 3.0.1's native
+    -- ForEach traceback/crash edge case.
+    local get_array_num = safe_property(array, "GetArrayNum")
+    if type(get_array_num) == "function" then
+        local count_ok, count = pcall(function()
+            return array:GetArrayNum()
+        end)
+        count = count_ok and tonumber(count) or nil
+        if count == nil or count < 0 then
+            return false, "array-count-unavailable"
+        end
+        for index = 1, count do
+            local read_ok, element = pcall(function()
+                return array[index]
+            end)
+            if not read_ok then
+                return false, "array-index-read-failed:" .. tostring(index)
+            end
+            local callback_ok, callback_error = pcall(
+                callback,
+                index,
+                element
+            )
+            if not callback_ok then
+                return false,
+                    "array-callback-failed:" .. tostring(callback_error)
+            end
+        end
+        return true, nil
+    end
+
+    -- Older wrappers may expose only ForEach.  This is a compatibility
+    -- fallback; Build 24575825's product array uses GetArrayNum above.
+    local for_each = safe_property(array, "ForEach")
+    if type(for_each) == "function" then
+        local callback_error = nil
+        local ok, bridge_error = pcall(function()
+            array:ForEach(function(index, element)
+                local callback_ok, detail = pcall(
+                    callback,
+                    index,
+                    element
+                )
+                if not callback_ok then
+                    callback_error = detail
+                    error(detail)
+                end
+            end)
+        end)
+        if not ok then
+            return false,
+                "array-foreach-failed:"
+                    .. tostring(callback_error or bridge_error)
+        end
+        return true, nil
+    end
+
+    -- Plain Lua tables remain supported for offline tests and fixtures.
+    if type(array) == "table" then
+        for index, element in pairs(array) do
+            local callback_ok, callback_error = pcall(
+                callback,
+                index,
+                element
+            )
+            if not callback_ok then
+                return false,
+                    "array-callback-failed:" .. tostring(callback_error)
+            end
+        end
+        return true, nil
+    end
+    return false, "array-iteration-unsupported:" .. type(array)
+end
+
+local function native_name_string(value)
+    value = safe_unwrap(value)
+    if value == nil then return nil end
+    local ok, rendered = pcall(function()
+        if value.ToString ~= nil then
+            return value:ToString()
+        end
+        return tostring(value)
+    end)
+    if not ok or rendered == nil then return nil end
+    rendered = tostring(rendered)
+    rendered = string.gsub(rendered, "^FName:", "")
+    rendered = string.gsub(rendered, '^"(.*)"$', "%1")
+    return rendered
+end
+
+local function native_guid_string(value)
+    value = safe_unwrap(value)
+    if value == nil then return nil end
+    -- UE4SS's reflected Guid is a struct userdata. Reading an absent member
+    -- such as ToString raises instead of returning nil, so inspect the four
+    -- declared Guid fields first through the protected property helper.
+    local words = {
+        safe_property(value, "A"),
+        safe_property(value, "B"),
+        safe_property(value, "C"),
+        safe_property(value, "D"),
+    }
+    local complete = true
+    for index = 1, 4 do
+        local numeric = tonumber(safe_unwrap(words[index]))
+        if numeric == nil then
+            complete = false
+            break
+        end
+        words[index] = math.floor(numeric % 4294967296)
+    end
+    if complete then
+        return string.format(
+            "%08x-%08x-%08x-%08x",
+            words[1],
+            words[2],
+            words[3],
+            words[4]
+        )
+    end
+
+    local to_string = safe_property(value, "ToString")
+    if type(to_string) == "function" then
+        local ok, rendered = pcall(function() return value:ToString() end)
+        if ok and rendered ~= nil and tostring(rendered) ~= "" then
+            return tostring(rendered)
+        end
+    end
+    return nil
+end
+
+local function native_object_guid(object, property_name)
+    local property_guid = native_guid_string(
+        safe_property(object, property_name)
+    )
+    if property_guid ~= nil then return property_guid end
+    if not is_valid_object(object) then return nil end
+    -- UE4SS exposes reflected UFunction out parameters as additional Lua
+    -- return values.  PalShopBase.GetId has only an OutID parameter in Build
+    -- 24575825, so its GUID is normally the second value after the empty
+    -- ordinary return slot.  Keep the first-value route for mocks and older
+    -- builds, then accept either out-parameter slot.
+    local called, reflected_guid, reflected_out_guid, reflected_extra_guid = pcall(function()
+        return object:GetId()
+    end)
+    local resolved = called and (
+        native_guid_string(reflected_guid)
+        or native_guid_string(reflected_out_guid)
+        or native_guid_string(reflected_extra_guid)
+    ) or nil
+    if resolved ~= nil then return resolved end
+
+    -- Some UE4SS builds require an explicit Lua table for an out parameter.
+    -- Keep this last so the normal reflected-property and return-value paths
+    -- remain untouched.
+    local explicit_out = {}
+    local explicit_ok, explicit_return = pcall(function()
+        return object:GetId(explicit_out)
+    end)
+    if not explicit_ok then return nil end
+    return native_guid_string(explicit_return)
+        or native_guid_string(explicit_out)
+end
+
 local function copy_vector(value, defaults)
     assert(type(value) == "table", "spawn vector is required")
     return {
@@ -198,6 +372,9 @@ function NativeCharacterAdapter.create(options)
                 options.asyncMerchantSpawnerEnabled == true,
             asynchronousMerchantReadiness = true,
             itemShopBinding = true,
+            itemShopDynamicProductMutationRoute = true,
+            itemShopDynamicPriceMutationRoute = true,
+            itemShopDynamicStockMutationRoute = true,
             palShopBinding = true,
             guardBlueprintSpawn = true,
             guardProviderFactory = true,
@@ -524,6 +701,285 @@ function NativeCharacterAdapter:_configure_vendor(actor, plan)
     return true, nil
 end
 
+-- Build 24575825 exposes PalShopBase.ProductArray and the static-item giver's
+-- ProductStaticItemID, OverridePrice, StockNum and MaxStockNum.  Mutate only
+-- the nine audited economy products already present in this merchant's
+-- cooked row; every unrelated native product is left untouched.  A product
+-- that changed from sell to procure stays in the native row with zero stock,
+-- while the confirmed native sell-replication bridge handles the procurement
+-- request.  This edits the transient server shop object, never Palworld save
+-- data or the static DataTable.
+function NativeCharacterAdapter:apply_dynamic_item_shop_market(actor, plan)
+    if not is_valid_object(actor) then
+        return false, "merchant-actor-unavailable"
+    end
+    if type(plan) ~= "table" or plan.salesChannel ~= "ItemShop" then
+        return false, "dynamic-item-shop-plan-unavailable"
+    end
+    if plan.dynamicMarketEnabled ~= true then
+        return false, "dynamic-item-shop-disabled"
+    end
+    local vendor = safe_property(
+        actor,
+        "BP_PalShopVenderDataComponent"
+    )
+    if not is_valid_object(vendor) then
+        return false, "vendor-component-unavailable"
+    end
+    local shop = safe_unwrap(safe_property(vendor, "MyItemShop"))
+    if not is_valid_object(shop) then
+        return false, "item-shop-unavailable"
+    end
+    local product_array = safe_property(shop, "ProductArray")
+    if product_array == nil then
+        return false, "item-shop-product-array-unavailable"
+    end
+
+    local sell_by_item = {}
+    local procure_by_item = {}
+    local audited_items = {}
+    for _, item_id in ipairs(plan.marketUniverseItemIds or {}) do
+        audited_items[item_id] = true
+    end
+    for _, row in ipairs(plan.products or {}) do
+        sell_by_item[row.itemId] = row
+        audited_items[row.itemId] = true
+    end
+    for _, row in ipairs(plan.requested or {}) do
+        procure_by_item[row.itemId] = row
+        audited_items[row.itemId] = true
+    end
+
+    local inspected = 0
+    local matched = 0
+    local changed = 0
+    local failed = 0
+    local sell_lines = 0
+    local procurement_lines = 0
+    local observed_items = {}
+    local iterated, iteration_error = for_each_native_array(
+        product_array,
+        function(_, remote_product)
+            local product = safe_unwrap(remote_product)
+            if is_valid_object(product) then
+                inspected = inspected + 1
+                local giver = safe_unwrap(
+                    safe_property(product, "MyProductGiver")
+                )
+                if is_valid_object(giver) then
+                    local item_id = native_name_string(
+                        safe_property(giver, "ProductStaticItemID")
+                    )
+                    if item_id ~= nil then
+                        observed_items[item_id] = true
+                    end
+                    local sell = item_id and sell_by_item[item_id] or nil
+                    local procure = item_id
+                            and procure_by_item[item_id]
+                        or nil
+                    if item_id ~= nil
+                        and audited_items[item_id] == true
+                        and (sell ~= nil or procure ~= nil) then
+                        matched = matched + 1
+                        local price = sell and sell.price
+                            or procure.targetPrice
+                        local stock = sell and sell.stock or 0
+                        local mutation_ok, mutation_error = pcall(function()
+                            giver.OverridePrice = price
+                            giver.bIsInfinityStockFlag = false
+                            giver.StockNum = stock
+                            giver.MaxStockNum = stock
+                            local create_data = safe_property(
+                                giver,
+                                "ProductCreateData"
+                            )
+                            local item_data = create_data and safe_property(
+                                create_data,
+                                "ItemShopCreateData"
+                            )
+                            if item_data ~= nil then
+                                item_data.OverridePrice = price
+                                item_data.Stock = stock
+                            end
+                        end)
+                        if mutation_ok then
+                            changed = changed + 1
+                            if sell ~= nil then
+                                sell_lines = sell_lines + 1
+                            else
+                                procurement_lines = procurement_lines + 1
+                            end
+                            pcall(function() giver:OnRep_StockNum() end)
+                            pcall(function() giver:OnRep_MaxStockNum() end)
+                            pcall(function()
+                                product:OnUpdateProductStock(stock)
+                            end)
+                            pcall(function()
+                                product:OnUpdateProductMaxStock(stock)
+                            end)
+                        else
+                            failed = failed + 1
+                            self:_log(string.format(
+                                "DYNAMIC_ITEM_SHOP_PRODUCT_FAILED item=%s error=%s",
+                                tostring(item_id),
+                                tostring(mutation_error)
+                            ))
+                        end
+                    end
+                end
+            end
+        end
+    )
+    if not iterated then
+        return false, "item-shop-product-array-iteration-failed:"
+            .. tostring(iteration_error)
+    end
+    pcall(function() shop:OnRep_ProductArray() end)
+    local reason = changed > 0 and failed == 0
+            and "dynamic-item-shop-applied"
+        or changed > 0
+            and "dynamic-item-shop-partial"
+        or "no-dynamic-product-match"
+    self:_log(string.format(
+        "DYNAMIC_ITEM_SHOP_MARKET_APPLIED actor=%s faction=%s ok=%s reason=%s revision=%s inspected=%d matched=%d changed=%d failed=%d sell=%d procureSoldOut=%d",
+        safe_full_name(actor),
+        tostring(plan.factionId),
+        tostring(changed > 0 and failed == 0),
+        reason,
+        tostring(plan.resourceLedgerRevision or "none"),
+        inspected,
+        matched,
+        changed,
+        failed,
+        sell_lines,
+        procurement_lines
+    ))
+    return changed > 0 and failed == 0, reason, {
+        shop = shop,
+        inspectedCount = inspected,
+        matchedCount = matched,
+        changedCount = changed,
+        failedCount = failed,
+        sellLineCount = sell_lines,
+        procurementSoldOutLineCount = procurement_lines,
+        observedItems = observed_items,
+    }
+end
+
+-- Bind one already-authored ItemShop product to an open unique-Pal ransom.
+-- The product and shop GUIDs are read from the transient authoritative shop
+-- object after SetupShopData; only the matched product's price/stock fields
+-- are changed. No DataTable or Palworld save payload is written.
+function NativeCharacterAdapter:configure_unique_pal_ransom_product(
+    actor,
+    offer
+)
+    if not is_valid_object(actor) then
+        return nil, "merchant-actor-unavailable"
+    end
+    if type(offer) ~= "table"
+        or type(offer.productItemId) ~= "string"
+        or offer.productItemId == ""
+        or type(offer.unitPrice) ~= "number"
+        or offer.unitPrice <= 0 then
+        return nil, "invalid-unique-pal-ransom-offer"
+    end
+    local vendor = safe_unwrap(safe_property(
+        actor,
+        "BP_PalShopVenderDataComponent"
+    ))
+    if not is_valid_object(vendor) then
+        return nil, "vendor-component-unavailable"
+    end
+    local shop = safe_unwrap(safe_property(vendor, "MyItemShop"))
+    if not is_valid_object(shop) then
+        return nil, "item-shop-unavailable"
+    end
+    local shop_id = native_object_guid(shop, "MyShopID")
+        or native_guid_string(safe_property(vendor, "MyShopID"))
+    if shop_id == nil then return nil, "item-shop-id-unavailable" end
+    local product_array = safe_property(shop, "ProductArray")
+    if product_array == nil then
+        return nil, "item-shop-product-array-unavailable"
+    end
+    local product_id = nil
+    local mutation_error = nil
+    local iterated, iteration_error = for_each_native_array(
+        product_array,
+        function(_, remote_product)
+            if product_id ~= nil then return end
+            local product = safe_unwrap(remote_product)
+            if not is_valid_object(product) then return end
+            local giver = safe_unwrap(safe_property(
+                product,
+                "MyProductGiver"
+            ))
+            if not is_valid_object(giver) then return end
+            local item_id = native_name_string(safe_property(
+                giver,
+                "ProductStaticItemID"
+            ))
+            if item_id ~= offer.productItemId then return end
+            local price = math.floor(offer.unitPrice)
+            local stock = math.floor(offer.buyQuantity or 1)
+            local changed, detail = pcall(function()
+                giver.OverridePrice = price
+                giver.bIsInfinityStockFlag = false
+                giver.StockNum = stock
+                giver.MaxStockNum = stock
+                local create_data = safe_property(giver, "ProductCreateData")
+                local item_data = create_data and safe_property(
+                    create_data,
+                    "ItemShopCreateData"
+                ) or nil
+                if item_data ~= nil then
+                    item_data.OverridePrice = price
+                    item_data.Stock = stock
+                end
+                pcall(function() giver:OnRep_StockNum() end)
+                pcall(function() giver:OnRep_MaxStockNum() end)
+                pcall(function() product:OnUpdateProductStock(stock) end)
+                pcall(function() product:OnUpdateProductMaxStock(stock) end)
+            end)
+            if not changed then
+                mutation_error = tostring(detail)
+                return
+            end
+            product_id = native_object_guid(product, "MyProductID")
+        end
+    )
+    if not iterated then
+        return nil, "item-shop-product-array-iteration-failed:"
+            .. tostring(iteration_error)
+    end
+    if product_id == nil then
+        return nil, mutation_error ~= nil
+                and "unique-pal-ransom-product-mutation-failed:"
+                    .. mutation_error
+            or "unique-pal-ransom-product-unavailable:"
+                .. offer.productItemId
+    end
+    pcall(function() shop:OnRep_ProductArray() end)
+    self:_log(string.format(
+        "UNIQUE_PAL_RANSOM_PRODUCT_READY actor=%s item=%s shop=%s product=%s price=%d stock=1",
+        safe_full_name(actor),
+        offer.productItemId,
+        shop_id,
+        product_id,
+        math.floor(offer.unitPrice)
+    ))
+    return {
+        shopId = shop_id,
+        productId = product_id,
+        productItemId = offer.productItemId,
+        unitPrice = math.floor(offer.unitPrice),
+        buyQuantity = 1,
+        singlePurchaseStock = true,
+        serverAuthoritativePrice = true,
+        serverAuthoritativePaymentResult = true,
+    }, nil
+end
+
 function NativeCharacterAdapter:_ensure_default_controller(actor)
     local controller = nil
     local read_ok = pcall(function()
@@ -737,14 +1193,43 @@ function NativeCharacterAdapter:refresh_merchant_shop(actor, plan)
     end
     local requested, detail =
         self:_request_network_shop_setup(actor)
+    -- SetupShopDataForActor_ToServer may replace the transient PalShopBase
+    -- produced by the vendor component.  Apply prices and stock only after
+    -- that authoritative server shop exists; otherwise the values and the
+    -- Product GUID belong to the retired pre-network object.
+    local dynamic_ok = nil
+    local dynamic_detail = "dynamic-item-shop-not-requested"
+    if plan.dynamicMarketEnabled == true then
+        local applied, reason = self:apply_dynamic_item_shop_market(
+            actor,
+            plan
+        )
+        dynamic_ok = applied
+        dynamic_detail = reason
+        -- Keep the previously accepted static shop available if a future
+        -- game build removes one reflected field.  The explicit failure log
+        -- prevents the dynamic acceptance layer from claiming success.
+        if not applied then
+            self:_log(string.format(
+                "DYNAMIC_ITEM_SHOP_REFRESH_FAILED actor=%s faction=%s reason=%s staticFallback=true",
+                safe_full_name(actor),
+                tostring(plan.factionId),
+                tostring(reason)
+            ))
+        end
+    end
     self:_log(string.format(
-        "MERCHANT_SHOP_REFRESHED actor=%s row=%s requested=%s detail=%s",
+        "MERCHANT_SHOP_REFRESHED actor=%s row=%s requested=%s detail=%s dynamic=%s dynamicDetail=%s",
         safe_full_name(actor),
         tostring(plan.shopRowName),
         tostring(requested),
-        tostring(detail)
+        tostring(detail),
+        tostring(dynamic_ok),
+        tostring(dynamic_detail)
     ))
-    return requested, detail
+    return requested, tostring(detail)
+        .. "|dynamic=" .. tostring(dynamic_ok)
+        .. ":" .. tostring(dynamic_detail)
 end
 
 function NativeCharacterAdapter:_destroy_untracked(actor)
@@ -2102,7 +2587,8 @@ end
 
 function NativeCharacterAdapter:create_guard_provider(
     character_id,
-    character_class_path
+    character_class_path,
+    provider_options
 )
     require_non_empty_string(
         character_id,
@@ -2112,6 +2598,16 @@ function NativeCharacterAdapter:create_guard_provider(
         character_class_path,
         "guard provider character class path"
     )
+    provider_options = provider_options or {}
+    assert(type(provider_options) == "table",
+        "guard provider options must be a table")
+    local runtime_prefix = provider_options.runtimePrefix
+        or "player-guard"
+    local spawn_mode = provider_options.mode or "player-guard"
+    require_non_empty_string(runtime_prefix,
+        "guard provider runtime prefix")
+    require_non_empty_string(spawn_mode,
+        "guard provider spawn mode")
     local adapter = self
     return {
         deploy = function(faction_id, request_id, context)
@@ -2120,7 +2616,7 @@ function NativeCharacterAdapter:create_guard_provider(
                 type(context.location) == "table",
                 "guard deployment context.location is required"
             )
-            local runtime_id = "player-guard:"
+            local runtime_id = runtime_prefix .. ":"
                 .. require_non_empty_string(
                     faction_id,
                     "guard provider faction ID"
@@ -2132,7 +2628,7 @@ function NativeCharacterAdapter:create_guard_provider(
                 )
             local actor = adapter:spawn_guard({
                 runtimeId = runtime_id,
-                mode = "player-guard",
+                mode = spawn_mode,
                 factionId = faction_id,
                 characterId = character_id,
                 characterClassPath = character_class_path,

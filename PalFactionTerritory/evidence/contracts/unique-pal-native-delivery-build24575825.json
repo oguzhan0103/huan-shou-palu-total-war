@@ -1,0 +1,115 @@
+{
+  "schemaVersion": "1.1.0",
+  "evidenceId": "pwft.unique-pal-native-delivery.build24575825",
+  "capturedAt": "2026-08-22T17:54:24.5402998+08:00",
+  "steamBuildId": "24575825",
+  "titleVersion": "v1.0.3.101283",
+  "source": {
+    "relativePath": "Pal/Binaries/Win64/ue4ss/UE4SS_ObjectDump.txt",
+    "bytes": 46370831,
+    "sha256": "3E84E8A6936B7D1C33DE6CFC034C4A200655A3E762CBC2EC4C6A57516476EC78",
+    "captureScope": "title-screen-loaded-reflected-objects",
+    "loadAllAssetsBeforeDumpingObjects": false,
+    "gameSaveWasEntered": false,
+    "gameFilesWereModified": false
+  },
+  "signatures": {
+    "capacity": [
+      "/Script/Pal.PalPlayerState:GetPalStorage() -> PalPlayerDataPalStorage",
+      "/Script/Pal.PalPlayerDataPalStorage:GetPageNum() -> int",
+      "/Script/Pal.PalPlayerDataPalStorage:GetPageIndexExistEmptySlot(StartPageIndex) -> int",
+      "/Script/Pal.PalPlayerDataPalStorage:TargetContainer -> PalIndividualCharacterContainer",
+      "/Script/Pal.PalIndividualCharacterContainer:FindEmptySlot() -> PalIndividualCharacterSlot",
+      "/Script/Pal.PalIndividualCharacterSlot:IsEmpty() -> bool",
+      "/Script/Pal.PalIndividualCharacterSlot:GetSlotIndex() -> int",
+      "/Script/Pal.PalIndividualCharacterSlot:GetSlotId()"
+    ],
+    "spawn": [
+      "/Script/Pal.PalPlayerController:GetDefaultPlayerCharacter() -> PalPlayerCharacter",
+      "/Script/Engine.Actor:K2_GetActorLocation() -> FVector",
+      "/Script/Pal.PalUtility:GetNPCManager(WorldContextObject) -> PalNPCManager",
+      "/Script/Pal.PalNPCManager:NPCAIControllerBaseClass -> UClass",
+      "/Script/Pal.PalNPCManager:SpawnNPCForServer(SpawnInfo, spawnCallback) -> PalIndividualCharacterHandle",
+      "/Script/Pal.PalNPCSpawnInfo:CharacterID -> FName",
+      "/Script/Pal.PalNPCSpawnInfo:Level -> int",
+      "/Script/Pal.PalNPCSpawnInfo:Location -> FVector"
+    ],
+    "capture": [
+      "/Script/Pal.PalUtility:PalCaptureSuccess(AttackerPlayer, Monster)"
+    ],
+    "identityAndReadback": [
+      "/Script/Pal.PalIndividualCharacterHandle:GetIndividualID() -> FPalInstanceID",
+      "/Script/Pal.PalInstanceID:PlayerUId -> FGuid",
+      "/Script/Pal.PalInstanceID:InstanceId -> FGuid",
+      "/Script/Pal.PalIndividualCharacterHandle:TryGetIndividualActor() -> PalCharacter",
+      "/Script/Pal.PalIndividualCharacterSlot:GetHandle() -> PalIndividualCharacterHandle",
+      "/Script/Pal.PalIndividualCharacterContainer:FindByHandle(Handle) -> PalIndividualCharacterSlot",
+      "/Script/Pal.PalUtility:GetIndividualIDByActor(Actor) -> FPalInstanceID",
+      "/Script/Pal.PalUtility:GetIndividualCharacterHandleByActor(Actor) -> PalIndividualCharacterHandle"
+    ]
+  },
+  "runtimeVerification": {
+    "spawnNpcForServerExistingProjectLiveEvidence": true,
+    "palStorageObjectChainRead": true,
+    "capacityRead": true,
+    "palCaptureSuccessCall": true,
+    "postCaptureExactIndividualReadback": true,
+    "readOnlyProbe": {
+      "capturedAt": "2026-08-22T16:49:41.0588030+08:00",
+      "worldScope": "local-singleplayer-qa-world",
+      "worldGeneration": 4,
+      "pageCount": 32,
+      "firstEmptyPageIndex": 6,
+      "emptySlotIndex": 191,
+      "capacityAvailable": true,
+      "mutation": false,
+      "sourceLogRelativePath": "Pal/Binaries/Win64/ue4ss/UE4SS.log",
+      "sourceLogBytesAfterExit": 309642,
+      "sourceLogSha256AfterExit": "A1D5A0C6DAF47BEE4892D2155D3126898973FF56AB20C0A7BFDA1B02B0D25A11"
+    },
+    "mutatingLiveAcceptance": {
+      "capturedAt": "2026-08-22T17:54:24.5402998+08:00",
+      "worldName": "oguzhan",
+      "worldId": "E0D5ECDC46B379829F8F31A729ACFD92",
+      "worldGeneration": 4,
+      "speciesId": "Anubis",
+      "level": 1,
+      "deliveryId": "qa.native-pal-delivery.g4.r1",
+      "individualKey": "pal-00000000000000000000000000000001-8E0F25AB4226BF458C679D91DC9EE50C",
+      "identityAttemptCount": 1,
+      "captureAttemptCount": 1,
+      "storageReadbackAttemptCount": 1,
+      "result": "native-pal-delivery-live-test-verified",
+      "sameIndividualReadBack": true,
+      "directContainerMutation": false,
+      "callbackExceptionAfterMainWorldReady": false,
+      "sourceLogRelativePath": "Pal/Binaries/Win64/ue4ss/UE4SS.log",
+      "sourceLogBytesAfterExit": 315873,
+      "sourceLogSha256AfterExit": "3574D89EB7A345F3E8F43E538ACD0432493195EF149B2ED5FEF854A421C9938A",
+      "preflightSnapshotFileCount": 363,
+      "restoredFileCount": 363,
+      "restoredHashMismatchCount": 0,
+      "qaConfigRestoredDisabled": true,
+      "formalRuntimeRedeployedAndAudited": true
+    }
+  },
+  "developmentStatus": {
+    "sourceAdapterImplemented": true,
+    "offlineContractTestsPassed": true,
+    "qaHarnessImplemented": true,
+    "productionBridgeBindingRegistered": false,
+    "mutatingDeliveryDefaultEnabled": false,
+    "directContainerMutationImplemented": false,
+    "captureAndExactReadbackLiveAccepted": true
+  },
+  "conclusion": {
+    "currentBuildSignaturesPresent": true,
+    "readOnlyProbeAllowed": true,
+    "nativeCaptureDeliveryActivationAllowed": true,
+    "productionBridgeBindingRegistered": false,
+    "formalConfigDefaultEnabled": false,
+    "saveMutatingAcceptanceTestCompletedUnderUserAuthorization": true,
+    "directContainerMutationAllowed": false,
+    "saveMutatingAcceptanceTestAllowedByThisEvidence": false
+  }
+}

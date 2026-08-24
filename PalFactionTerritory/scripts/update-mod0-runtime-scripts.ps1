@@ -73,7 +73,7 @@ $BackupFiles = foreach ($RelativeFile in $RelativeFiles) {
 }
 [ordered]@{
     createdAt = (Get-Date).ToString("o")
-    reason = "Deploy Build 24575825 mechanism base with in-Mod Agent bridge, local Ollama operator loop, reciprocal combat-defender targeting, and the previously accepted commerce and siege runtimes."
+    reason = "Deploy the Build 24575825 mechanics-only base with accepted B7 routes, A8 exact-leader native guards, and the A9 write-ahead idempotent native item-reward settlement provider."
     targetMod = $TargetMod
     backupFiles = $BackupFiles
 } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $BackupRoot "backup-manifest.json") -Encoding UTF8
@@ -108,7 +108,7 @@ $InstalledFiles = foreach ($RelativeFile in $RelativeFiles) {
     mode = "faction-territory-with-identity-keyed-external-ledger-commerce-services-small-settlement-raid-world-balance-fail-closed"
     installedAt = (Get-Date).ToString("o")
     gameRoot = $GameRoot
-    scope = "UE4SS faction territory mechanism base plus the local Ollama dialogue bridge/operator and Small Settlement raid routes; external Agent output remains presentation-only and player-confirmed; no Palworld save, PAK, or original game content changed."
+    scope = "UE4SS mechanics-only faction-war base including B7 strategic production, A8 exact-leader guard formations, and A9 current-Build item-reward settlement with persistent operation replay, exact OwnerPlayerUId inventory selection, server-authoritative grant and exact count readback; no story text, PAK, or original game-content file changed by deployment."
     previousEvidenceBackup = $BackupRoot
     installedFiles = $InstalledFiles
 } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $EvidencePath -Encoding UTF8

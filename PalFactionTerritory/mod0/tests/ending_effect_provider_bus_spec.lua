@@ -161,6 +161,7 @@ local function provider(output, context)
     }
 end
 assert(bus:register_provider(provider_definition, provider).ok)
+assert(bus:status().fullyCapableProviderCount == 1)
 assert(bus:register_provider({
     providerId = "spec.ending.invalid.provider",
     effectKinds = { "set_flag" },

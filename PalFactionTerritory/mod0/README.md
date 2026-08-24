@@ -3,7 +3,7 @@
 状态：**Build 24575825 当前源码已部署并通过安装审计；小型聚落帕鲁攻城已完成
 4/4 原生生成、战斗、死亡、胜负、信物和回收；商人商会已完成七柜台生产驻场、
 2/7 代表性真实购买、需求／非需求出售、复制去重、单窗口 20 点和敌对修复 60 点。
-集中测试快捷键保持关闭。**
+集中测试快捷键保持关闭；势力进度侧车已通过两次完整重启、损坏主文件备份恢复和跨世界隔离实机验收。**
 
 Mod 0 现在同时承载势力地图、地名颜色、敌区传送限制、雷恩商人、世界平衡、小型聚落原生入侵，以及不含剧情内容的势力进度机制底座。
 
@@ -16,7 +16,7 @@ Mod 0 现在同时承载势力地图、地名颜色、敌区传送限制、雷�
 - 地图加载 10 秒后扫描 `APalLevelObjectUnlockableFastTravelPoint`，记录 `FastTravelPointID -> SoftUnlockMapMaskTexture -> regionId` 证据。
 - 提供开发命令：`pwft.status`、`pwft.map`、`pwft.relation`、`pwft.region`。
 - 提供版本化势力进度核心：7 个人类势力可分别加入和晋升，5 个帕鲁势力只能从敌对转为友好。
-- 提供用户确认的人类势力关系查询、加入后的敌对外交覆盖、加入资格阻断和显式外交修复接口；不会降低数值好感度。
+- 提供用户确认的人类势力关系查询、加入后的敌对外交覆盖、加入资格阻断和显式外交修复接口；人类势力数值好感支持受信事件增减、签名幂等、自动降级和权限回收，帕鲁势力仍禁止负向变更。权威后果路由可承接精确绑定的成员/平民伤害、任务失败/违约和战争后果。
 - 提供固定市场自动外交修复：每个敌对来源需要 60 点、每个商业窗口最多 20 点，只接受成功且非负的固定市场交易，按来源逐个解除。
 - 提供成员、核心成员、领队、领主四级身份，领队开始具备玩家护卫资格。
 - 提供任务、防守与限额商业好感度接口，以及帕鲁和解、结局三条件。
@@ -36,10 +36,14 @@ Mod 0 现在同时承载势力地图、地名颜色、敌区传送限制、雷�
 - 出售流程可自动读取 `PalItemSlot` 的物品 ID/数量和 UI 接受结果；服务器成功信号确认前仍不结算。
 - 提供势力 UI 数据模型和玩家可见适配器：仅在玩家主动按 `F5` 后创建专用 `WBP_PFT_FactionStatus`，显示 12 势力关系、好感、身份、商业外交修复、护卫和解锁门槛；再次按 `F5` 关闭。
 - 提供保卫战临时友好/结算服务和领队护卫服务。
+- 降到领队以下会通过统一变更回调撤回现役玩家护卫；内容包可用任务模板 `1.1` 声明人类势力、最低身份和最低好感门槛，失去权限时只暂停并保留任务进度，恢复资格后继续。
 - 提供安全的 Mod 自有 JSON 旁路持久化设施；可靠世界／玩家身份确认后启用，身份
   未就绪时失败关闭，不写 Palworld 世界存档。
+- 提供 `PalCharacterParameterComponent:OnDamage` 的精确目标伤害探针：只处理已登记 Defender、匹配组件 Owner、直接本地玩家和正 `ActualDamage`；同目标 5 秒去抖。当前证据来自旧 Build 24370881，Build 24575825 正式扣分保持关闭。
 - 提供版本化公共接口，供后续粉丝任务、剧情、UI 和生成适配器调用：
-  `_G.PWFT_FACTION_API_V1`、`_G.PWFT_COMMERCE_API_V1`、
+  `_G.PWFT_FACTION_API_V1`、`_G.PWFT_FACTION_CONSEQUENCE_API_V1`、
+  `_G.PWFT_FACTION_CONSEQUENCE_NATIVE_BINDING_V1`、
+  `_G.PWFT_COMMERCE_API_V1`、
   `_G.PWFT_ECONOMY_API_V1`、`_G.PWFT_ECONOMY_SHOP_API_V1`、
   `_G.PWFT_JOIN_API_V1`、
   `_G.PWFT_COMMERCE_BRIDGE_V1`、`_G.PWFT_DEFENSE_API_V1`、
@@ -49,7 +53,10 @@ Mod 0 现在同时承载势力地图、地名颜色、敌区传送限制、雷�
   `_G.PWFT_PAL_RECONCILIATION_API_V1`、
   `_G.PWFT_PAL_RAID_RESULT_ADAPTER_V1` 与
   `_G.PWFT_PAL_DISCOURSE_API_V1`、`_G.PWFT_AGENT_DIALOGUE_BRIDGE_V1` 与
-  `_G.PWFT_AGENT_DIALOGUE_OPERATOR_V1`；商会柜台另导出
+  `_G.PWFT_AGENT_DIALOGUE_OPERATOR_V1`；唯一帕鲁原生 Boss 接线另导出
+  `_G.PWFT_UNIQUE_PAL_CAMPAIGN_V1` 与
+  `_G.PWFT_UNIQUE_PAL_BOSS_PROVIDER_BUS_V1`、
+  `_G.PWFT_UNIQUE_PAL_WORLD_EFFECT_BUS_V1`；商会柜台另导出
   `_G.PWFT_ECONOMY_MERCHANT_RUNTIME_V1`。
 - 提供 `pwft.progress`、`pwft.factions`、`pwft.commerce` 和 `pwft.economy` 离线/开发诊断命令。
 
@@ -60,7 +67,9 @@ Mod 0 现在同时承载势力地图、地名颜色、敌区传送限制、雷�
   `IsEnableFastTravel` query for mapped hostile territories; it never writes
   unlock flags, moves the player, or changes save data.
 - `enableSaveWrites = false`
-- 势力进度已有版本化快照和主文件/临时文件/备份回退设施；在拿到可靠的世界/玩家身份键前保持 `enabled = false`。
+- 势力进度侧车已启用，但只在可靠世界/玩家身份键就绪后开放写入；身份未就绪时失败关闭。Build 24575825 已完成两次完整重启、主文件损坏后 `active:backup` 自愈和两个世界 profile 隔离实机验收。
+- 势力进度 sidecar 载荷从 `1.0` 自动迁移到 `1.1`，保留未知扩展状态；任意控制台、客户端和 Ollama 文本均不能直接施加好感变更，旧 `pwft.progress grant` 已失败关闭。
+- 原生伤害适配器不扫描世界且只接受同一 UObject 引用。当前 `probeEnabled=true`、`settlementEnabled=false`；旧 Build Hook 注册成功或离线测试通过都不能替代 Build 24575825 的伤害来源实机确认。
 - `nativeEconomyMerchantSpawnEnabled = true`；`FTPoint90` 泰拉瑞亚密域小岛已锁定为中立“商人商会”并从势力着色/敌对传送限制中剥离。七柜台商品资产、原生商店绑定、交互、生成、正式根坐标和朝向均已实机验收。正式运行时会在玩家接近商会时生成七柜台，离开较远后统一回收；`Ctrl+F9` 集中测试开关仍默认关闭。
 - 原生 ItemShop 可以表达商品、售价与库存，但不能覆盖玩家出售价格；需求品奖励只在
   服务器出售请求与真实背包复制确认后结算，不伪造采购金币补差。
@@ -76,11 +85,11 @@ Mod 0 现在同时承载势力地图、地名颜色、敌区传送限制、雷�
 
 ## 下一道门槛
 
-1. 商人商会 1.0 已完成；队形、朝向、自由漫步和采购金币补差不作为当前门槛。
-2. 下一阶段集中在侧车备份恢复、世界 80 级、五岛狂暴、任务／防守、动态经济／
-   战争和战略世界原生接线。
-3. 唯一性帕鲁状态机已完成源码；原生 Boss、空城、赎回金币和 Pal 交付仍待开发。
-4. 不以离线 PASS 代替实机结论；正式剧情、代表和精确 Actor 继续由内容包提供。
+1. 商人商会 1.0 与势力进度侧车 B0 已完成；队形、朝向、自由漫步和采购金币补差不作为当前门槛。
+2. 下一项不依赖剧情的集中实机是 B1 世界 80 级；必须分阶段启用并验证玩家以外目标、切图、刷新、Boss、商人和友军无误改。
+3. 好感下降、身份降级、权限回收、三类权威后果 provider 与原生伤害 probe-only 适配器已完成纯开发和自动测试；下一道对应门槛是核验 Build 24575825 当前 Hook 与真实伤害来源，保持无扣分探针先验收，再经用户授权打开并验证旧 sidecar 迁移、护卫撤回、任务暂停/恢复、NPC/商人/UI 刷新实机闭环。
+4. 唯一性帕鲁状态机、P1 Boss Provider 和 P2 世界效果／战争／赎回 Provider 已完成纯源码和自动测试；真实 species、Boss Actor、spawner、替换槽位、城市锚点、商会柜台、袭击、支付、Pal 交付与平衡数值仍须内容证据和实机授权。
+5. 不以离线 PASS 代替实机结论；正式剧情、代表和精确 Actor 继续由内容包提供。
 
 ## 当前源码与历史部署
 
@@ -89,7 +98,7 @@ Mod 0 现在同时承载势力地图、地名颜色、敌区传送限制、雷�
   见仓库根目录 `INSTALL.md`。
 - UE4SS：Palworld 专用 zDev 包；`MemberVariableLayout.ini` 已存在。
 - 控制台：文本控制台关闭，GUI 开发控制台开启，便于首次观察且不启用额外通用作弊 Mod。
-- 当前部署经本地安装审计确认：51 个运行时文件与当前源码哈希一致；原始日志与部署快照保留在私有验收区，不进入公开仓库。
+- 当前部署经本地安装审计确认：76 个记录文件与部署清单及当前源码哈希一致；原始日志与部署快照保留在私有验收区，不进入公开仓库。
 - 商会生产驻场与恢复证据：`docs/48_商人商会生产驻场生命周期验收_2026-08-12.md`。
 
 ## PMK / UMG 当前状态

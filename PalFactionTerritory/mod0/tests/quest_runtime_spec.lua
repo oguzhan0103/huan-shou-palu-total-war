@@ -243,6 +243,73 @@ assert(status.localizationKeysOnly and status.structuredResultsOnly)
 assert(progression.state.contentQuests == quests.state)
 assert(progression:export_snapshot().contentQuests.instances["quest:sample:001"].state == "completed")
 
+local access_template = {}
+for key, value in pairs(template) do access_template[key] = value end
+access_template.schemaVersion = "1.1.0"
+access_template.templateId = "fan.quest.rank-gated-investigation"
+access_template.accessPolicy = {
+    factionId = "pwft.faction.rayne_syndicate",
+    requiresJoined = true,
+    minimumRankId = "Leader",
+    minimumReputation = 700,
+    onAccessLoss = "suspend",
+}
+assert(quests:register_template(access_template).ok)
+local access_denied = quests:start(
+    access_template.templateId,
+    "quest:rank-gated:001",
+    "event:quest:rank-gated:denied-membership",
+    nil
+)
+assert(not access_denied.ok and access_denied.reason == "quest-access-denied")
+assert(access_denied.access.reason == "quest-access-membership-required")
+local rayne = "pwft.faction.rayne_syndicate"
+assert(progression:join(rayne).ok)
+local rank_denied = quests:start(
+    access_template.templateId,
+    "quest:rank-gated:001",
+    "event:quest:rank-gated:denied-rank",
+    nil
+)
+assert(not rank_denied.ok)
+assert(rank_denied.access.reason == "quest-access-rank-too-low")
+assert(progression:grant_reputation(rayne, "task", 300, {}).ok)
+assert(progression:grant_reputation(rayne, "task", 300, {}).ok)
+assert(progression:grant_reputation(rayne, "task", 100, {}).ok)
+assert(progression:status(rayne).rankId == "Leader")
+local gated_started = quests:start(
+    access_template.templateId,
+    "quest:rank-gated:001",
+    "event:quest:rank-gated:start",
+    nil
+)
+assert(gated_started.ok and gated_started.quest.accessSuspended == false)
+local access_penalty = progression:apply_reputation_delta(
+    rayne,
+    "consequence",
+    -300,
+    {
+        operationId = "consequence:quest-access:001",
+        authority = "pwft.faction-consequence.v1",
+        reasonCode = "mission-failure",
+    }
+)
+assert(access_penalty.ok and progression:status(rayne).rankId == "CoreMember")
+local suspended = quests:reconcile_access(rayne)
+assert(suspended.suspendedCount == 1)
+assert(quests:quest_status("quest:rank-gated:001").accessSuspended == true)
+assert(
+    quests:advance(
+        "quest:rank-gated:001",
+        "investigate",
+        "event:quest:rank-gated:blocked",
+        nil
+    ).reason == "quest-access-suspended"
+)
+for _, active_stage in ipairs(quests:active_objective_stages()) do
+    assert(active_stage.questInstanceId ~= "quest:rank-gated:001")
+end
+
 -- The quest ledger survives through the existing progression snapshot. A
 -- fresh runtime may register the same content/template and continue querying
 -- completed or aborted instances without touching Palworld's save payload.
@@ -254,8 +321,22 @@ local restored_content = ContentPackRegistry.create()
 assert(restored_content:register(pack_manifest).ok)
 local restored_quests = QuestRuntime.create(restored_progression, restored_content)
 assert(restored_quests:register_template(template).ok)
+assert(restored_quests:register_template(access_template).ok)
 assert(restored_quests:quest_status("quest:sample:001").state == "completed")
 assert(restored_quests:quest_status("quest:sample:002").state == "aborted")
+assert(restored_quests:quest_status("quest:rank-gated:001").accessSuspended == true)
 assert(restored_quests:status().snapshotOwnedByProgression)
 
-print("PASS localization-key-only quest templates, start/advance/branch/complete/abort, idempotent events, structured results, and progression-owned snapshot restore")
+assert(restored_progression:grant_reputation(rayne, "task", 300, {}).ok)
+assert(restored_progression:status(rayne).rankId == "Leader")
+local resumed = restored_quests:reconcile_access(rayne)
+assert(resumed.resumedCount == 1)
+assert(restored_quests:quest_status("quest:rank-gated:001").accessSuspended == false)
+assert(restored_quests:advance(
+    "quest:rank-gated:001",
+    "investigate",
+    "event:quest:rank-gated:resumed",
+    nil
+).ok)
+
+print("PASS quest templates, signed-reputation access suspension/recovery, idempotent transitions, and progression-owned restore")

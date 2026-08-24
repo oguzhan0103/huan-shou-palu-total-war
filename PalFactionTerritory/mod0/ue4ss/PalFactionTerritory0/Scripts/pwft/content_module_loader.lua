@@ -55,6 +55,10 @@ function ContentModuleLoader.create(
         logger = options.logger,
         loaded = false,
         records = {},
+        activators = {},
+        reactivationCount = 0,
+        reactivationFailureCount = 0,
+        lastReactivationReason = nil,
         capabilities = {
             internalRequireOnly = true,
             crossModGlobalsRequired = false,
@@ -111,6 +115,11 @@ function ContentModuleLoader:load()
                 if not record.registered then
                     record.reason = "content-module-registration-failed"
                 elseif type(module_or_error.activate) == "function" then
+                    self.activators[module_name] = {
+                        moduleName = module_name,
+                        activate = module_or_error.activate,
+                        registration = copy(registered),
+                    }
                     local activated, activation_or_error = pcall(
                         module_or_error.activate,
                         self.context,
@@ -135,12 +144,18 @@ function ContentModuleLoader:load()
             end
         end
         self:_log(string.format(
-            "CONTENT_MODULE module=%s registered=%s activated=%s reason=%s pack=%s",
+            "CONTENT_MODULE module=%s registered=%s activated=%s reason=%s pack=%s registrationReason=%s registrationError=%s",
             tostring(record.moduleName),
             tostring(record.registered),
             tostring(record.activated),
             tostring(record.reason),
-            tostring(record.contentPackId or "none")
+            tostring(record.contentPackId or "none"),
+            tostring(record.registration and record.registration.reason
+                or "none"),
+            tostring(record.registration
+                and (record.registration.validationError
+                    or record.registration.error)
+                or "none")
         ))
     end
 
@@ -149,6 +164,65 @@ function ContentModuleLoader:load()
         status.failedCount == 0
             and "content-modules-loaded"
             or "content-module-load-failed",
+        status)
+end
+
+-- Native providers and their UObject-bound target routes are generation
+-- scoped.  A map unload intentionally clears them; the registered data bundle
+-- remains valid, so re-run only the trusted activation function after the next
+-- world loads.  This never registers story/content data a second time.
+function ContentModuleLoader:reactivate(reason)
+    if not self.loaded then
+        return result(false, "content-modules-not-loaded")
+    end
+    if not self.enabled then
+        return result(true, "content-module-loader-disabled", self:status())
+    end
+    self.reactivationCount = self.reactivationCount + 1
+    self.lastReactivationReason = tostring(reason or "world-rebind")
+    local failed = 0
+    for _, record in ipairs(self.records) do
+        local activator = self.activators[record.moduleName]
+        if record.registered and activator ~= nil then
+            local activated, activation_or_error = pcall(
+                activator.activate,
+                self.context,
+                copy(activator.registration)
+            )
+            record.reactivationCount =
+                (record.reactivationCount or 0) + 1
+            if not activated then
+                record.activated = false
+                record.reason = "content-module-reactivation-failed"
+                record.error = tostring(activation_or_error)
+                failed = failed + 1
+            elseif type(activation_or_error) == "table"
+                and activation_or_error.ok == false then
+                record.activated = false
+                record.reason = "content-module-reactivation-rejected"
+                record.activation = copy(activation_or_error)
+                failed = failed + 1
+            else
+                record.activated = true
+                record.reason = "content-module-reactivated"
+                record.error = nil
+                record.activation = copy(activation_or_error)
+            end
+            self:_log(string.format(
+                "CONTENT_MODULE_REACTIVATE module=%s activated=%s reason=%s worldReason=%s",
+                tostring(record.moduleName),
+                tostring(record.activated),
+                tostring(record.reason),
+                self.lastReactivationReason
+            ))
+        end
+    end
+    self.reactivationFailureCount =
+        self.reactivationFailureCount + failed
+    local status = self:status()
+    return result(failed == 0,
+        failed == 0 and "content-modules-reactivated"
+            or "content-module-reactivation-failed",
         status)
 end
 
@@ -171,6 +245,9 @@ function ContentModuleLoader:status()
         registeredCount = registered_count,
         activatedCount = activated_count,
         failedCount = failed_count,
+        reactivationCount = self.reactivationCount,
+        reactivationFailureCount = self.reactivationFailureCount,
+        lastReactivationReason = self.lastReactivationReason,
         records = copy(self.records),
         internalRequireOnly = true,
         crossModGlobalsRequired = false,

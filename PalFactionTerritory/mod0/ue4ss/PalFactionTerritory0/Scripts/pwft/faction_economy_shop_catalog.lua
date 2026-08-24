@@ -416,12 +416,27 @@ end
 
 function FactionEconomyShopCatalog:status()
     local activation = self.contract.runtimeActivation
+    local product_count = 0
+    local procurement_count = 0
+    local signal_count = 0
+    for _, faction_id in ipairs(self.representativeOrder) do
+        local market = assert(self.economy:faction_market(faction_id))
+        product_count = product_count + #market.sell
+        procurement_count = procurement_count + #market.procure
+        signal_count = signal_count + #market.sell
+            + #market.procure + #market.unresolved
+    end
+    local economy_status = self.economy:status()
     return {
         version = self.version,
         representativeCount = #self.representativeOrder,
-        productRowCount = self.productCount,
-        requestedItemCount = self.procurementCount,
-        marketSignalCount = self.signalCount,
+        productRowCount = product_count,
+        requestedItemCount = procurement_count,
+        marketSignalCount = signal_count,
+        dynamicMarketEnabled =
+            self.economy.capabilities.resourceLedgerAuthority == true,
+        resourceLedgerRevision =
+            economy_status.resourceLedgerRevision,
         customProductRowsReady =
             activation.customProductRowsReady,
         customProductRowsEnabled =

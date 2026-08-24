@@ -1,0 +1,16 @@
+[2026-08-23 17:11:31.1834124] [RayneMerchant] NATIVE_SPAWNER_CREATED count=1 source=identity-ready character=NPC_Male_DarkTrader level=80 customShop=true relation=Friendly
+[2026-08-23 17:11:32.2299606] [RayneMerchant] RELATION_INTERACTION_POLICY relation=Friendly hostile=false interactEnabled=true aiActive=false battleMode=false
+[2026-08-23 17:11:32.2376711] [RayneMerchant] NATIVE_MERCHANT_READY actor=BP_NPC_DarkTrader_C actorSource=spawner-handle shopMode=custom shopRow=PFT_Rayne_AllPaldex relation=Friendly
+[2026-08-23 17:17:59.2979618] [RayneMerchant] DESTROYED reason=relation-change-Hostile nativeDespawn=true explicitActorDestroy=false actorSource=spawner-handle
+[2026-08-23 17:17:59.2981206] RAYNE_RELATION_LIVE_TEST_APPLIED key=F11 previous=Friendly relation=Hostile revision=15 saveWrites=0
+[2026-08-23 17:17:59.9031767] [RayneMerchant] NATIVE_SPAWNER_CREATED count=4 source=relation-change character=NPC_Male_DarkTrader level=80 customShop=true relation=Hostile
+[2026-08-23 17:18:00.9141471] [RayneMerchant] RELATION_INTERACTION_POLICY relation=Hostile hostile=true interactEnabled=false aiActive=true battleMode=true
+[2026-08-23 17:18:00.9142685] [RayneMerchant] NATIVE_MERCHANT_READY actor=BP_NPC_DarkTrader_BOSS_C actorSource=spawner-handle shopMode=custom shopRow=PFT_Rayne_AllPaldex relation=Hostile
+[2026-08-23 17:18:00.9143165] [RayneMerchant] SHOP_ACCESS_BLOCKED relation=Hostile interaction=false networkShop=false commercialTruce=false
+[2026-08-23 17:18:00.9432664] [RayneMerchant] HOSTILE_TARGET_ADDED player=BP_Player_Female_C distance=504.6 relation=Hostile
+[2026-08-23 17:18:16.5396686] [RayneMerchant] DESTROYED reason=relation-change-Friendly nativeDespawn=true explicitActorDestroy=false actorSource=spawner-handle
+[2026-08-23 17:18:16.5398146] RAYNE_RELATION_LIVE_TEST_APPLIED key=F11 previous=Hostile relation=Friendly revision=16 saveWrites=0
+[2026-08-23 17:18:17.1385551] [RayneMerchant] NATIVE_SPAWNER_CREATED count=5 source=relation-change character=NPC_Male_DarkTrader level=80 customShop=true relation=Friendly
+[2026-08-23 17:18:18.1471154] [RayneMerchant] RELATION_INTERACTION_POLICY relation=Friendly hostile=false interactEnabled=true aiActive=false battleMode=false
+[2026-08-23 17:18:18.1618284] [RayneMerchant] NATIVE_MERCHANT_READY actor=BP_NPC_DarkTrader_BOSS_C actorSource=spawner-handle shopMode=custom shopRow=PFT_Rayne_AllPaldex relation=Friendly
+[2026-08-23 17:18:29.0259356] ECONOMY_MERCHANT_INTERACTION_ROUTED ok=true reason=rayne-native-pal-shop-dispatched faction=pwft.faction.rayne_syndicate route=PalNPCInteractionComponent.OnTriggerInteract(Talk)

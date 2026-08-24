@@ -5,6 +5,9 @@ local CompanionLedger = {}
 local SCHEMA_VERSION = "1.0.0"
 
 local function copy(value)
+    if value == Json.null then
+        return Json.null
+    end
     if type(value) ~= "table" then
         return value
     end
@@ -111,6 +114,132 @@ local function safe_copy(value)
         return false, tostring(result)
     end
     return true, result
+end
+
+local function projection_path(parent, key)
+    if type(key) == "number" then
+        return parent .. "[" .. tostring(key) .. "]"
+    end
+    if string.find(tostring(key), "^[A-Za-z_][A-Za-z0-9_]*$") then
+        return parent .. "." .. tostring(key)
+    end
+    return parent .. "[" .. string.format("%q", tostring(key)) .. "]"
+end
+
+local function project_public_json(value)
+    local report = {
+        redactedCount = 0,
+        redactions = {},
+    }
+    local seen = {}
+
+    local function redact(path, reason)
+        report.redactedCount = report.redactedCount + 1
+        if #report.redactions < 16 then
+            table.insert(report.redactions, {
+                path = path,
+                reason = reason,
+            })
+        end
+    end
+
+    local function project(current, path, array_slot)
+        if current == Json.null then
+            return Json.null, true
+        end
+        local current_type = type(current)
+        if current_type == "nil" then
+            return nil, true
+        end
+        if current_type == "string" or current_type == "boolean" then
+            return current, true
+        end
+        if current_type == "number" then
+            if current ~= current
+                or current == math.huge
+                or current == -math.huge then
+                redact(path, "non-finite-number")
+                return array_slot and Json.null or nil, false
+            end
+            return current, true
+        end
+        if current_type ~= "table" then
+            redact(path, "unsupported-" .. current_type)
+            return array_slot and Json.null or nil, false
+        end
+        if seen[current] then
+            redact(path, "cyclic-table")
+            return array_slot and Json.null or nil, false
+        end
+        seen[current] = true
+
+        local keys = {}
+        local numeric_count = 0
+        local numeric_maximum = 0
+        local only_numeric_keys = true
+        local cursor = nil
+        while true do
+            local key, _ = next(current, cursor)
+            if key == nil then
+                break
+            end
+            cursor = key
+            table.insert(keys, key)
+            if type(key) == "number"
+                and key >= 1
+                and key % 1 == 0 then
+                numeric_count = numeric_count + 1
+                numeric_maximum = math.max(numeric_maximum, key)
+            else
+                only_numeric_keys = false
+            end
+        end
+
+        local output = {}
+        local is_array = only_numeric_keys
+            and numeric_maximum == numeric_count
+        if is_array then
+            for index = 1, numeric_maximum do
+                local child = rawget(current, index)
+                local projected = project(
+                    child,
+                    projection_path(path, index),
+                    true
+                )
+                output[index] = projected
+            end
+        else
+            for _, key in ipairs(keys) do
+                if type(key) ~= "string" then
+                    redact(
+                        projection_path(path, key),
+                        "unsupported-object-key-" .. type(key)
+                    )
+                else
+                    local child_path = projection_path(path, key)
+                    local projected, retained = project(
+                        rawget(current, key),
+                        child_path,
+                        false
+                    )
+                    if retained or projected ~= nil then
+                        output[key] = projected
+                    end
+                end
+            end
+        end
+        seen[current] = nil
+        return output, true
+    end
+
+    local ok, projected, retained = pcall(project, value, "$", false)
+    if not ok then
+        return false, "public-projection-failed:" .. tostring(projected)
+    end
+    if not retained or type(projected) ~= "table" then
+        return false, "public-projection-root-invalid"
+    end
+    return true, projected, report
 end
 
 local function atomic_write(instance, path, value)
@@ -313,6 +442,20 @@ function CompanionLedger:record(event)
     return true, envelope
 end
 
+function CompanionLedger:record_public(event)
+    assert(type(event) == "table", "public companion event must be a table")
+    local projected, event_or_error, report = project_public_json(event)
+    if not projected then
+        self.lastError = "event-" .. tostring(event_or_error)
+        return false, self.lastError
+    end
+    local recorded, envelope_or_error = self:record(event_or_error)
+    if not recorded then
+        return false, envelope_or_error
+    end
+    return true, envelope_or_error, report
+end
+
 function CompanionLedger:publish(payload)
     if not self.active then
         return false, "profile-not-active"
@@ -340,6 +483,20 @@ function CompanionLedger:publish(payload)
     end
     self.lastError = nil
     return true, "published"
+end
+
+function CompanionLedger:publish_public(payload)
+    assert(type(payload) == "table", "public companion state must be a table")
+    local projected, state_or_error, report = project_public_json(payload)
+    if not projected then
+        self.lastError = "state-" .. tostring(state_or_error)
+        return false, self.lastError
+    end
+    local published, detail = self:publish(state_or_error)
+    if not published then
+        return false, detail
+    end
+    return true, detail, report
 end
 
 function CompanionLedger:status()

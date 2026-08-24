@@ -26,6 +26,36 @@ local function copy(value)
     return result
 end
 
+-- Runtime vendor metadata may acquire UE4SS callbacks or wrapped native
+-- objects after registration.  Those values are useful to the in-process
+-- bridge, but they must never cross the external companion JSON boundary.
+-- Keep the internal copy above intact and emit only the documented public
+-- merchant fields.
+local function public_vendor_metadata(metadata)
+    metadata = type(metadata) == "table" and metadata or {}
+    local projected = {}
+    local fields = {
+        "mode",
+        "commercialTruce",
+        "merchantOrganisationId",
+        "representedFactionId",
+        "economyCatalogBinding",
+        "source",
+    }
+    for _, field in ipairs(fields) do
+        local value = metadata[field]
+        local value_type = type(value)
+        if value_type == "string" or value_type == "boolean"
+            or (value_type == "number"
+                and value == value
+                and value ~= math.huge
+                and value ~= -math.huge) then
+            projected[field] = value
+        end
+    end
+    return projected
+end
+
 local function safe_unwrap(value)
     if value == nil then
         return nil
@@ -102,25 +132,45 @@ local function guid_text(value)
     if value == nil then
         return "<nil-guid>"
     end
-    local ok, converted = pcall(function()
-        if type(value.ToString) == "function" then
-            return value:ToString()
+    -- Build 24575825 exposes RequestBuyProduct_ToServer GUID parameters as
+    -- reflected UScriptStruct userdata.  They have A/B/C/D fields but no
+    -- callable ToString member; tostring(userdata) only yields a transient
+    -- pointer such as "UScriptStruct: 000001...".  Read the declared fields
+    -- through the protected property helper before trying any presentation
+    -- method so the request identity exactly matches the GUID read from the
+    -- authoritative shop/product objects.
+    local words = {
+        safe_property(value, "A"),
+        safe_property(value, "B"),
+        safe_property(value, "C"),
+        safe_property(value, "D"),
+    }
+    local complete = true
+    for index = 1, 4 do
+        local numeric = tonumber(safe_unwrap(words[index]))
+        if numeric == nil then
+            complete = false
+            break
         end
-        return nil
-    end)
-    if ok and converted ~= nil and tostring(converted) ~= "" then
-        return tostring(converted)
+        words[index] = math.floor(numeric % 4294967296)
     end
-    if type(value) == "table"
-        and value.A ~= nil and value.B ~= nil
-        and value.C ~= nil and value.D ~= nil then
+    if complete then
         return string.format(
             "%08x-%08x-%08x-%08x",
-            tonumber(value.A) or 0,
-            tonumber(value.B) or 0,
-            tonumber(value.C) or 0,
-            tonumber(value.D) or 0
+            words[1],
+            words[2],
+            words[3],
+            words[4]
         )
+    end
+    local to_string = safe_property(value, "ToString")
+    if type(to_string) == "function" then
+        local ok, converted = pcall(function()
+            return value:ToString()
+        end)
+        if ok and converted ~= nil and tostring(converted) ~= "" then
+            return tostring(converted)
+        end
     end
     return tostring(value)
 end
@@ -364,6 +414,7 @@ function CommerceBridge.create(commerce, options)
         windowIdProvider = options.windowIdProvider or default_window_id,
         transactionIdFactory = options.transactionIdFactory,
         priceResolver = options.priceResolver,
+        buyPolicyResolver = options.buyPolicyResolver,
         inventorySnapshotResolver =
             options.inventorySnapshotResolver
                 or default_inventory_snapshot_resolver,
@@ -379,6 +430,7 @@ function CommerceBridge.create(commerce, options)
         buyRequestCount = 0,
         successfulBuyCount = 0,
         failedBuyCount = 0,
+        noCommerceAwardBuyCount = 0,
         sellRequestCount = 0,
         itemSellUiRequestCount = 0,
         itemSellUiAcceptedCount = 0,
@@ -454,7 +506,7 @@ function CommerceBridge:register_vendor_actor(
         type = "merchant-registered",
         factionId = faction_id,
         vendorKey = key,
-        metadata = copy(metadata or {}),
+        metadata = public_vendor_metadata(metadata),
     })
     return true, key
 end
@@ -539,21 +591,35 @@ function CommerceBridge:on_buy_request(component, shop_guid, product_guid, buy_n
             self.priceResolver,
             shop_id,
             product_id,
-            integer_value(buy_num, 1)
+            integer_value(buy_num, 1),
+            faction_id
         )
         if ok and tonumber(resolved) ~= nil and tonumber(resolved) >= 0 then
             total_gold = tonumber(resolved)
         end
     end
-    local queue = self.pendingBuys[component_key] or {}
-    table.insert(queue, {
+    local pending = {
+        factionId = faction_id,
         shopId = shop_id,
         productId = product_id,
         buyNum = integer_value(buy_num, 1),
         totalGold = total_gold,
         transactionId = tostring(transaction_id),
         commerceWindowId = tostring(self.windowIdProvider()),
-    })
+    }
+    if self.buyPolicyResolver ~= nil then
+        local ok, policy = pcall(
+            self.buyPolicyResolver,
+            copy(pending)
+        )
+        if ok and type(policy) == "table" then
+            pending.buyPolicy = copy(policy)
+        elseif not ok then
+            log(self, "BUY_POLICY_RESOLVER_FAILED reason=" .. tostring(policy))
+        end
+    end
+    local queue = self.pendingBuys[component_key] or {}
+    table.insert(queue, pending)
     self.pendingBuys[component_key] = queue
     self.buyRequestCount = self.buyRequestCount + 1
     return true, queue[#queue]
@@ -573,9 +639,18 @@ function CommerceBridge:on_buy_result(component, result_type)
             ok = false,
             reason = "native-buy-failed",
             transactionId = pending.transactionId,
+            factionId = pending.factionId,
             shopId = pending.shopId,
             productId = pending.productId,
             buyNum = pending.buyNum,
+            totalGold = pending.totalGold,
+            settlementKind = pending.buyPolicy
+                    and pending.buyPolicy.settlementKind or nil,
+            settlementReferenceId = pending.buyPolicy
+                    and pending.buyPolicy.settlementReferenceId or nil,
+            commerceReputationSuppressed = pending.buyPolicy
+                    and pending.buyPolicy.skipCommerceReputation == true
+                or false,
         })
         return true, {
             ok = false,
@@ -583,12 +658,29 @@ function CommerceBridge:on_buy_result(component, result_type)
             transactionId = pending.transactionId,
         }
     end
-    local outcome = self.commerce:confirm_buy(
-        pending.shopId,
-        pending.transactionId,
-        pending.totalGold,
-        pending.commerceWindowId
-    )
+    local suppress_commerce = pending.buyPolicy ~= nil
+        and pending.buyPolicy.skipCommerceReputation == true
+    local outcome
+    if suppress_commerce then
+        self.noCommerceAwardBuyCount = self.noCommerceAwardBuyCount + 1
+        outcome = {
+            ok = true,
+            reason = "native-buy-confirmed-commerce-award-suppressed",
+            applied = 0,
+            requestedAward = 0,
+            direction = "buy",
+            factionId = pending.factionId,
+            shopId = pending.shopId,
+            transactionId = pending.transactionId,
+        }
+    else
+        outcome = self.commerce:confirm_buy(
+            pending.shopId,
+            pending.transactionId,
+            pending.totalGold,
+            pending.commerceWindowId
+        )
+    end
     self.successfulBuyCount = self.successfulBuyCount + 1
     log(self, string.format(
         "ECONOMY_BUY_CONFIRMED shop=%s product=%s quantity=%d award=%s",
@@ -603,6 +695,13 @@ function CommerceBridge:on_buy_result(component, result_type)
     event.productId = pending.productId
     event.buyNum = pending.buyNum
     event.totalGold = pending.totalGold
+    event.settlementKind = pending.buyPolicy
+            and pending.buyPolicy.settlementKind or nil
+    event.settlementReferenceId = pending.buyPolicy
+            and pending.buyPolicy.settlementReferenceId or nil
+    event.commerceReputationSuppressed = suppress_commerce
+    event.settlementEligible = pending.buyPolicy
+            and pending.buyPolicy.settlementEligible or nil
     emit_event(self, event)
     return true, outcome
 end
@@ -1211,6 +1310,7 @@ function CommerceBridge:status()
         buyRequestCount = self.buyRequestCount,
         successfulBuyCount = self.successfulBuyCount,
         failedBuyCount = self.failedBuyCount,
+        noCommerceAwardBuyCount = self.noCommerceAwardBuyCount,
         sellRequestCount = self.sellRequestCount,
         itemSellUiRequestCount =
             self.itemSellUiRequestCount,

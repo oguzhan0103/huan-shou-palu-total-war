@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "1.0.0",
+  "gameBuild": "24575825",
+  "objectDumpSha256": "3E84E8A6936B7D1C33DE6CFC034C4A200655A3E762CBC2EC4C6A57516476EC78",
+  "nativeRoute": "SpawnNPCForServer -> stable PalInstanceID -> PalCaptureSuccess -> exact storage FindByHandle readback",
+  "liveAcceptanceEvidence": "evidence/contracts/unique-pal-native-delivery-build24575825.json",
+  "deliveryLevel": 80,
+  "approvedSpeciesByUniquePalId": {
+    "pwft.unique.pinkcat": "PinkCat",
+    "pwft.unique.anubis": "Anubis",
+    "pwft.unique.weasel_dragon": "WeaselDragon",
+    "pwft.unique.black_metal_dragon": "BlackMetalDragon",
+    "pwft.unique.ronin": "Ronin"
+  },
+  "tentativeMappings": {
+    "feybreakCloudWhirlEnabled": false,
+    "reason": "species and final new-map mapping are not confirmed"
+  },
+  "contentBinding": {
+    "required": true,
+    "baseRegisteredBindingCount": 0,
+    "requiredFields": [
+      "bindingId",
+      "targetBindingId",
+      "providerId",
+      "palDeliveryKey",
+      "worldGeneration",
+      "speciesByUniquePalId"
+    ],
+    "reactivateAfterWorldLoad": true,
+    "storyContentIncluded": false
+  },
+  "ransomProduct": {
+    "nativeChannel": "ItemShop",
+    "serverAuthoritativePrice": true,
+    "serverAuthoritativePaymentResult": true,
+    "stock": 1,
+    "buyQuantity": 1,
+    "currency": "Gold",
+    "priceSource": "content-pack uniquePalCampaign.ransomPrice",
+    "merchantFactionMustEqualCurrentHolder": true,
+    "exactRuntimeFields": [
+      "nativeOfferId",
+      "shopId",
+      "productId",
+      "merchantFactionId",
+      "unitPrice",
+      "ransomPaymentKey"
+    ],
+    "commerceReputationAward": 0,
+    "baseRegisteredProductCount": 0
+  },
+  "transactionGuarantees": {
+    "logicalOwnershipAfterConfirmedPaymentOnly": true,
+    "nativeDeliveryAfterOwnershipTransfer": true,
+    "capacityPreflight": true,
+    "singleEntityCreation": true,
+    "singleCaptureCommit": true,
+    "exactIndividualReadback": true,
+    "idempotentPaymentReplay": true,
+    "idempotentEntityDelivery": true,
+    "rawMutatingAdapterPublic": false,
+    "directContainerMutation": false,
+    "palworldSaveMutation": false
+  }
+}

@@ -82,6 +82,33 @@ assert(state.callbacks.loadMapPre == load_map_pre_hook)
 assert(state.callbacks.loadMapPost == load_map_hook)
 assert(state.settlementRaid ~= nil)
 assert(state.worldBalance ~= nil)
+assert(state.uniquePalNativeDeliveryBridge ~= nil)
+assert(_G.PWFT_UNIQUE_PAL_NATIVE_DELIVERY_BRIDGE_V1
+    == state.uniquePalNativeDeliveryBridge)
+local native_delivery_status =
+    state.uniquePalNativeDeliveryBridge:status()
+assert(native_delivery_status.currentNativeBindings == 5)
+assert(native_delivery_status.directContainerMutation == false)
+assert(native_delivery_status.debugCaptureApiAllowed == false)
+assert(state.uniquePalWorldEffectNativeProduction ~= nil)
+assert(_G.PWFT_UNIQUE_PAL_WORLD_EFFECT_NATIVE_PRODUCTION_V1
+    == state.uniquePalWorldEffectNativeProduction)
+local native_world_effect_status =
+    state.uniquePalWorldEffectNativeProduction:status()
+assert(native_world_effect_status.active == true)
+assert(native_world_effect_status.targetBindingCount == 5)
+assert(native_world_effect_status.nativeDeliveryBindingCount == 5)
+assert(state.uniquePalBossNativeProduction ~= nil)
+assert(_G.PWFT_UNIQUE_PAL_BOSS_NATIVE_PRODUCTION_V1
+    == state.uniquePalBossNativeProduction)
+local native_boss_production_status =
+    state.uniquePalBossNativeProduction:status()
+assert(native_boss_production_status.active == true)
+assert(native_boss_production_status.bindingCount == 5)
+assert(native_boss_production_status.hooksRegistered == true)
+assert(native_boss_production_status.nativeSpawnRoute
+    == "PalNPCManager.SpawnNPCForServer")
+assert(native_boss_production_status.storyContentIncluded == false)
 assert(state.settlementRaid.config.nearestPalFactionId == "pwft.faction.dark_nocturnal_pal_tribe")
 assert(state.factionProgression ~= nil)
 assert(state.palReconciliation ~= nil)
@@ -97,6 +124,9 @@ assert(state.factionApi ~= nil)
 assert(state.factionResourceLedger ~= nil)
 assert(state.factionEconomyWar ~= nil)
 assert(state.rewardPolicy ~= nil)
+assert(state.rewardDeliveryBus ~= nil)
+assert(state.rewardItemNativeAdapter ~= nil)
+assert(state.rewardDeliveryLiveTest ~= nil)
 assert(state.factionCommerce ~= nil)
 assert(state.factionEconomy ~= nil)
 assert(state.factionEconomyShops ~= nil)
@@ -104,8 +134,15 @@ assert(state.commerceBridge ~= nil)
 assert(state.commerceWindowLiveTest == nil)
 assert(state.hostileCommerceLiveTest == nil)
 assert(state.strategicWorldNativeBus ~= nil)
+assert(state.strategicWorldNativeProduction ~= nil)
 assert(state.endingEffectProviderBus ~= nil)
+assert(state.endingEffectNativeProduction ~= nil)
+assert(state.factionNpcAttitudeNativeProduction ~= nil)
 assert(state.factionDefense ~= nil)
+assert(state.humanDefenseResultBridge ~= nil)
+assert(state.taskDefenseClosure ~= nil)
+assert(_G.PWFT_TASK_DEFENSE_CLOSURE_V1 == state.taskDefenseClosure)
+assert(state.taskDefenseClosure:status().storyContentIncluded == false)
 assert(state.factionGuard ~= nil)
 assert(state.factionJoin ~= nil)
 assert(state.factionJoinNativePresenter ~= nil)
@@ -135,11 +172,65 @@ assert(
 )
 assert(Config.factionProgression.persistence.enabled == true)
 assert(Config.factionProgression.persistence.deferredIdentity == true)
-assert(state.factionApi.version == "1.0.0")
+assert(state.factionApi.version == "1.1.0")
 assert(state.factionCommerce.version == "1.0.0")
-assert(state.factionEconomy.version == "1.1.0")
+assert(state.factionEconomy.version == "1.0.0")
+assert(state.factionEconomyStatic.version == "1.1.0")
+assert(state.factionEconomy.capabilities.resourceLedgerAuthority == true)
 assert(state.factionEconomyShops.version == "1.0.0")
 assert(_G.PWFT_FACTION_API_V1 == state.factionApi)
+assert(_G.PWFT_FACTION_DYNAMIC_ECONOMY_V1
+    == state.factionEconomy)
+assert(
+    _G.PWFT_FACTION_CONSEQUENCE_API_V1
+        == state.factionConsequenceRouter
+)
+assert(state.factionConsequenceRouter:status().apiVersion == "1.0.0")
+assert(state.factionConsequenceRouter:status().providerCount == 3)
+assert(state.factionConsequenceRouter:status().reasonRouteCount == 5)
+assert(
+    state.factionConsequenceRouter:status()
+        .exactActorAndClassBinding == true
+)
+assert(
+    state.factionConsequenceRouter:status()
+        .nativeConfirmationRequired == true
+)
+assert(state.factionConsequenceRouter:status().modelMayDispatch == false)
+assert(
+    _G.PWFT_FACTION_CONSEQUENCE_NATIVE_BINDING_V1
+        == state.factionConsequenceNativeBinding
+)
+assert(state.factionConsequenceNativeBindingStart.ok == true)
+assert(
+    state.factionConsequenceNativeBinding:status().hookReady
+        == true
+)
+assert(
+    state.factionConsequenceNativeBinding:status().sourceBuildId
+        == "historical-objectdump-pre-24575825"
+)
+assert(
+    state.factionConsequenceNativeBinding:status()
+        .currentHostBuildId == "24575825"
+)
+assert(
+    state.factionConsequenceNativeBinding:status()
+        .currentHostSignatureVerified == false
+)
+assert(
+    state.factionConsequenceNativeBinding:status()
+        .settlementEnabled == false
+)
+assert(
+    state.factionConsequenceNativeBinding:status().broadActorScan
+        == false
+)
+assert(
+    hooks[
+        "/Script/Pal.PalCharacterParameterComponent:OnDamage"
+    ] ~= nil
+)
 assert(_G.PWFT_COMPANION_LEDGER_V1 == state.companionLedger)
 assert(
     _G.PWFT_BACKGROUND_RAID_RECORDER_V1
@@ -167,31 +258,83 @@ assert(_G.PWFT_STRATEGIC_WORLD_API_V1 == state.strategicWorld)
 assert(_G.PWFT_ENDING_API_V1 == state.endingRuntime)
 assert(_G.PWFT_STRATEGIC_WORLD_NATIVE_BUS_V1
     == state.strategicWorldNativeBus)
+assert(_G.PWFT_STRATEGIC_WORLD_NATIVE_PRODUCTION_V1
+    == state.strategicWorldNativeProduction)
+assert(_G.PWFT_STRATEGIC_WORLD_READINESS_V1
+    == state.strategicWorldReadiness)
 assert(_G.PWFT_ENDING_EFFECT_PROVIDER_BUS_V1
     == state.endingEffectProviderBus)
+assert(_G.PWFT_ENDING_EFFECT_NATIVE_PRODUCTION_V1
+    == state.endingEffectNativeProduction)
 assert(_G.PWFT_FACTION_RESOURCE_LEDGER_V1
     == state.factionResourceLedger)
 assert(_G.PWFT_FACTION_ECONOMY_WAR_V1 == state.factionEconomyWar)
 assert(_G.PWFT_REWARD_POLICY_V1 == state.rewardPolicy)
+assert(_G.PWFT_REWARD_DELIVERY_V1 == state.rewardDeliveryBus)
+assert(_G.PWFT_REWARD_ITEM_NATIVE_ADAPTER_V1
+    == state.rewardItemNativeAdapter)
+assert(_G.PWFT_REWARD_DELIVERY_LIVE_TEST_V1
+    == state.rewardDeliveryLiveTest)
 assert(state.factionResourceLedger:status().factionCount == 7)
 assert(state.factionResourceLedger:status().resourceCount == 8)
 assert(state.factionEconomyWar:status().conflictCount == 0)
-assert(state.strategicWorldNativeBus:status().bindingCount == 0)
+assert(state.strategicWorldNativeBus:status().bindingCount == 5)
+assert(state.strategicWorldNativeBus:status()
+    .bindingCountByKind["city-anchor"] == 5)
+assert(state.strategicWorldNativeBus:status()
+    .fullyCapableProviderCount == 1)
+local b7_readiness = state.strategicWorldReadiness:status()
+assert(b7_readiness.ok == false)
+assert(b7_readiness.phase == "native-bindings-required")
+assert(b7_readiness.liveEvidenceRequired == true)
+assert(b7_readiness.liveAccepted == false)
+assert(b7_readiness.PalworldSaveMutation == false)
 assert(state.endingEffectProviderBus:status().modelCommitAuthority == false)
 assert(state.rewardPolicy:status().capabilities.modelAuthority == false)
+assert(state.rewardDeliveryBus:status().providerCount == 1)
+assert(state.rewardDeliveryBus:status().channelCount == 0)
+assert(state.rewardDeliveryBus:status().capabilities.currencyMutation == false)
+assert(state.rewardItemNativeAdapter:status().buildId == "24575825")
+assert(state.rewardDeliveryLiveTest:status().enabled == false)
+assert(state.rewardDeliveryLiveTestStart.reason
+    == "reward-delivery-live-test-disabled")
 assert(type(state.factionProgression.state.factionResourceLedger) == "table")
 assert(type(state.factionProgression.state.factionEconomyWar) == "table")
 assert(type(state.factionProgression.state.strategicWorldNativeBus) == "table")
 assert(type(state.factionProgression.state.endingEffectProviderBus) == "table")
 assert(type(state.factionProgression.state.rewardPolicy) == "table")
+assert(type(state.factionProgression.state.rewardDelivery) == "table")
 assert(_G.PWFT_FACTION_NPC_ATTITUDE_API_V1
     == state.factionNpcAttitudeBus)
+assert(_G.PWFT_FACTION_NPC_ATTITUDE_NATIVE_PRODUCTION_V1
+    == state.factionNpcAttitudeNativeProduction)
+assert(state.factionNpcAttitudeBus:status().readyProviderCount == 1)
+assert(state.factionNpcAttitudeBus:status().bindingCount == 0)
+assert(state.endingEffectProviderBus:status()
+    .fullyCapableProviderCount == 1)
 assert(_G.PWFT_NPC_LEADER_GUARD_API_V1
     == state.npcLeaderGuardOrchestrator)
-assert(state.strategicWorld:status().contentPackCount == 0)
-assert(state.endingRuntime:status().routeCount == 0)
-assert(state.contentPackRegistry:status().registeredPackCount == 0)
-assert(state.contentRuntime:status().registeredBundleCount == 0)
+assert(_G.PWFT_NPC_LEADER_GUARD_NATIVE_PRODUCTION_V1
+    == state.npcLeaderGuardNativeProduction)
+assert(state.npcLeaderGuardOrchestrator:status().readyProviderCount == 1)
+assert(state.npcLeaderGuardNativeProduction:status().active == true)
+assert(state.npcLeaderGuardNativeProduction:status().archetypeCount == 7)
+assert(state.npcLeaderGuardNativeProduction:status().bindingCount == 0)
+assert(state.npcLeaderGuardNativeProduction:status().broadActorScan == false)
+assert(state.contentModuleLoader.context
+    .npcLeaderGuardNativeProduction
+        == state.npcLeaderGuardNativeProduction)
+assert(state.contentModuleLoader.context.rewardDeliveryBus
+    == state.rewardDeliveryBus)
+assert(state.strategicWorld:status().contentPackCount == 1)
+assert(state.strategicWorld:status().uniquePalCount == 5)
+assert(state.endingRuntime:status().routeCount == 1)
+assert(state.contentPackRegistry:status().registeredPackCount == 1)
+assert(state.contentRuntime:status().registeredBundleCount == 1)
+assert(state.contentModuleLoader:status().configuredModuleCount == 1)
+assert(state.contentModuleLoader:status().registeredCount == 1)
+assert(state.contentModuleLoader:status().activatedCount == 1)
+assert(state.contentModuleLoader:status().failedCount == 0)
 assert(state.questRuntime:status().templateCount == 0)
 assert(state.contentRuntime:status().rewardPolicyAtomicRegistration == true)
 assert(_G.PWFT_JOIN_API_V1 == state.factionJoin)
@@ -294,7 +437,10 @@ assert(
     state.factionEconomy:status().balanceProfileId
         == "pwft.economy.balance.supply_band_v1"
 )
-assert(state.factionEconomy:status().balanceRuntimeAuthority == false)
+assert(state.factionEconomy:status().balanceRuntimeAuthority == true)
+assert(state.factionEconomy:status().dynamicPriceRuntimeEnabled == true)
+assert(state.factionEconomy:status().dynamicStockCounts == true)
+assert(state.factionEconomy:status().dynamicProcurementRequests == true)
 assert(state.factionEconomy:status().customProductRowsEnabled == false)
 assert(
     state.factionEconomyShops:status().representativeCount == 7
@@ -354,8 +500,14 @@ assert(state.factionProgression:status("pwft.faction.dark_nocturnal_pal_tribe").
 -- committed ending through a stable generation ID and reports no-op when no
 -- ending has been committed; the bus never invents a successful provider.
 local generation_before = state.nativeWorldGeneration
+local consequence_generation_before =
+    state.factionConsequenceRouter:status().worldGeneration
 load_map_pre_hook()
 assert(state.nativeWorldGeneration == generation_before + 1)
+assert(
+    state.factionConsequenceRouter:status().worldGeneration
+        == consequence_generation_before + 1
+)
 assert(state.inGameWorldReady == false)
 assert(state.strategicWorldNativeBus:status().bindingCount == 0)
 local presence_generation_after_unload =

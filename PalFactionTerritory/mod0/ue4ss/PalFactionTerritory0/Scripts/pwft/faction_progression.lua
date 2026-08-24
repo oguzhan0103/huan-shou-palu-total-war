@@ -1,6 +1,7 @@
 local Progression = {}
 
-local STATE_SCHEMA_VERSION = "1.0.0"
+local STATE_SCHEMA_VERSION = "1.1.0"
+local LEGACY_STATE_SCHEMA_VERSION = "1.0.0"
 
 local function copy(value)
     if type(value) ~= "table" then
@@ -20,6 +21,41 @@ local function sorted_keys(values)
     end
     table.sort(keys)
     return keys
+end
+
+local function stable_sorted_keys(values)
+    local keys = {}
+    for key, _ in pairs(values or {}) do
+        keys[#keys + 1] = key
+    end
+    table.sort(keys, function(left, right)
+        if type(left) == type(right) then
+            return left < right
+        end
+        return type(left) < type(right)
+    end)
+    return keys
+end
+
+local function stable_encode(value)
+    local value_type = type(value)
+    if value_type == "nil" then
+        return "n"
+    elseif value_type == "boolean" then
+        return value and "b1" or "b0"
+    elseif value_type == "number" then
+        return "d" .. tostring(value)
+    elseif value_type == "string" then
+        return "s" .. #value .. ":" .. value
+    end
+    assert(value_type == "table", "unsupported reputation operation value")
+    local parts = { "t{" }
+    for _, key in ipairs(stable_sorted_keys(value)) do
+        parts[#parts + 1] = stable_encode(key)
+        parts[#parts + 1] = stable_encode(value[key])
+    end
+    parts[#parts + 1] = "}"
+    return table.concat(parts)
 end
 
 local function relation_pair_key(faction_a, faction_b)
@@ -54,7 +90,7 @@ end
 
 local function validate_contract(contract)
     assert(type(contract) == "table", "faction progression contract is required")
-    assert(contract.schemaVersion == "1.0.0", "unsupported faction progression contract schema")
+    assert(contract.schemaVersion == "1.1.0", "unsupported faction progression contract schema")
     assert(
         contract.baselineStatus == "user_confirmed_mechanics_baseline_2026-07-28",
         "faction progression baseline is not user-confirmed"
@@ -65,13 +101,49 @@ local function validate_contract(contract)
         "multiple human memberships must remain enabled"
     )
     assert(
-        contract.designPolicy.reputationDecreaseEnabled == false,
-        "reputation decrease is outside the current phase"
+        contract.designPolicy.reputationDecreaseEnabled == true,
+        "reputation decrease must be enabled for the P0 progression contract"
     )
     assert(
         contract.designPolicy.palworldSaveMutationAllowed == false,
         "Palworld save mutation must remain disabled"
     )
+
+    local mutation = contract.reputationMutationPolicy
+    assert(type(mutation) == "table", "reputation mutation policy is required")
+    assert(mutation.schemaVersion == "1.0.0", "unsupported reputation mutation policy schema")
+    assert(mutation.humanFactionsOnly == true, "reputation deltas must remain human-faction-only")
+    assert(mutation.palFactionDecreaseAllowed == false, "Pal-faction affinity decrease must remain disabled")
+    assert(mutation.zeroDeltaAllowed == false, "zero-value reputation operations must remain disabled")
+    require_number(mutation.minimumReputation, "minimum human reputation")
+    require_number(mutation.maximumReputation, "maximum human reputation")
+    assert(mutation.minimumReputation < 0, "minimum human reputation must be negative")
+    assert(mutation.maximumReputation >= 1200, "maximum human reputation must preserve Lord rank")
+    assert(mutation.minimumReputation < mutation.maximumReputation, "invalid reputation bounds")
+    assert(mutation.operationIdRequired == true, "reputation operation IDs are required")
+    assert(mutation.operationSignatureRequired == true, "reputation operation signatures are required")
+    assert(mutation.idempotencyConflictPolicy == "reject", "reputation event conflicts must be rejected")
+    assert(mutation.arbitraryClientMutationAllowed == false, "arbitrary client reputation mutation is forbidden")
+    assert(mutation.ollamaMutationAllowed == false, "Ollama cannot mutate reputation")
+    local authority_ids = {}
+    for _, authority in ipairs(mutation.authorities or {}) do
+        require_non_empty_string(authority.id, "reputation authority ID")
+        assert(authority_ids[authority.id] == nil, "duplicate reputation authority: " .. authority.id)
+        authority_ids[authority.id] = true
+        assert(type(authority.directions) == "table" and #authority.directions > 0, "reputation authority directions are required")
+        assert(type(authority.sources) == "table" and #authority.sources > 0, "reputation authority sources are required")
+        assert(type(authority.reasonCodes) == "table" and #authority.reasonCodes > 0, "reputation authority reason codes are required")
+        for _, direction in ipairs(authority.directions) do
+            assert(direction == "positive" or direction == "negative", "invalid reputation authority direction")
+        end
+        for _, source in ipairs(authority.sources) do
+            require_non_empty_string(source, "reputation authority source")
+        end
+        for _, reason_code in ipairs(authority.reasonCodes) do
+            require_non_empty_string(reason_code, "reputation reason code")
+        end
+    end
+    assert(#mutation.authorities == 4, "expected four authoritative reputation producers")
 
     local seen = {}
     for _, faction_id in ipairs(contract.humanFactionIds or {}) do
@@ -98,7 +170,16 @@ local function validate_contract(contract)
     assert(diplomacy.schemaVersion == "1.0.0", "unsupported join diplomacy effects schema")
     assert(diplomacy.defaultUnspecifiedRelation == "Neutral", "unspecified human relations must remain neutral")
     assert(diplomacy.joinedFactionRelation == "Player", "joined human factions must remain Player relation")
-    assert(diplomacy.reputationMutationOnJoin == false, "joining a faction must not lower reputation in this phase")
+    assert(diplomacy.reputationMutationOnJoin == false, "joining a faction must not mutate reputation")
+    assert(
+        membership.retainJoinedMembershipAtZero == true
+            and membership.retainJoinedMembershipBelowZero == true,
+        "reputation demotion must retain joined membership"
+    )
+    assert(
+        contract.relationPolicy.joinedHumanHostileRelation == "Hostile",
+        "negative joined reputation must become hostile"
+    )
 
     local valid_pair_relations = {
         Hostile = true,
@@ -162,14 +243,19 @@ local function validate_contract(contract)
     end
     assert(#contract.rankPolicy.ranks == 4, "expected four human membership ranks")
     assert(rank_ids.Member and rank_ids.CoreMember and rank_ids.Leader and rank_ids.Lord, "rank set is incomplete")
+    assert(contract.rankPolicy.automaticDemotion == true, "automatic rank demotion is required")
+    assert(contract.rankPolicy.minimumJoinedRank == "Member", "joined members must demote to Member")
     assert(contract.rankPolicy.ranks[3].guardAccess == true, "Leader must unlock player guards")
     assert(contract.rankPolicy.ranks[4].guardAccess == true, "Lord must retain player guards")
 
     local commerce = contract.reputationSources and contract.reputationSources.commerce or nil
     assert(type(commerce) == "table" and commerce.enabled == true, "commerce reputation source is required")
+    require_number(commerce.totalCapPerWindow, "commerce total window cap")
     require_number(commerce.negativeRecoveryCapPerWindow, "commerce negative recovery cap")
     require_number(commerce.nonNegativeCapPerWindow, "commerce non-negative cap")
-    assert(commerce.negativeRecoveryCapPerWindow > commerce.nonNegativeCapPerWindow, "hostile recovery cap must exceed friendly commerce cap")
+    assert(commerce.totalCapPerWindow == 20, "accepted commerce total window cap must remain 20")
+    assert(commerce.negativeRecoveryCapPerWindow <= commerce.totalCapPerWindow, "hostile recovery must fit the commerce total cap")
+    assert(commerce.nonNegativeCapPerWindow <= commerce.totalCapPerWindow, "friendly commerce must fit the commerce total cap")
     local diplomacy_recovery = commerce.diplomacyRecovery
     assert(
         type(diplomacy_recovery) == "table"
@@ -202,6 +288,73 @@ local function validate_contract(contract)
         diplomacy_recovery.carryRemainderAcrossSources == false,
         "one transaction cannot advance multiple hostility sources"
     )
+
+    local consequence = contract.reputationSources.consequence
+    assert(type(consequence) == "table" and consequence.enabled == true, "negative consequence source is required")
+    assert(consequence.direction == "negative-only", "consequence reputation must remain negative-only")
+    assert(consequence.humanOnly == true, "consequence reputation must remain human-faction-only")
+    require_number(consequence.maximumPenaltyPerEvent, "maximum reputation penalty per event")
+    assert(consequence.maximumPenaltyPerEvent > 0, "maximum reputation penalty must be positive")
+    assert(consequence.authority == "pwft.faction-consequence.v1", "consequence authority mismatch")
+    local routing = consequence.routingPolicy
+    assert(type(routing) == "table", "consequence routing policy is required")
+    assert(routing.schemaVersion == "1.0.0", "unsupported consequence routing policy")
+    assert(routing.eventSchemaVersion == "1.0.0", "unsupported consequence event schema")
+    assert(routing.exactActorAndClassRequired == true, "actor consequences require exact bindings")
+    assert(routing.nativeConfirmationRequired == true, "actor consequences require native confirmation")
+    assert(routing.worldGenerationRequiredForActorEvents == true, "actor consequences require world generation fencing")
+    assert(routing.modelDispatchAllowed == false, "models cannot dispatch faction consequences")
+    assert(routing.arbitraryClientDispatchAllowed == false, "arbitrary clients cannot dispatch faction consequences")
+    local native_damage = routing.nativeDamageBinding
+    assert(type(native_damage) == "table", "native damage consequence binding is required")
+    assert(native_damage.schemaVersion == "1.0.0", "unsupported native damage consequence binding")
+    require_non_empty_string(native_damage.sourceBuildId, "native damage source build ID")
+    require_non_empty_string(native_damage.currentHostBuildId, "native damage current host build ID")
+    require_non_empty_string(native_damage.sourceObjectDumpSha256, "native damage ObjectDump hash")
+    assert(string.len(native_damage.sourceObjectDumpSha256) == 64, "native damage ObjectDump hash must be SHA-256")
+    require_non_empty_string(native_damage.hookPath, "native damage hook path")
+    require_non_empty_string(native_damage.damageResultStruct, "native damage result struct")
+    require_non_empty_string(native_damage.attackerField, "native damage attacker field")
+    require_non_empty_string(native_damage.defenderField, "native damage defender field")
+    require_non_empty_string(native_damage.actualDamageField, "native damage actual-damage field")
+    assert(native_damage.exactRegisteredDefenderOnly == true, "native damage requires an exact registered defender")
+    assert(native_damage.directLocalPlayerOnly == true, "native damage requires the direct local player")
+    assert(native_damage.positiveActualDamageOnly == true, "native damage requires positive actual damage")
+    require_number(native_damage.minimumIntervalSecondsPerTarget, "native damage target interval")
+    assert(native_damage.minimumIntervalSecondsPerTarget > 0, "native damage target interval must be positive")
+    assert(type(native_damage.penaltyByActorRole) == "table", "native damage role penalties are required")
+    require_number(native_damage.penaltyByActorRole["faction-member"], "faction-member damage penalty")
+    require_number(native_damage.penaltyByActorRole.civilian, "civilian damage penalty")
+    assert(native_damage.penaltyByActorRole["faction-member"] > 0, "faction-member damage penalty must be positive")
+    assert(native_damage.penaltyByActorRole.civilian > 0, "civilian damage penalty must be positive")
+    assert(native_damage.probeEnabled == true, "native damage probe must be enabled")
+    assert(native_damage.settlementEnabled == false, "unverified current-build native damage settlement must fail closed")
+    require_non_empty_string(native_damage.settlementGate, "native damage settlement gate")
+    assert(native_damage.storyContentIncluded == false, "native damage binding cannot include story content")
+    local consequence_providers = {}
+    local consequence_reason_codes = {}
+    for _, provider in ipairs(routing.providers or {}) do
+        require_non_empty_string(provider.id, "consequence provider ID")
+        require_non_empty_string(provider.authoritySource, "consequence provider authority source")
+        assert(consequence_providers[provider.id] == nil, "duplicate consequence provider")
+        assert(type(provider.reasonCodes) == "table" and #provider.reasonCodes > 0, "consequence provider reason codes are required")
+        consequence_providers[provider.id] = provider.authoritySource
+        for _, reason_code in ipairs(provider.reasonCodes) do
+            require_non_empty_string(reason_code, "consequence provider reason code")
+            assert(consequence_reason_codes[reason_code] == nil, "duplicate consequence reason route")
+            consequence_reason_codes[reason_code] = provider.id
+        end
+    end
+    assert(#routing.providers == 3, "expected three consequence provider routes")
+    for _, reason_code in ipairs({
+        "friendly-fire",
+        "civilian-harm",
+        "contract-breach",
+        "mission-failure",
+        "war-consequence",
+    }) do
+        assert(consequence_reason_codes[reason_code] ~= nil, "missing consequence reason route: " .. reason_code)
+    end
 
     local pal_reconciliation = contract.reputationSources
         and contract.reputationSources.pal_reconciliation
@@ -244,7 +397,9 @@ local function make_initial_state(contract, faction_kinds)
         },
         eventCount = 0,
         lastEvent = nil,
+        legacyOperationSequence = 0,
         processedEventIds = {},
+        processedReputationOperations = {},
     }
     for _, faction_id in ipairs(sorted_keys(faction_kinds)) do
         local kind = faction_kinds[faction_id]
@@ -271,6 +426,7 @@ local function make_initial_state(contract, faction_kinds)
                 task = 0,
                 defense = 0,
                 commerce = 0,
+                consequence = 0,
                 pal_reconciliation = 0,
             },
         }
@@ -278,11 +434,47 @@ local function make_initial_state(contract, faction_kinds)
     return state
 end
 
+local function values_to_set(values)
+    local result = {}
+    for _, value in ipairs(values or {}) do
+        result[value] = true
+    end
+    return result
+end
+
+local function migrate_snapshot(snapshot)
+    assert(type(snapshot) == "table", "progression snapshot must be a table")
+    if snapshot.schemaVersion == STATE_SCHEMA_VERSION then
+        return copy(snapshot), nil
+    end
+    assert(
+        snapshot.schemaVersion == LEGACY_STATE_SCHEMA_VERSION,
+        "unsupported progression snapshot schema"
+    )
+    local migrated = copy(snapshot)
+    migrated.schemaVersion = STATE_SCHEMA_VERSION
+    migrated.processedReputationOperations =
+        migrated.processedReputationOperations or {}
+    migrated.legacyOperationSequence = migrated.legacyOperationSequence or 0
+    for _, record in pairs(migrated.factions or {}) do
+        record.sourceTotals = record.sourceTotals or {}
+        record.sourceTotals.consequence =
+            record.sourceTotals.consequence or 0
+    end
+    return migrated, {
+        fromSchemaVersion = LEGACY_STATE_SCHEMA_VERSION,
+        toSchemaVersion = STATE_SCHEMA_VERSION,
+        strategy = "preserve-extensions-add-reputation-operation-ledger",
+    }
+end
+
 local function validate_snapshot(snapshot, faction_kinds)
     assert(type(snapshot) == "table", "progression snapshot must be a table")
     assert(snapshot.schemaVersion == STATE_SCHEMA_VERSION, "unsupported progression snapshot schema")
     assert(type(snapshot.revision) == "number" and snapshot.revision >= 0, "invalid progression snapshot revision")
     assert(type(snapshot.factions) == "table", "progression snapshot factions are required")
+    assert(type(snapshot.processedEventIds) == "table", "progression processed events are required")
+    assert(type(snapshot.processedReputationOperations) == "table", "reputation operation ledger is required")
     for faction_id, kind in pairs(faction_kinds) do
         local record = snapshot.factions[faction_id]
         assert(type(record) == "table", "snapshot is missing faction: " .. faction_id)
@@ -410,7 +602,11 @@ local function refresh_faction(instance, record)
     local hostile_below = instance.contract.relationPolicy.hostileBelowReputation
     if record.kind == "Human" then
         if record.joined then
-            record.relation = instance.contract.relationPolicy.joinedHumanRelation
+            if record.reputation < hostile_below then
+                record.relation = instance.contract.relationPolicy.joinedHumanHostileRelation
+            else
+                record.relation = instance.contract.relationPolicy.joinedHumanRelation
+            end
             record.rankId =
                 rank_for_reputation(
                     instance,
@@ -465,6 +661,11 @@ local function refresh_all(instance)
     if type(instance.state.processedEventIds) ~= "table" then
         instance.state.processedEventIds = {}
     end
+    if type(instance.state.processedReputationOperations) ~= "table" then
+        instance.state.processedReputationOperations = {}
+    end
+    instance.state.legacyOperationSequence =
+        instance.state.legacyOperationSequence or 0
     if type(instance.state.diplomacy) ~= "table" then
         instance.state.diplomacy = {}
     end
@@ -493,6 +694,7 @@ local function refresh_all(instance)
         record.sourceTotals.task = record.sourceTotals.task or 0
         record.sourceTotals.defense = record.sourceTotals.defense or 0
         record.sourceTotals.commerce = record.sourceTotals.commerce or 0
+        record.sourceTotals.consequence = record.sourceTotals.consequence or 0
         record.sourceTotals.pal_reconciliation = record.sourceTotals.pal_reconciliation or 0
         record.diplomacyHostilitySources = {}
         refresh_faction(instance, record)
@@ -514,6 +716,7 @@ function Progression.create(contract, snapshot)
         factionKinds = faction_kinds,
         rankIndexes = {},
         humanRelationMatrix = {},
+        mutationAuthorities = {},
         restoreListeners = {},
         restoreListenerOrder = {},
     }
@@ -523,12 +726,22 @@ function Progression.create(contract, snapshot)
     for _, pair in ipairs(contract.membershipPolicy.joinDiplomacyEffects.pairs) do
         instance.humanRelationMatrix[relation_pair_key(pair.factionA, pair.factionB)] = pair.relation
     end
+    for _, authority in ipairs(contract.reputationMutationPolicy.authorities) do
+        instance.mutationAuthorities[authority.id] = {
+            directions = values_to_set(authority.directions),
+            sources = values_to_set(authority.sources),
+            reasonCodes = values_to_set(authority.reasonCodes),
+        }
+    end
 
     if snapshot ~= nil then
-        validate_snapshot(snapshot, faction_kinds)
-        instance.state = copy(snapshot)
+        local migrated, migration = migrate_snapshot(snapshot)
+        validate_snapshot(migrated, faction_kinds)
+        instance.state = migrated
+        instance.lastMigration = migration
     else
         instance.state = make_initial_state(contract, faction_kinds)
+        instance.lastMigration = nil
     end
     refresh_all(instance)
     return setmetatable(instance, { __index = Progression })
@@ -540,6 +753,7 @@ function Progression:status(faction_id)
             schemaVersion = self.state.schemaVersion,
             revision = self.state.revision,
             eventCount = self.state.eventCount,
+            lastMigration = copy(self.lastMigration),
             palReconciliationUnlocked = self.state.unlocks.palReconciliation,
             ending3Unlocked = self.state.unlocks.ending3,
             persistence = "snapshot-adapter-only",
@@ -808,7 +1022,13 @@ local function grant_commerce(instance, record, requested, context)
     local window_id = context and context.windowId or record.commerce.windowId or "runtime"
     instance:set_commerce_window(record.factionId, window_id)
 
-    local remaining = requested
+    local window_awarded =
+        (record.commerce.negativeRecoveryAwarded or 0)
+        + (record.commerce.nonNegativeAwarded or 0)
+    local remaining = math.min(
+        requested,
+        math.max(0, commerce.totalCapPerWindow - window_awarded)
+    )
     local applied = 0
     local negative_recovery_applied = 0
     local non_negative_applied = 0
@@ -941,9 +1161,12 @@ local function apply_commerce_diplomacy_recovery(
     if current >= policy.requiredPointsPerHostilitySource
         and policy.automaticClear == true then
         local clear_event_id = nil
-        if context ~= nil and context.eventId ~= nil then
+        local source_event_id = context
+            and (context.operationId or context.eventId)
+            or nil
+        if source_event_id ~= nil then
             clear_event_id = "diplomacy-recovery:"
-                .. context.eventId
+                .. source_event_id
                 .. ":"
                 .. source_faction_id
         end
@@ -977,101 +1200,334 @@ local function apply_commerce_diplomacy_recovery(
     return outcome
 end
 
-function Progression:grant_reputation(faction_id, source, amount, context)
+local function mutation_direction(delta)
+    return delta < 0 and "negative" or "positive"
+end
+
+local function reputation_operation_signature(
+    faction_id,
+    source,
+    delta,
+    operation
+)
+    return stable_encode({
+        factionId = faction_id,
+        source = source,
+        delta = delta,
+        authority = operation.authority,
+        reasonCode = operation.reasonCode,
+        contextId = operation.contextId,
+        windowId = operation.windowId,
+        diplomacyRecoveryEligible =
+            operation.diplomacyRecoveryEligible == true,
+        venueMode = operation.venueMode,
+    })
+end
+
+local function duplicate_reputation_operation(
+    instance,
+    record,
+    operation_id,
+    signature
+)
+    local previous =
+        instance.state.processedReputationOperations[operation_id]
+    if previous ~= nil then
+        if previous.signature ~= signature then
+            return result(false, "reputation-operation-id-conflict", {
+                factionId = record.factionId,
+                operationId = operation_id,
+                previousAuthority = previous.authority,
+                previousReasonCode = previous.reasonCode,
+            })
+        end
+        return result(true, "duplicate-event", {
+            factionId = record.factionId,
+            operationId = operation_id,
+            source = previous.source,
+            requested = previous.requested,
+            delta = previous.requested,
+            applied = 0,
+            originalApplied = previous.applied,
+            after = record.reputation,
+            relation = record.relation,
+            rankId = record.rankId,
+            replayed = true,
+        })
+    end
+    if instance.state.processedEventIds[operation_id] == true then
+        return result(true, "duplicate-legacy-event", {
+            factionId = record.factionId,
+            operationId = operation_id,
+            applied = 0,
+            after = record.reputation,
+            relation = record.relation,
+            rankId = record.rankId,
+            replayed = true,
+            signatureUnavailable = true,
+        })
+    end
+    return nil
+end
+
+function Progression:apply_reputation_delta(
+    faction_id,
+    source,
+    delta,
+    operation
+)
     local record = self.state.factions[faction_id]
     if record == nil then
         return result(false, "unknown-faction")
     end
-    if type(amount) ~= "number" or amount <= 0 then
-        return result(false, "positive-award-required")
+    if record.kind ~= "Human" then
+        return result(false, "human-reputation-delta-only")
     end
-    local event_id = context and context.eventId or nil
-    if event_id ~= nil then
-        require_non_empty_string(event_id, "reputation event ID")
-        if self.state.processedEventIds[event_id] == true then
-            return result(true, "duplicate-event", {
-                factionId = faction_id,
-                source = source,
-                requested = amount,
-                applied = 0,
-                after = record.reputation,
-                relation = record.relation,
-                rankId = record.rankId,
-            })
-        end
+    if type(delta) ~= "number" or delta == 0 then
+        return result(false, "non-zero-reputation-delta-required")
     end
-    if source == "pal_reconciliation" then
-        return result(false, "use-reconcile-pal-operation")
+    if type(operation) ~= "table" then
+        return result(false, "reputation-operation-required")
     end
+    local operation_id = operation.operationId
+    local authority_id = operation.authority
+    local reason_code = operation.reasonCode
+    if type(operation_id) ~= "string" or operation_id == "" then
+        return result(false, "reputation-operation-id-required")
+    end
+    if type(authority_id) ~= "string" or authority_id == "" then
+        return result(false, "reputation-authority-required")
+    end
+    if type(reason_code) ~= "string" or reason_code == "" then
+        return result(false, "reputation-reason-code-required")
+    end
+
     local source_policy = self.contract.reputationSources[source]
     if type(source_policy) ~= "table" or source_policy.enabled ~= true then
         return result(false, "unsupported-reputation-source")
     end
-    if record.kind == "Pal" then
-        return result(false, "pal-reconciliation-mechanism-pending")
-    end
-
-    local before = record.reputation
-    local applied = 0
-    local commerce_award = nil
-    if source == "commerce" then
-        commerce_award = grant_commerce(
-            self,
-            record,
-            amount,
-            context
-        )
-        applied = commerce_award.applied
-    else
-        local maximum = source_policy.maximumAwardPerEvent or amount
-        applied = math.min(amount, maximum)
-        record.reputation = record.reputation + applied
-    end
-
-    record.sourceTotals[source] = (record.sourceTotals[source] or 0) + applied
-    refresh_faction(self, record)
-    if event_id ~= nil
-        and (applied > 0 or source == "commerce") then
-        self.state.processedEventIds[event_id] = true
-    end
-    local commerce_diplomacy_recovery = nil
-    if applied > 0 then
-        add_event(self, {
-            type = "reputation",
+    local authority = self.mutationAuthorities[authority_id]
+    local direction = mutation_direction(delta)
+    if authority == nil
+        or authority.directions[direction] ~= true
+        or authority.sources[source] ~= true
+        or authority.reasonCodes[reason_code] ~= true then
+        return result(false, "reputation-authority-policy-rejected", {
             factionId = faction_id,
             source = source,
-            requested = amount,
-            applied = applied,
-            before = before,
-            after = record.reputation,
-            contextId = context and context.contextId or nil,
-            eventId = event_id,
-            venueMode = context and context.venueMode or nil,
+            direction = direction,
+            authority = authority_id,
+            reasonCode = reason_code,
         })
-        refresh_unlocks(self)
-        if source == "commerce" then
-            commerce_diplomacy_recovery =
-                apply_commerce_diplomacy_recovery(
-                    self,
-                    record,
-                    commerce_award.nonNegativeApplied,
-                    context
-                )
-        end
     end
-    return result(true, applied < amount and "award-capped" or "award-applied", {
-        factionId = faction_id,
+    if direction == "negative" and source ~= "consequence" then
+        return result(false, "negative-consequence-source-required")
+    end
+    if direction == "positive" and source == "consequence" then
+        return result(false, "consequence-source-is-negative-only")
+    end
+
+    local signature = reputation_operation_signature(
+        faction_id,
+        source,
+        delta,
+        operation
+    )
+    local replay = duplicate_reputation_operation(
+        self,
+        record,
+        operation_id,
+        signature
+    )
+    if replay ~= nil then
+        return replay
+    end
+
+    local mutation_policy = self.contract.reputationMutationPolicy
+    local before = record.reputation
+    local before_rank_id = record.rankId
+    local before_relation = record.relation
+    local before_joined = record.joined
+    local applied = 0
+    local commerce_award = nil
+    if direction == "positive" then
+        local bounded_request = math.min(
+            delta,
+            math.max(0, mutation_policy.maximumReputation - before)
+        )
+        if source == "commerce" then
+            commerce_award = grant_commerce(
+                self,
+                record,
+                bounded_request,
+                operation
+            )
+            applied = commerce_award.applied
+        else
+            local maximum = source_policy.maximumAwardPerEvent or bounded_request
+            applied = math.min(bounded_request, maximum)
+            record.reputation = record.reputation + applied
+        end
+    else
+        local maximum = source_policy.maximumPenaltyPerEvent
+        local requested_magnitude = math.min(-delta, maximum)
+        local target = math.max(
+            mutation_policy.minimumReputation,
+            before - requested_magnitude
+        )
+        applied = target - before
+        record.reputation = target
+    end
+
+    record.sourceTotals[source] =
+        (record.sourceTotals[source] or 0) + applied
+    refresh_faction(self, record)
+    refresh_unlocks(self)
+
+    local commerce_diplomacy_recovery = nil
+    if source == "commerce" and applied > 0 then
+        commerce_diplomacy_recovery =
+            apply_commerce_diplomacy_recovery(
+                self,
+                record,
+                commerce_award.nonNegativeApplied,
+                operation
+            )
+    end
+
+    local capped = math.abs(applied) < math.abs(delta)
+    local outcome_reason = nil
+    if direction == "positive" then
+        outcome_reason = capped and "award-capped" or "award-applied"
+    else
+        outcome_reason = capped and "penalty-capped" or "penalty-applied"
+    end
+    local after_rank_id = record.rankId
+    local rank_changed = before_rank_id ~= after_rank_id
+    record.lastReputationChange = {
+        operationId = operation_id,
+        authority = authority_id,
+        reasonCode = reason_code,
         source = source,
-        requested = amount,
+        requested = delta,
         applied = applied,
         before = before,
         after = record.reputation,
+        beforeRankId = before_rank_id,
+        afterRankId = after_rank_id,
+        beforeRelation = before_relation,
+        afterRelation = record.relation,
+    }
+    local outcome = result(true, outcome_reason, {
+        factionId = faction_id,
+        source = source,
+        requested = delta,
+        delta = delta,
+        applied = applied,
+        before = before,
+        after = record.reputation,
+        beforeRelation = before_relation,
         relation = record.relation,
-        rankId = record.rankId,
+        beforeRankId = before_rank_id,
+        rankId = after_rank_id,
+        rankChanged = rank_changed,
+        promoted = rank_changed
+            and rank_index(self, after_rank_id)
+                > rank_index(self, before_rank_id),
+        demoted = rank_changed
+            and rank_index(self, after_rank_id)
+                < rank_index(self, before_rank_id),
+        membershipRetained = before_joined and record.joined,
+        operationId = operation_id,
+        authority = authority_id,
+        reasonCode = reason_code,
+        operationRecorded = true,
         commerceBreakdown = commerce_award,
         commerceDiplomacyRecovery =
             commerce_diplomacy_recovery,
     })
+
+    self.state.processedEventIds[operation_id] = true
+    self.state.processedReputationOperations[operation_id] = {
+        signature = signature,
+        authority = authority_id,
+        reasonCode = reason_code,
+        source = source,
+        requested = delta,
+        applied = applied,
+    }
+    add_event(self, {
+        type = "reputation-delta",
+        factionId = faction_id,
+        source = source,
+        requested = delta,
+        applied = applied,
+        before = before,
+        after = record.reputation,
+        beforeRankId = before_rank_id,
+        afterRankId = after_rank_id,
+        beforeRelation = before_relation,
+        afterRelation = record.relation,
+        authority = authority_id,
+        reasonCode = reason_code,
+        contextId = operation.contextId,
+        eventId = operation_id,
+        venueMode = operation.venueMode,
+    })
+    return outcome
+end
+
+function Progression:grant_reputation(faction_id, source, amount, context)
+    if type(amount) ~= "number" or amount <= 0 then
+        return result(false, "positive-award-required")
+    end
+    if source == "pal_reconciliation" then
+        return result(false, "use-reconcile-pal-operation")
+    end
+    local legacy_authorities = {
+        task = {
+            authority = "pwft.task-award.v1",
+            reasonCode = "task-completed",
+        },
+        defense = {
+            authority = "pwft.defense-award.v1",
+            reasonCode = "defense-resolved",
+        },
+        commerce = {
+            authority = "pwft.commerce-award.v1",
+            reasonCode = "commerce-confirmed",
+        },
+    }
+    local producer = legacy_authorities[source]
+    if producer == nil then
+        return result(false, "unsupported-reputation-source")
+    end
+    context = context or {}
+    local operation_id = context.eventId
+    if operation_id == nil then
+        self.state.legacyOperationSequence =
+            self.state.legacyOperationSequence + 1
+        operation_id = string.format(
+            "legacy:%s:%d",
+            source,
+            self.state.legacyOperationSequence
+        )
+    end
+    return self:apply_reputation_delta(
+        faction_id,
+        source,
+        amount,
+        {
+            operationId = operation_id,
+            authority = producer.authority,
+            reasonCode = producer.reasonCode,
+            contextId = context.contextId,
+            windowId = context.windowId,
+            diplomacyRecoveryEligible =
+                context.diplomacyRecoveryEligible == true,
+            venueMode = context.venueMode,
+        }
+    )
 end
 
 function Progression:award_pal_reconciliation(
@@ -1188,6 +1644,11 @@ function Progression:export_snapshot()
     return copy(self.state)
 end
 
+function Progression.migrate_snapshot(snapshot)
+    local migrated, migration = migrate_snapshot(snapshot)
+    return migrated, copy(migration)
+end
+
 function Progression:register_restore_listener(listener_id, listener)
     require_non_empty_string(listener_id, "restore listener ID")
     assert(type(listener) == "function", "restore listener must be a function")
@@ -1211,12 +1672,16 @@ function Progression:restore_listener_status()
 end
 
 function Progression:restore_snapshot(snapshot)
-    validate_snapshot(snapshot, self.factionKinds)
+    local migrated, migration = migrate_snapshot(snapshot)
+    validate_snapshot(migrated, self.factionKinds)
     local previous_state = self.state
-    self.state = copy(snapshot)
+    local previous_migration = self.lastMigration
+    self.state = migrated
+    self.lastMigration = migration
     local refresh_ok, refresh_error = pcall(refresh_all, self)
     if not refresh_ok then
         self.state = previous_state
+        self.lastMigration = previous_migration
         refresh_all(self)
         error("snapshot refresh failed: " .. tostring(refresh_error))
     end
@@ -1249,6 +1714,7 @@ function Progression:restore_snapshot(snapshot)
     if listener_failure ~= nil then
         local rejected_state = self.state
         self.state = previous_state
+        self.lastMigration = previous_migration
         refresh_all(self)
         for _, listener_id in ipairs(self.restoreListenerOrder) do
             pcall(
@@ -1267,6 +1733,7 @@ function Progression:restore_snapshot(snapshot)
         reason = "snapshot-restored",
         revision = self.state.revision,
         reboundListenerCount = #self.restoreListenerOrder,
+        migration = copy(migration),
     }
 end
 

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "1.0.0",
+  "apiVersion": "1.0.0",
+  "workPackage": "A9-native-item-reward-settlement",
+  "policyApi": "PWFT_REWARD_POLICY_V1",
+  "deliveryApi": "PWFT_REWARD_DELIVERY_V1",
+  "nativeAdapterApi": "PWFT_REWARD_ITEM_NATIVE_ADAPTER_V1",
+  "verifiedBuild": {
+    "steamBuildId": "24575825",
+    "objectDumpSha256": "3e84e8a6936b7d1c33de6cfc034c4a200655a3e762cbc2ec4c6a57516476ec78"
+  },
+  "nativeRoutes": {
+    "hostGrant": "PalPlayerInventoryData.AddItem_ServerInternal",
+    "clientGrant": "PalNetworkPlayerComponent.RequestAddItem_ToServer",
+    "readback": "PalPlayerInventoryData.CountItemNum",
+    "ownerIdentity": "PalPlayerInventoryData.OwnerPlayerUId",
+    "localNetworkComponent": "PalPlayerController.Transmitter.GetPlayer"
+  },
+  "transaction": {
+    "persistentOperationReplay": true,
+    "deterministicDeliveryId": "operationId:channelId",
+    "writeAheadSidecarFenceRequired": true,
+    "exactOwnerPlayerUIdMatchRequired": true,
+    "exactBeforeAfterCountRequired": true,
+    "duplicateSettlementEmitsNewNativeRequest": false,
+    "ambiguousDispatchAutomaticallyRetries": false,
+    "restartAfterDispatchRequiresReconciliation": true,
+    "partialMultiChannelRecovery": true
+  },
+  "supportedRewardKinds": [
+    "item"
+  ],
+  "unsupportedRewardKinds": [
+    "currency",
+    "direct-save-payload",
+    "model-authored-mutation"
+  ],
+  "contentBoundary": {
+    "baseRegistersNativeProvider": true,
+    "baseRegistersRewardChannels": false,
+    "trustedContentModuleProvidesChannelId": true,
+    "trustedContentModuleProvidesNativeItemId": true,
+    "trustedContentModuleProvidesPerDeliveryCap": true,
+    "storyContentIncluded": false
+  },
+  "acceptanceBoundary": {
+    "objectDumpAndExistingQaRouteInspected": true,
+    "automatedTestsAreLiveAcceptance": false,
+    "realInventoryGrantAndRestartEvidenceRequired": true,
+    "userAcceptanceClaimed": false
+  }
+}

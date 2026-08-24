@@ -17,12 +17,12 @@ return {
                     formationId = "example.minimal.guard.city-steward",
                     members = {
                         {
-                            archetypeId = "example.minimal.guard.melee",
-                            count = 1,
-                        },
-                        {
-                            archetypeId = "example.minimal.guard.ranged",
-                            count = 1,
+                            -- Core supplies one verified default archetype per
+                            -- human faction. Authors may register more through
+                            -- PWFT_NPC_LEADER_GUARD_NATIVE_PRODUCTION_V1.
+                            archetypeId =
+                                "pwft.faction.rayne_syndicate.default-guard",
+                            count = 2,
                         },
                     },
                     allowedSceneKinds = { "city", "field" },

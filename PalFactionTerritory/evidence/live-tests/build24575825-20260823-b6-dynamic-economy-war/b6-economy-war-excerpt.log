@@ -1,0 +1,13 @@
+[2026-08-23 19:55:25] IDENTITY_READY world=E0D5ECDC46B379829F8F31A729ACFD92 player=00000000000000000000000000000001 sidecar=active:primary
+[2026-08-23 19:55:27] NATIVE_DYNAMIC_MARKET_BOOT activeCounters=7 rayneRevision=0 rayneSellRows=1 rayneProcureSoldOutRows=0
+[2026-08-23 19:56:10] B6_STEP step=1 phase=limited_sale quantity=50 band=limited direction=sell sellPrice=280 stock=25 sameMerchant=true nativeOk=true
+[2026-08-23 19:56:28] NATIVE_DYNAMIC_MARKET_APPLIED faction=pwft.faction.rayne_syndicate revision=2 inspected=1 matched=1 changed=1 failed=0 sell=0 procureSoldOut=1
+[2026-08-23 19:56:28] B6_STEP step=2 phase=trade_requested quantity=49 band=scarce direction=procure procurementPrice=290 procurementQuota=62 conflict=trade_requested supplier=pwft.faction.pal_genetic_research_unit sameMerchant=true nativeOk=true
+[2026-08-23 19:56:49] B6_STEP step=3 phase=threat quantity=49 conflict=threat
+[2026-08-23 19:57:08] B6_STEP step=4 phase=awaiting_restart quantity=49 conflict=war restartRequired=true
+[2026-08-23 20:05:29] IDENTITY_READY world=E0D5ECDC46B379829F8F31A729ACFD92 player=00000000000000000000000000000001 sidecar=active:primary
+[2026-08-23 20:05:31] NATIVE_DYNAMIC_MARKET_RESTORED activeCounters=7 rayneRevision=2 rayneSellRows=0 rayneProcureSoldOutRows=1
+[2026-08-23 20:07:40] B6_STEP step=5 phase=restart_confirmed quantity=49 band=scarce conflict=war persistence=true
+[2026-08-23 20:08:14] NATIVE_DYNAMIC_MARKET_APPLIED faction=pwft.faction.rayne_syndicate revision=3 inspected=1 matched=1 changed=1 failed=0 sell=1 procureSoldOut=0
+[2026-08-23 20:08:14] B6_STEP step=6 phase=ceasefire quantity=150 band=established direction=sell sellPrice=240 stock=66 conflict=ceasefire sameMerchant=true nativeOk=true persistence=true
+[2026-08-23 20:08:36] B6_STEP step=7 phase=complete quantity=150 band=established sellPrice=240 stock=66 conflict=stable persistence=true palworldSaveWrites=0

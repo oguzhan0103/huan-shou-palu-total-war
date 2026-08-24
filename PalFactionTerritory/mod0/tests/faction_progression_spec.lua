@@ -53,8 +53,8 @@ for _, faction_id in ipairs(Registry.progression.palFactionIds) do
     assert(progression:reconcile_pal(faction_id).reason == "pal-discourse-service-required")
 end
 
--- Hostile human relations can be repaired through commerce, but one commerce
--- window cannot exceed the configured recovery plus friendly-commerce caps.
+-- Hostile human relations can be repaired through commerce, but every
+-- commerce window is capped at the accepted total of 20 points.
 local hostile_snapshot = progression:export_snapshot()
 local rayne_id = "pwft.faction.rayne_syndicate"
 hostile_snapshot.factions[rayne_id].reputation = -60
@@ -69,12 +69,16 @@ local commerce = hostile:grant_reputation(
 )
 assert(commerce.ok == true)
 assert(commerce.reason == "award-capped")
-assert(commerce.applied == 80)
+assert(commerce.applied == 20)
 assert(commerce.before == -60)
-assert(commerce.after == 20)
-assert(hostile:status(rayne_id).relation == "Friendly")
+assert(commerce.after == -40)
+assert(hostile:status(rayne_id).relation == "Hostile")
 assert(hostile:grant_reputation(rayne_id, "commerce", 10, { windowId = "test-window-a" }).applied == 0)
-assert(hostile:grant_reputation(rayne_id, "commerce", 10, { windowId = "test-window-b" }).applied == 10)
+assert(hostile:grant_reputation(rayne_id, "commerce", 100, { windowId = "test-window-b" }).applied == 20)
+assert(hostile:status(rayne_id).reputation == -20)
+assert(hostile:grant_reputation(rayne_id, "commerce", 100, { windowId = "test-window-c" }).applied == 20)
+assert(hostile:status(rayne_id).reputation == 0)
+assert(hostile:status(rayne_id).relation == "Friendly")
 
 -- Affiliation hostility is repaired automatically by successful commerce.
 -- Only non-negative commerce awards count; each source needs 60 points, the
@@ -258,6 +262,105 @@ assert(progression:grant_reputation(rayne_id, "task", 500, { contextId = "task-0
 assert(progression:grant_reputation(rayne_id, "task", 200, { contextId = "task-003" }).applied == 200)
 assert(progression:status(rayne_id).rankId == "Lord")
 
+-- Negative reputation is human-only, authority/reason constrained, signed,
+-- idempotent, and automatically demotes without removing membership.
+local rejected_penalty = progression:apply_reputation_delta(
+    rayne_id,
+    "consequence",
+    -10,
+    {
+        operationId = "consequence:rejected-authority",
+        authority = "pwft.task-award.v1",
+        reasonCode = "task-completed",
+    }
+)
+assert(not rejected_penalty.ok)
+assert(rejected_penalty.reason == "reputation-authority-policy-rejected")
+local first_penalty = progression:apply_reputation_delta(
+    rayne_id,
+    "consequence",
+    -500,
+    {
+        operationId = "consequence:rayne:001",
+        authority = "pwft.faction-consequence.v1",
+        reasonCode = "friendly-fire",
+        contextId = "incident:rayne:001",
+    }
+)
+assert(first_penalty.ok and first_penalty.reason == "penalty-capped")
+assert(first_penalty.applied == -300)
+assert(first_penalty.beforeRankId == "Lord")
+assert(first_penalty.rankId == "Leader")
+assert(first_penalty.demoted == true)
+assert(progression:status(rayne_id).guardAccess == true)
+local duplicate_penalty = progression:apply_reputation_delta(
+    rayne_id,
+    "consequence",
+    -500,
+    {
+        operationId = "consequence:rayne:001",
+        authority = "pwft.faction-consequence.v1",
+        reasonCode = "friendly-fire",
+        contextId = "incident:rayne:001",
+    }
+)
+assert(duplicate_penalty.ok and duplicate_penalty.reason == "duplicate-event")
+assert(duplicate_penalty.applied == 0 and duplicate_penalty.originalApplied == -300)
+local conflict_penalty = progression:apply_reputation_delta(
+    rayne_id,
+    "consequence",
+    -400,
+    {
+        operationId = "consequence:rayne:001",
+        authority = "pwft.faction-consequence.v1",
+        reasonCode = "friendly-fire",
+        contextId = "incident:rayne:001",
+    }
+)
+assert(not conflict_penalty.ok)
+assert(conflict_penalty.reason == "reputation-operation-id-conflict")
+for index = 2, 4 do
+    local penalty = progression:apply_reputation_delta(
+        rayne_id,
+        "consequence",
+        -300,
+        {
+            operationId = "consequence:rayne:00" .. tostring(index),
+            authority = "pwft.faction-consequence.v1",
+            reasonCode = "war-consequence",
+        }
+    )
+    assert(penalty.ok and penalty.applied == -300)
+end
+local hostile_member = progression:apply_reputation_delta(
+    rayne_id,
+    "consequence",
+    -100,
+    {
+        operationId = "consequence:rayne:005",
+        authority = "pwft.faction-consequence.v1",
+        reasonCode = "contract-breach",
+    }
+)
+assert(hostile_member.ok and hostile_member.after == -100)
+assert(hostile_member.membershipRetained == true)
+assert(progression:status(rayne_id).joined == true)
+assert(progression:status(rayne_id).rankId == "Member")
+assert(progression:status(rayne_id).relation == "Hostile")
+assert(progression:status(rayne_id).guardAccess == false)
+assert(progression:gate_status().palReconciliationUnlocked == false)
+local pal_penalty = progression:apply_reputation_delta(
+    Registry.progression.palFactionIds[1],
+    "consequence",
+    -10,
+    {
+        operationId = "consequence:pal:forbidden",
+        authority = "pwft.faction-consequence.v1",
+        reasonCode = "war-consequence",
+    }
+)
+assert(not pal_penalty.ok and pal_penalty.reason == "human-reputation-delta-only")
+
 -- Complete the remaining human faction ranks. This unlocks the Pal
 -- reconciliation stage but does not auto-reconcile any Pal faction.
 for _, faction_id in ipairs(Registry.progression.humanFactionIds) do
@@ -313,6 +416,19 @@ assert(restored:status(rayne_id).rankId == "Lord")
 assert(restored:status(rayne_id).guardAccess == true)
 assert(#restored:relation_events() == Registry.counts.factions)
 
+local legacy_snapshot = progression:export_snapshot()
+legacy_snapshot.schemaVersion = "1.0.0"
+legacy_snapshot.processedReputationOperations = nil
+legacy_snapshot.legacyOperationSequence = nil
+legacy_snapshot.factions[rayne_id].sourceTotals.consequence = nil
+legacy_snapshot.extensionProbe = { preserved = true }
+local migrated = Progression.create(Registry.progression, legacy_snapshot)
+assert(migrated:status().schemaVersion == "1.1.0")
+assert(migrated:status().lastMigration.fromSchemaVersion == "1.0.0")
+assert(migrated:export_snapshot().extensionProbe.preserved == true)
+assert(migrated:status(rayne_id).sourceTotals.consequence == 0)
+assert(type(migrated:export_snapshot().processedReputationOperations) == "table")
+
 local in_place = Progression.create(Registry.progression)
 local restored_in_place = in_place:restore_snapshot(
     progression:export_snapshot()
@@ -321,4 +437,4 @@ assert(restored_in_place.ok == true)
 assert(in_place:status().ending3Unlocked == true)
 assert(in_place:status(rayne_id).rankId == "Lord")
 
-print("PASS Lua faction progression (relation matrix, multi-membership, caps, ranks, guards, gates, snapshot)")
+print("PASS Lua faction progression (signed authoritative deltas, demotion, relation matrix, commerce caps, guards, gates, migration)")

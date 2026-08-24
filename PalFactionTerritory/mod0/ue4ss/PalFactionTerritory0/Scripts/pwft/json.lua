@@ -237,7 +237,12 @@ local function parse_array(state)
         return result
     end
     while true do
-        table.insert(result, parse_value(state))
+        -- Assign through one local so a host function that exposes an extra
+        -- return value cannot accidentally select table.insert's
+        -- three-argument overload. UE4SS/LuaJIT surfaced this only after a
+        -- unique-Pal timeout snapshot contained a heterogeneous history row.
+        local value = parse_value(state)
+        result[#result + 1] = value
         skip_whitespace(state)
         local character = string.sub(state.text, state.position, state.position)
         if character == "]" then

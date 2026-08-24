@@ -1,0 +1,3 @@
+[2026-08-23 20:32:41] [AppID 1623730] Upload OK for file Pal/Saved/SaveGames/<steam-user>/E0D5ECDC46B379829F8F31A729ACFD92/LevelMeta.sav
+[2026-08-23 20:32:42] [AppID 1623730] Upload OK for file Pal/Saved/SaveGames/<steam-user>/E0D5ECDC46B379829F8F31A729ACFD92/Level.sav
+[2026-08-23 20:32:42] [AppID 1623730] Upload complete, result OK

@@ -4,6 +4,194 @@ return {
     expectedSteamBuildId = "24575825",
     defaultMapMode = "Original",
 
+    -- Build 24575825 exposes the complete reflected storage/capture route.
+    -- This probe is intentionally disabled in production. QA may enable it
+    -- to read the local Pal storage object chain and capacity only; it never
+    -- creates a Pal, calls PalCaptureSuccess, or mutates a container/save.
+    uniquePalNativeDeliveryProbe = {
+        enabled = false,
+        readOnly = true,
+        buildId = "24575825",
+        objectDumpSha256 =
+            "3e84e8a6936b7d1c33de6cfc034c4a200655a3e762cbc2ec4c6a57516476ec78",
+        retryDelaysMs = {
+            1500,
+            5000,
+            12000,
+        },
+    },
+
+    -- Destructive QA only. Formal source and installed configuration keep
+    -- this false. When temporarily enabled after a verified save snapshot,
+    -- Ctrl+F10 delivers one level-1 Anubis through the current-build native
+    -- server-spawn/capture/storage-readback route and logs the exact
+    -- PalInstanceID. It is not registered as a production P2 provider.
+    uniquePalNativeDeliveryLiveTest = {
+        enabled = false,
+        key = "F10",
+        buildId = "24575825",
+        objectDumpSha256 =
+            "3e84e8a6936b7d1c33de6cfc034c4a200655a3e762cbc2ec4c6a57516476ec78",
+        speciesId = "Anubis",
+        level = 1,
+        retryDelayMs = 500,
+        maxAttempts = 60,
+    },
+
+    -- Production delivery is a capability, not a built-in story pack.  It
+    -- exposes the Build-24575825 route that passed exact PalInstanceID
+    -- spawn/capture/storage-readback acceptance, but can mutate only after a
+    -- trusted content module registers an active P2 world-effect provider,
+    -- exact target binding, route key and an approved unique-Pal mapping.
+    -- The five IDs below are the user-confirmed base-island mappings.  The
+    -- tentative Feybreak/Cloud-whirl entry is deliberately absent.
+    uniquePalNativeDeliveryProduction = {
+        enabled = true,
+        buildId = "24575825",
+        objectDumpSha256 =
+            "3e84e8a6936b7d1c33de6cfc034c4a200655a3e762cbc2ec4c6a57516476ec78",
+        deliveryLevel = 80,
+        approvedSpeciesByUniquePalId = {
+            ["pwft.unique.pinkcat"] = "PinkCat",
+            ["pwft.unique.anubis"] = "Anubis",
+            ["pwft.unique.weasel_dragon"] = "WeaselDragon",
+            ["pwft.unique.black_metal_dragon"] = "BlackMetalDragon",
+            ["pwft.unique.ronin"] = "Ronin",
+        },
+        storyContentIncluded = false,
+    },
+
+    -- A9 item-reward settlement uses the current Build's reflected
+    -- server-authoritative grant routes.  Every delivery is written to the
+    -- Mod sidecar before mutation and is accepted only after an exact
+    -- OwnerPlayerUId inventory-count readback.  The base registers the
+    -- provider but no reward channels: trusted content modules supply the
+    -- native item IDs and caps, which keeps detailed reward design outside
+    -- the mechanics-only foundation. Currency and direct save-payload writes
+    -- remain unsupported.
+    rewardItemNativeProduction = {
+        enabled = true,
+        buildId = "24575825",
+        objectDumpSha256 =
+            "3e84e8a6936b7d1c33de6cfc034c4a200655a3e762cbc2ec4c6a57516476ec78",
+        currentBuildVerified = true,
+        providerId = "pwft.native.reward-item.production",
+        authoritySource = "pwft.native.reward-item.authority",
+        routeKey =
+            "PalPlayerInventoryData.AddItem_ServerInternal|"
+                .. "PalNetworkPlayerComponent.RequestAddItem_ToServer|"
+                .. "PalPlayerInventoryData.CountItemNum",
+        retryDelayMs = 500,
+        maxVerifyAttempts = 60,
+        storyContentIncluded = false,
+    },
+
+    -- Destructive QA only. A staging script may enable this in the installed
+    -- copy after taking SaveGames and Mod-State snapshots. Press Ctrl+F8 once
+    -- to issue one StainlessSteel reward and a second time to prove the same
+    -- operation does not dispatch again. Formal source stays disabled.
+    rewardItemNativeLiveTest = {
+        enabled = false,
+        key = "F8",
+        requireControlModifier = true,
+        operationId = "pwft.qa.reward-item.20260824.1",
+        contentPackId = "pwft.qa.reward-item",
+        policyId = "pwft.qa.reward-item.boss",
+        channelId = "pwft.qa.reward-item.channel.stainless-steel",
+        providerId = "pwft.native.reward-item.production",
+        nativeItemId = "StainlessSteel",
+        units = 1,
+        storyContentIncluded = false,
+    },
+
+    -- B7 production route for the five user-confirmed unique Pals. One
+    -- logical campaign tick equals one real minute. The ordinary release
+    -- schedule is randomised per Pal; QA controls remain disabled in the
+    -- distributable and may be enabled only for concentrated live testing.
+    uniquePalBossNativeProduction = {
+        enabled = true,
+        buildId = "24575825",
+        providerId = "pwft.native.unique-pal-boss.production",
+        authoritySource = "pwft.native.unique-pal-boss.authority",
+        playerId = "local-player",
+        automaticSchedulerEnabled = true,
+        tickIntervalMs = 60000,
+        spawnResolveDelaysMs = {
+            500,
+            1500,
+            4000,
+            8000,
+        },
+        spawnOffset = {
+            X = 1200,
+            Y = 0,
+            Z = 80,
+        },
+        qa = {
+            enabled = false,
+            requireControlModifier = true,
+            uniquePalId = "pwft.unique.anubis",
+            uniquePalIds = {
+                "pwft.unique.pinkcat",
+                "pwft.unique.anubis",
+                "pwft.unique.weasel_dragon",
+                "pwft.unique.black_metal_dragon",
+                "pwft.unique.ronin",
+            },
+            openKey = "F4",
+            captureKey = "F11",
+            timeoutKey = "F6",
+            cycleKey = "F12",
+            weakenKey = "F9",
+            suppressionProbeKey = "F3",
+            suppressionProbeCharacterId = "BOSS_SheepBall",
+            -- Test-only fallback for automation environments whose injected
+            -- keys are visible to UE but not UE4SS' low-level key hook.
+            -- Formal builds keep this disabled and never poll an external
+            -- command file.
+            commandFileEnabled = false,
+            commandFilePath = "",
+            commandPollIntervalMs = 250,
+        },
+        storyContentIncluded = false,
+    },
+
+    -- B7 production world consequences. NPC holders wait 30-60 minutes
+    -- before declaring a destruction war; off-screen wars resolve through a
+    -- deterministic text route, while joined target factions reuse the
+    -- already proven settlement-raid attendance/result bridge. Ctrl+F7 near
+    -- a holder's Merchant Guild counter opens the exact-price ransom route.
+    uniquePalWorldEffectNativeProduction = {
+        enabled = true,
+        buildId = "24575825",
+        providerId =
+            "pwft.native.unique-pal-world-effect.production",
+        authoritySource =
+            "pwft.native.unique-pal-world-effect.authority",
+        autoWarEnabled = true,
+        minimumWarDelayMs = 1800000,
+        maximumWarDelayMs = 3600000,
+        backgroundResolveDelayMs = 15000,
+        backgroundAttackerWinPercent = 65,
+        defenseCountdownSeconds = 30,
+        ransomInteractionKey = "F7",
+        ransomInteractionRequireControlModifier = true,
+        ransomInteractionRadius = 700,
+        -- Every authored economy row contains this product. During an open
+        -- ransom it becomes stock-one and uses the campaign's exact price;
+        -- the normal economy row is restored after settlement.
+        ransomProductItemId = "StainlessSteel",
+        qa = {
+            enabled = false,
+            requireControlModifier = true,
+            uniquePalId = "pwft.unique.anubis",
+            joinTargetKey = "F1",
+            warKey = "F5",
+            forceAttackerWin = true,
+        },
+        storyContentIncluded = false,
+    },
+
     -- The progression core owns reputation, independent human memberships,
     -- ranks, commerce caps, guard eligibility, and ending gates. Runtime
     -- Reputation is authoritative in a Mod-owned external sidecar.  The
@@ -120,24 +308,48 @@ return {
     -- remains a mechanics-only foundation.
     contentModules = {
         enabled = true,
-        modules = {},
+        modules = {
+            "pwft_b7_unique_pals.content_module",
+        },
         fallbackLocale = "zh-CN",
         storyContentIncludedByBase = false,
     },
 
-    -- Native attitude and NPC-leader guard adapters are optional trusted
-    -- providers.  The empty whitelist is fail-closed: the mechanics APIs are
-    -- available, but no game object can be mutated until an installed content
-    -- module explicitly opts in a provider ID + authority pair.
+    -- Native attitude and NPC-leader guard adapters use explicit trusted
+    -- provider ID + authority pairs. They still fail closed until an exact
+    -- content definition and live Actor binding exist.
     factionNpcAttitudes = {
-        providerWhitelist = {},
+        providerWhitelist = {
+            ["pwft.native.NPC-attitude.production"] =
+                "pwft.native.NPC-attitude.authority",
+        },
+    },
+    factionNpcAttitudeNativeProduction = {
+        enabled = true,
+        providerId = "pwft.native.NPC-attitude.production",
+        authoritySource =
+            "pwft.native.NPC-attitude.authority",
     },
     npcLeaderGuards = {
-        providerWhitelist = {},
+        providerWhitelist = {
+            ["pwft.native.NPC-leader-guard.production"] =
+                "pwft.native.NPC-leader-guard.authority",
+        },
         maxPerLeader = 2,
         maxPerFaction = 6,
         maxPerScene = 12,
         maximumMembersPerFormation = 16,
+    },
+    npcLeaderGuardNativeProduction = {
+        enabled = true,
+        providerId = "pwft.native.NPC-leader-guard.production",
+        authoritySource = "pwft.native.NPC-leader-guard.authority",
+        spawnRadius = 220,
+        spawnVerticalOffset = 10,
+        -- Core ships no story leader or guard composition. Content modules
+        -- register verified archetype -> native character mappings here or
+        -- through PWFT_NPC_LEADER_GUARD_NATIVE_PRODUCTION_V1.
+        archetypes = {},
     },
 
     -- Player-facing read-only faction panel. It uses a dedicated cooked
@@ -205,6 +417,24 @@ return {
             key = "F9",
             factionId = "pwft.faction.rayne_syndicate",
             forwardDistance = 600,
+        },
+        -- B6 concentrated acceptance only.  With the Rayne Merchant Guild
+        -- counter already active, Ctrl+F3 advances one auditable phase:
+        -- established -> limited sale -> procurement/trade -> threat -> war
+        -- -> mandatory game restart -> ceasefire -> stable.  Every resource
+        -- and conflict event lives only in the Mod-owned progression sidecar;
+        -- the verified preflight restore returns the test profile afterwards.
+        economyWarLiveTest = {
+            enabled = false,
+            key = "F3",
+            runId = "b6-live-20260823-r1",
+            factionId = "pwft.faction.rayne_syndicate",
+            resourceId = "metal_ore",
+            productItemId = "CopperIngot",
+            initialQuantity = 150,
+            firstReduction = 100,
+            secondReduction = 1,
+            nativeMerchantRequired = true,
         },
         -- Native transaction acceptance only. When temporarily enabled,
         -- Ctrl+F12 advances the window ID consumed by subsequent real shop
@@ -329,6 +559,14 @@ return {
         defaultActionAssetPath = "/Game/Pal/Blueprint/Controller/AIAction/NPC/Relax/BP_AIAction_NPC_Relax_SalesPerson.BP_AIAction_NPC_Relax_SalesPerson",
         defaultActionClassPath = "/Game/Pal/Blueprint/Controller/AIAction/NPC/Relax/BP_AIAction_NPC_Relax_SalesPerson.BP_AIAction_NPC_Relax_SalesPerson_C",
         expectedActorClassToken = "BP_NPC_DarkTrader_C",
+        -- The official boss spawner resolves the ordinary merchant class while
+        -- relations are peaceful, but Palworld deliberately promotes the same
+        -- template to its combat-capable BOSS class after hostility is enabled.
+        -- Both are native Dark Trader forms owned by this one runtime spawner.
+        expectedActorClassTokens = {
+            "BP_NPC_DarkTrader_C",
+            "BP_NPC_DarkTrader_BOSS_C",
+        },
         merchantLevel = 80,
         merchantLevelCap = 80,
 
@@ -361,9 +599,10 @@ return {
         nativeSetupRetryMs = 500,
         nativeSetupMaxAttempts = 40,
         -- Some native spawns produce the correct DarkTrader actor without
-        -- publishing SpawnedHandle. Resolve that actor by class and proximity
-        -- so the custom shop does not silently fall back to vanilla stock.
-        nativeActorFallbackAttempt = 2,
+        -- publishing SpawnedHandle. Give the owning spawner five seconds to
+        -- publish its handle before resolving a newly-created actor by class
+        -- and proximity. Existing actors are excluded from that fallback.
+        nativeActorFallbackAttempt = 10,
         nativeActorFallbackRadius = 2500.0,
         hostileAwarenessRadius = 2200.0,
         hostilityCheckIntervalMs = 1000,
@@ -371,7 +610,7 @@ return {
         shopRegistrationRetryMs = 1000,
         shopRegistrationMaxAttempts = 12,
         -- Temporary relation round-trip acceptance route. Production keeps
-        -- this disabled; when enabled, Ctrl+F11 toggles only the standalone
+        -- this disabled; when enabled, F11 toggles only the standalone
         -- Rayne Pal merchant between Friendly and Hostile without save writes.
         relationLiveTest = {
             enabled = false,
@@ -431,14 +670,35 @@ return {
     },
 
     -- Post-game world normalization is split into independent, fail-closed
-    -- capabilities. No level, EXP, faction, HP, damage, or capture value is
-    -- written into a save parameter. Keep every capability disabled until its
-    -- own live-test phase is explicitly authorized.
+    -- capabilities. B1 changes only the exact eligible runtime character's
+    -- reflected SaveParameter.Level during its native initialization event;
+    -- it never scans loaded actors and never touches player/player-owned
+    -- parameters. That runtime value can be included by Palworld's later
+    -- autosave, so every capability remains disabled until its own live-test
+    -- phase is explicitly authorized and protected by a full save snapshot.
     worldBalance = {
         enabled = true,
         targetLevel = 80,
         initializationReapplyDelayMs = 100,
         maxDetailLogCount = 24,
+        -- Readback-only live acceptance support. Formal source and release
+        -- installs keep this disabled. A staging script may enable it after a
+        -- full snapshot so initialization events can prove the effective
+        -- level without a FindAllOf world scan. The optional Boss probe uses
+        -- the native NPC manager and destroys its one transient actor.
+        liveAudit = {
+            enabled = false,
+            summaryDelaysMs = { 2000, 8000, 20000 },
+            bossProbe = {
+                enabled = false,
+                key = "F8",
+                characterId = "Boss_Anubis",
+                spawnLevel = 1,
+                cleanupDelayMs = 15000,
+                spawnOffset = { X = 800, Y = 0, Z = 80 },
+                saveWrites = false,
+            },
+        },
         levelOverride = {
             enabled = false,
             mode = "native-character-initialization-events-only",
@@ -452,6 +712,23 @@ return {
             makeUncapturable = true,
             hpMultiplier = 2.0,
             damageMultiplier = 2.0,
+            -- B2-only readback and controlled comparison probe. Formal
+            -- source/installations keep both gates disabled. QA stages one
+            -- level-80 PinkCat beside the player with F7, observes the exact
+            -- native Predator/rate/capture fields, then destroys it.
+            liveAudit = {
+                enabled = false,
+                probe = {
+                    enabled = false,
+                    key = "F7",
+                    characterId = "PinkCat",
+                    spawnLevel = 80,
+                    observeDelaysMs = { 1000, 3000 },
+                    cleanupDelayMs = 15000,
+                    spawnOffset = { X = 800, Y = 0, Z = 80 },
+                    saveWrites = false,
+                },
+            },
         },
         loadedActorReconcile = {
             enabled = false,

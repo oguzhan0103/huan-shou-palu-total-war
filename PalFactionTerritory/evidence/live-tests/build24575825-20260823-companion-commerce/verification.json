@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "1.0.0",
+  "result": "PASS",
+  "gameBuild": "24575825",
+  "gameVersion": "1.0.3.101283",
+  "testDate": "2026-08-23",
+  "acceptanceGate": "companion-commerce-json-boundary-repair",
+  "regression": {
+    "observedDuring": "B2-pal-faction-rage",
+    "failingFaction": "pwft.faction.eternal_pyre",
+    "recordError": "event-encode-failed-json.lua:16",
+    "publishError": "state-copy-failed-companion_ledger.lua:12"
+  },
+  "implementation": {
+    "internalVendorMetadataRetained": true,
+    "merchantEventUsesPublicAllowlist": true,
+    "publicMerchantFields": [
+      "mode",
+      "commercialTruce",
+      "merchantOrganisationId",
+      "representedFactionId",
+      "economyCatalogBinding",
+      "source"
+    ],
+    "publicProjectionBypassesPairsMetamethod": true,
+    "unsupportedFunctionsUserdataThreadsAndCyclesRedacted": true,
+    "redactionPathDiagnostics": true,
+    "strictLedgerMethodsRemainFailClosed": true,
+    "allRuntimeCompanionEventsUsePublicBoundary": true
+  },
+  "automatedVerification": {
+    "focusedCommerceSpec": "PASS",
+    "focusedCompanionSpec": "PASS",
+    "luaSourceFiles": 78,
+    "luaTests": 72,
+    "trackedTextFiles": 398
+  },
+  "liveRun": {
+    "result": "PASS",
+    "profileKeyKind": "world-and-player-scoped",
+    "sessionEvents": 25,
+    "firstSequence": 1,
+    "lastSequence": 25,
+    "merchantRegisteredEvents": 8,
+    "uniqueMerchantFactions": 7,
+    "guildCatalogRegistrations": 7,
+    "specialMerchantRegistrations": 1,
+    "eternalPyreRegistrations": 1,
+    "merchantShopOpenedEvents": 15,
+    "companionFailureMarkers": 0,
+    "publicProjectionMarkers": 0,
+    "rawLogSha256": "2d58becc94d0a145d019cb5b752d628bbec20a8454b4cd3f3063d7270c63c894",
+    "rawLogBytes": 320898
+  },
+  "restore": {
+    "result": "PASS",
+    "gameRunning": false,
+    "saveFiles": 384,
+    "saveDiffCount": 0,
+    "stateFiles": 12,
+    "stateDiffCount": 0,
+    "formalDeploymentFiles": 76,
+    "deploymentMatchesCurrentSource": true
+  },
+  "evidenceBoundary": {
+    "merchantRegistrationObserved": true,
+    "companionJsonAppendObserved": true,
+    "merchantBuySellPerformed": false,
+    "merchantInteractionVisualAcceptance": false,
+    "titleModWarningPersistedFromPriorRun": true,
+    "newCompanionErrorInCurrentLog": false,
+    "rawLogsStateAndSavesPrivate": true,
+    "userAcceptance": "not-performed"
+  }
+}

@@ -235,7 +235,9 @@ function FactionEconomyMerchantRuntime.create(
         commerceBridge = commerce_bridge,
         adapter = native_adapter,
         activationAuthorized = options.activationAuthorized == true,
+        spawnPolicyResolver = options.spawnPolicyResolver,
         records = records,
+        uniquePalRansomOffers = {},
         -- Keep the native dispatch parameter alive while the corresponding
         -- ItemShop is on PalHUDService's stack.  The service owns the UI, but
         -- retaining the exact authored parameter also prevents Lua/UE4SS GC
@@ -244,6 +246,9 @@ function FactionEconomyMerchantRuntime.create(
         activationCount = 0,
         deactivationCount = 0,
         rollbackCount = 0,
+        spawnSuppressionCount = 0,
+        ransomConfigurationCount = 0,
+        ransomClearCount = 0,
         capabilities = {
             sevenMerchantGuildCounters = true,
             economyCatalogShopRows = true,
@@ -277,6 +282,18 @@ function FactionEconomyMerchantRuntime:merchant_plan(
     if shop == nil then
         return nil, reason
     end
+    local procurement, procurement_error =
+        self.shopCatalog:procurement_catalog(faction_id)
+    if procurement == nil then
+        return nil, procurement_error
+    end
+    local market_universe = {}
+    for _, product in ipairs(
+        self.shopCatalog.economy.contract.auditedProducts
+    ) do
+        table.insert(market_universe, product.productItemId)
+    end
+    local economy_status = self.shopCatalog.economy:status()
     local slot = self.commerceContract.merchantIsland.slotOffsets[
         shop.slotIndex + 1
     ]
@@ -306,6 +323,14 @@ function FactionEconomyMerchantRuntime:merchant_plan(
         salesChannel = "ItemShop",
         shopRowName = shop.lotteryRowName,
         productGroupRowName = shop.productGroupRowName,
+        products = copy(shop.products),
+        requested = copy(procurement.requested),
+        marketUniverseItemIds = market_universe,
+        dynamicMarketEnabled =
+            self.shopCatalog.economy.capabilities
+                    .resourceLedgerAuthority == true,
+        resourceLedgerRevision =
+            economy_status.resourceLedgerRevision,
         -- Seven unique rows and faction registrations distinguish counters;
         -- their shared neutral merchant model is the 1.0 baseline.
         nativeSpawnerRequired = false,
@@ -320,6 +345,83 @@ function FactionEconomyMerchantRuntime:merchant_plan(
         ),
         rotation = copy(root_rotation),
     }
+end
+
+function FactionEconomyMerchantRuntime:_spawn_policy(
+    faction_id,
+    spawn_kind
+)
+    if type(self.spawnPolicyResolver) ~= "function" then
+        return result(true, "merchant-spawn-policy-unbound", {
+            suppressSpawn = false,
+        })
+    end
+    local ok, policy = pcall(
+        self.spawnPolicyResolver,
+        faction_id,
+        spawn_kind or "merchant-guild-counter"
+    )
+    if not ok or type(policy) ~= "table" then
+        return result(false, "merchant-spawn-policy-failed", {
+            suppressSpawn = true,
+            detail = tostring(policy),
+        })
+    end
+    return policy
+end
+
+function FactionEconomyMerchantRuntime:_sync_dynamic_plan(plan)
+    if type(plan) ~= "table" then
+        return false, "merchant-plan-unavailable"
+    end
+    local shop, shop_error = self.shopCatalog:shop_catalog(
+        plan.factionId
+    )
+    if shop == nil then return false, shop_error end
+    local procurement, procurement_error =
+        self.shopCatalog:procurement_catalog(plan.factionId)
+    if procurement == nil then return false, procurement_error end
+    plan.products = copy(shop.products)
+    plan.requested = copy(procurement.requested)
+    plan.dynamicMarketEnabled =
+        self.shopCatalog.economy.capabilities
+                .resourceLedgerAuthority == true
+    plan.resourceLedgerRevision =
+        self.shopCatalog.economy:status().resourceLedgerRevision
+    local ransom = self.uniquePalRansomOffers[plan.factionId]
+    if ransom ~= nil then
+        local replaced = false
+        for index, row in ipairs(plan.products) do
+            if row.itemId == ransom.productItemId then
+                plan.products[index] = {
+                    itemId = ransom.productItemId,
+                    displayNameZhHans = "唯一帕鲁赎回信物",
+                    price = ransom.unitPrice,
+                    stock = 1,
+                    productType = row.productType or "Normal",
+                    productNum = 1,
+                    uniquePalRansom = true,
+                }
+                replaced = true
+                break
+            end
+        end
+        if not replaced then
+            table.insert(plan.products, {
+                itemId = ransom.productItemId,
+                displayNameZhHans = "唯一帕鲁赎回信物",
+                price = ransom.unitPrice,
+                stock = 1,
+                productType = "Normal",
+                productNum = 1,
+                uniquePalRansom = true,
+            })
+        end
+        plan.uniquePalRansomOffer = copy(ransom)
+    else
+        plan.uniquePalRansomOffer = nil
+    end
+    return true, nil
 end
 
 function FactionEconomyMerchantRuntime:market_plan(
@@ -452,6 +554,18 @@ function FactionEconomyMerchantRuntime:_register_ready_actor(
     native_handle
 )
     local record = self.records[plan.factionId]
+    local policy = self:_spawn_policy(
+        plan.factionId,
+        "merchant-guild-counter"
+    )
+    if policy.ok ~= true or policy.suppressSpawn == true then
+        record.pending = false
+        record.pendingHandle = nil
+        record.nativeHandle = nil
+        record.lastError = policy.reason
+        self.spawnSuppressionCount = self.spawnSuppressionCount + 1
+        return false, policy.reason or "destroyed-faction-spawn-suppressed"
+    end
     local registered, detail =
         self.commerceBridge:register_vendor_actor(
             plan.factionId,
@@ -483,6 +597,22 @@ function FactionEconomyMerchantRuntime:_register_ready_actor(
                 self.adapter:_configure_vendor(actor, plan)
             if not configured then
                 return false, configure_error
+            end
+            if plan.dynamicMarketEnabled == true
+                and type(self.adapter.apply_dynamic_item_shop_market)
+                    == "function" then
+                local dynamic_ok, dynamic_reason =
+                    self.adapter:apply_dynamic_item_shop_market(
+                        actor,
+                        plan
+                    )
+                if not dynamic_ok then
+                    self.adapter:_log(string.format(
+                        "DYNAMIC_ITEM_SHOP_ACTIVATION_FAILED faction=%s reason=%s staticFallback=true",
+                        tostring(plan.factionId),
+                        tostring(dynamic_reason)
+                    ))
+                end
             end
             local requested, network_detail =
                 self.adapter:_request_network_shop_setup(actor)
@@ -527,6 +657,95 @@ function FactionEconomyMerchantRuntime:_register_ready_actor(
     return true, nil
 end
 
+
+function FactionEconomyMerchantRuntime:refresh_dynamic_market(faction_id)
+    faction_id = require_non_empty_string(
+        faction_id,
+        "faction ID"
+    )
+    local record = self.records[faction_id]
+    if record == nil then
+        return result(false, "unknown-economy-shop-faction")
+    end
+    if record.actor == nil or type(record.plan) ~= "table" then
+        return result(true, "dynamic-market-no-active-merchant", {
+            factionId = faction_id,
+            active = false,
+        })
+    end
+    local synced, sync_error = self:_sync_dynamic_plan(record.plan)
+    if not synced then
+        record.lastDynamicMarketError = sync_error
+        return result(false, "dynamic-market-plan-refresh-failed", {
+            factionId = faction_id,
+            detail = sync_error,
+        })
+    end
+    if self.adapter == nil
+        or type(self.adapter.apply_dynamic_item_shop_market)
+            ~= "function" then
+        record.lastDynamicMarketError =
+            "native-dynamic-item-shop-adapter-unavailable"
+        return result(false,
+            "native-dynamic-item-shop-adapter-unavailable", {
+            factionId = faction_id,
+        })
+    end
+    local called, applied, reason, detail = pcall(
+        self.adapter.apply_dynamic_item_shop_market,
+        self.adapter,
+        record.actor,
+        record.plan
+    )
+    if not called or applied ~= true then
+        record.lastDynamicMarketError = tostring(
+            called and reason or applied
+        )
+        return result(false, "dynamic-market-native-refresh-failed", {
+            factionId = faction_id,
+            detail = record.lastDynamicMarketError,
+            nativeDetail = detail,
+            resourceLedgerRevision =
+                record.plan.resourceLedgerRevision,
+        })
+    end
+    record.lastDynamicMarketError = nil
+    record.dynamicMarketRefreshCount =
+        (record.dynamicMarketRefreshCount or 0) + 1
+    record.lastDynamicMarketDetail = detail
+    return result(true, "dynamic-market-native-refreshed", {
+        factionId = faction_id,
+        active = true,
+        resourceLedgerRevision =
+            record.plan.resourceLedgerRevision,
+        nativeReason = reason,
+        nativeDetail = detail,
+        refreshCount = record.dynamicMarketRefreshCount,
+    })
+end
+
+function FactionEconomyMerchantRuntime:refresh_all_dynamic_markets()
+    local refreshed = {}
+    local failed = {}
+    for _, faction_id in ipairs(
+        self.shopCatalog.representativeOrder
+    ) do
+        local outcome = self:refresh_dynamic_market(faction_id)
+        if outcome.ok then
+            table.insert(refreshed, outcome)
+        else
+            table.insert(failed, outcome)
+        end
+    end
+    return result(#failed == 0,
+        #failed == 0
+            and "all-dynamic-markets-refreshed"
+            or "dynamic-market-refresh-partial", {
+        refreshed = refreshed,
+        failed = failed,
+    })
+end
+
 function FactionEconomyMerchantRuntime:activate_faction(
     faction_id,
     root_location,
@@ -535,6 +754,18 @@ function FactionEconomyMerchantRuntime:activate_faction(
     local enabled, disabled_reason = self:_activation_gate()
     if not enabled then
         return result(false, disabled_reason)
+    end
+    local policy = self:_spawn_policy(
+        faction_id,
+        "merchant-guild-counter"
+    )
+    if policy.ok ~= true or policy.suppressSpawn == true then
+        self.spawnSuppressionCount = self.spawnSuppressionCount + 1
+        return result(false,
+            policy.reason or "destroyed-faction-spawn-suppressed", {
+                factionId = faction_id,
+                suppressed = true,
+            })
     end
     local plan, plan_error = self:merchant_plan(
         faction_id,
@@ -773,9 +1004,20 @@ function FactionEconomyMerchantRuntime:activate_market(
         return result(false, plan_error)
     end
     local spawned = {}
+    local suppressed = {}
     for _, plan in ipairs(plans) do
         local record = self.records[plan.factionId]
-        if record.actor == nil and not record.pending
+        local policy = self:_spawn_policy(
+            plan.factionId,
+            "merchant-guild-counter"
+        )
+        if policy.ok ~= true or policy.suppressSpawn == true then
+            self.spawnSuppressionCount = self.spawnSuppressionCount + 1
+            table.insert(suppressed, {
+                factionId = plan.factionId,
+                reason = policy.reason,
+            })
+        elseif record.actor == nil and not record.pending
             and (
                 self:_uses_npc_manager_spawn(plan)
                 or self:_uses_async_merchant_spawner(plan)
@@ -859,7 +1101,146 @@ function FactionEconomyMerchantRuntime:activate_market(
             and "economy-market-activation-queued"
             or "economy-market-activated", {
         spawned = spawned,
+        suppressed = suppressed,
     })
+end
+
+function FactionEconomyMerchantRuntime:nearest_faction(
+    player_actor,
+    max_distance,
+    required_faction_id
+)
+    if player_actor == nil then
+        return result(false, "local-player-unavailable")
+    end
+    max_distance = tonumber(max_distance) or 350
+    local player_ok, player_location = pcall(function()
+        return player_actor:K2_GetActorLocation()
+    end)
+    if not player_ok or player_location == nil then
+        return result(false, "local-player-location-unavailable")
+    end
+    local nearest_faction_id = nil
+    local nearest_actor = nil
+    local nearest_distance_squared = nil
+    local maximum_distance_squared = max_distance * max_distance
+    for faction_id, record in pairs(self.records) do
+        if record.actor ~= nil
+            and (required_faction_id == nil
+                or faction_id == required_faction_id) then
+            local actor_ok, actor_location = pcall(function()
+                return record.actor:K2_GetActorLocation()
+            end)
+            if actor_ok and actor_location ~= nil then
+                local dx = (tonumber(actor_location.X) or 0)
+                    - (tonumber(player_location.X) or 0)
+                local dy = (tonumber(actor_location.Y) or 0)
+                    - (tonumber(player_location.Y) or 0)
+                local dz = (tonumber(actor_location.Z) or 0)
+                    - (tonumber(player_location.Z) or 0)
+                local distance_squared = dx * dx + dy * dy + dz * dz
+                if distance_squared <= maximum_distance_squared
+                    and (nearest_distance_squared == nil
+                        or distance_squared < nearest_distance_squared) then
+                    nearest_faction_id = faction_id
+                    nearest_actor = record.actor
+                    nearest_distance_squared = distance_squared
+                end
+            end
+        end
+    end
+    if nearest_faction_id == nil then
+        return result(false, "no-economy-merchant-in-range")
+    end
+    return result(true, "nearest-economy-merchant-resolved", {
+        factionId = nearest_faction_id,
+        actor = nearest_actor,
+        distance = math.sqrt(nearest_distance_squared),
+    })
+end
+
+function FactionEconomyMerchantRuntime:configure_unique_pal_ransom(
+    faction_id,
+    offer
+)
+    faction_id = require_non_empty_string(faction_id, "faction ID")
+    local record = self.records[faction_id]
+    if record == nil then return result(false, "unknown-economy-shop-faction") end
+    if record.actor == nil or type(record.plan) ~= "table" then
+        return result(false, "ransom-merchant-counter-inactive")
+    end
+    assert(type(offer) == "table", "unique-Pal ransom offer is required")
+    local normalized = copy(offer)
+    normalized.merchantFactionId = faction_id
+    normalized.currency = normalized.currency or "Gold"
+    normalized.buyQuantity = 1
+    normalized.singlePurchaseStock = true
+    normalized.serverAuthoritativePrice = true
+    normalized.serverAuthoritativePaymentResult = true
+    self.uniquePalRansomOffers[faction_id] = normalized
+    local synced, sync_error = self:_sync_dynamic_plan(record.plan)
+    if not synced then
+        self.uniquePalRansomOffers[faction_id] = nil
+        return result(false, "ransom-market-plan-refresh-failed", {
+            detail = tostring(sync_error),
+        })
+    end
+    local refreshed, refresh_detail = self.adapter:refresh_merchant_shop(
+        record.actor,
+        record.plan
+    )
+    if refreshed ~= true then
+        self.uniquePalRansomOffers[faction_id] = nil
+        return result(false, "ransom-merchant-shop-refresh-failed", {
+            detail = tostring(refresh_detail),
+        })
+    end
+    local identity, identity_error =
+        self.adapter:configure_unique_pal_ransom_product(
+            record.actor,
+            normalized
+        )
+    if identity == nil then
+        self.uniquePalRansomOffers[faction_id] = nil
+        if self.adapter ~= nil and type(self.adapter._log) == "function" then
+            self.adapter:_log(string.format(
+                "UNIQUE_PAL_RANSOM_PRODUCT_FAILED faction=%s item=%s detail=%s",
+                faction_id,
+                tostring(normalized.productItemId),
+                tostring(identity_error)
+            ))
+        end
+        return result(false, "ransom-native-product-binding-failed", {
+            detail = tostring(identity_error),
+        })
+    end
+    self.ransomConfigurationCount = self.ransomConfigurationCount + 1
+    for key, value in pairs(identity) do normalized[key] = value end
+    normalized.ok = true
+    normalized.reason = "unique-pal-ransom-product-configured"
+    return normalized
+end
+
+function FactionEconomyMerchantRuntime:clear_unique_pal_ransom(
+    faction_id,
+    unique_pal_id
+)
+    local offer = self.uniquePalRansomOffers[faction_id]
+    if offer == nil then
+        return result(true, "unique-pal-ransom-already-cleared")
+    end
+    if unique_pal_id ~= nil and offer.uniquePalId ~= unique_pal_id then
+        return result(false, "unique-pal-ransom-clear-identity-mismatch")
+    end
+    self.uniquePalRansomOffers[faction_id] = nil
+    local record = self.records[faction_id]
+    if record ~= nil and record.actor ~= nil and type(record.plan) == "table" then
+        self:_sync_dynamic_plan(record.plan)
+        pcall(self.adapter.refresh_merchant_shop,
+            self.adapter, record.actor, record.plan)
+    end
+    self.ransomClearCount = self.ransomClearCount + 1
+    return result(true, "unique-pal-ransom-cleared")
 end
 
 function FactionEconomyMerchantRuntime:deactivate_market(reason)
@@ -991,6 +1372,12 @@ function FactionEconomyMerchantRuntime:status()
     local owned_count = 0
     local pending_count = 0
     local invalid_record_count = 0
+    local dynamic_refresh_count = 0
+    local dynamic_failure_count = 0
+    local ransom_offer_count = 0
+    for _ in pairs(self.uniquePalRansomOffers) do
+        ransom_offer_count = ransom_offer_count + 1
+    end
     for _, record in pairs(self.records) do
         -- UE4SS may retain a stale callback value while its callback garbage
         -- collector is retiring an old native actor.  Status is called from a
@@ -1008,6 +1395,11 @@ function FactionEconomyMerchantRuntime:status()
             end
             if record.pending then
                 pending_count = pending_count + 1
+            end
+            dynamic_refresh_count = dynamic_refresh_count
+                + (record.dynamicMarketRefreshCount or 0)
+            if record.lastDynamicMarketError ~= nil then
+                dynamic_failure_count = dynamic_failure_count + 1
             end
         end
     end
@@ -1030,6 +1422,16 @@ function FactionEconomyMerchantRuntime:status()
         activationCount = self.activationCount,
         deactivationCount = self.deactivationCount,
         rollbackCount = self.rollbackCount,
+        spawnPolicyBound = type(self.spawnPolicyResolver) == "function",
+        spawnSuppressionCount = self.spawnSuppressionCount,
+        activeUniquePalRansomOfferCount = ransom_offer_count,
+        ransomConfigurationCount = self.ransomConfigurationCount,
+        ransomClearCount = self.ransomClearCount,
+        dynamicMarketEnabled =
+            self.shopCatalog.economy.capabilities
+                    .resourceLedgerAuthority == true,
+        dynamicMarketRefreshCount = dynamic_refresh_count,
+        dynamicMarketFailureCount = dynamic_failure_count,
         placementStatus =
             self.commerceContract.merchantIsland.placementStatus,
         runtimeStatus = self.activationAuthorized
@@ -1229,7 +1631,8 @@ end
 -- distance gate keeps every unrelated NPC and world interaction untouched.
 function FactionEconomyMerchantRuntime:interact_nearest(
     player_actor,
-    max_distance
+    max_distance,
+    required_faction_id
 )
     if player_actor == nil then
         return result(false, "local-player-unavailable")
@@ -1256,7 +1659,9 @@ function FactionEconomyMerchantRuntime:interact_nearest(
     local nearest_distance_squared = nil
     local max_distance_squared = max_distance * max_distance
     for faction_id, record in pairs(self.records) do
-        if record.actor ~= nil then
+        if record.actor ~= nil
+            and (required_faction_id == nil
+                or faction_id == required_faction_id) then
             local actor_ok, actor_location = pcall(function()
                 return record.actor:K2_GetActorLocation()
             end)
@@ -1293,6 +1698,15 @@ function FactionEconomyMerchantRuntime:interact_nearest(
         return result(false, "merchant-plan-unavailable", {
             factionId = nearest_faction_id,
             actor = nearest_actor,
+        })
+    end
+    local plan_synced, plan_sync_error =
+        self:_sync_dynamic_plan(plan)
+    if not plan_synced then
+        return result(false, "dynamic-market-plan-refresh-failed", {
+            factionId = nearest_faction_id,
+            actor = nearest_actor,
+            detail = tostring(plan_sync_error),
         })
     end
     -- Dark Trader's authored OnTriggerInteract opens its PalShop flow.  That

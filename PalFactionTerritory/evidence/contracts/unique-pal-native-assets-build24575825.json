@@ -1,0 +1,225 @@
+{
+  "schemaVersion": "1.0.0",
+  "evidenceId": "pwft.unique-pal-native-assets.build24575825",
+  "capturedAt": "2026-08-22",
+  "steamBuildId": "24575825",
+  "source": {
+    "pakRelativePath": "Pal/Content/Paks/Pal-Windows.pak",
+    "inventoryMethod": "repak-v0.2.3-list-and-get-plus-sha256",
+    "parameterDecodeMethod": "UAssetAPI-1.1.0-mapped-json",
+    "mappedParameterJsonSha256": "A9A3DA3EAFA50D512A72D9840F2EA3336F97137CBBCB1328D1DE8D8B8C074958",
+    "gameWasLaunched": false,
+    "gameFilesWereModified": false
+  },
+  "parameterRows": [
+    {
+      "rowId": "BOSS_PinkCat",
+      "speciesId": "PinkCat",
+      "bpClassId": "BOSS_PinkCat",
+      "isBoss": true,
+      "isRaidBoss": false,
+      "useBossHpGauge": true,
+      "aiResponse": "NotInterested",
+      "hp": 84,
+      "meleeAttack": 70,
+      "shotAttack": 70,
+      "defense": 70,
+      "enemyReceiveDamageRate": 0.47999998927116394,
+      "captureRateCorrect": 1.0499999523162842
+    },
+    {
+      "rowId": "Boss_Anubis",
+      "speciesId": "Anubis",
+      "bpClassId": "Boss_Anubis",
+      "isBoss": true,
+      "isRaidBoss": false,
+      "useBossHpGauge": true,
+      "aiResponse": "Boss",
+      "hp": 144,
+      "meleeAttack": 130,
+      "shotAttack": 130,
+      "defense": 100,
+      "enemyReceiveDamageRate": 0.23999999463558197,
+      "captureRateCorrect": 0.699999988079071
+    },
+    {
+      "rowId": "BOSS_WeaselDragon",
+      "speciesId": "WeaselDragon",
+      "bpClassId": "BOSS_WeaselDragon",
+      "isBoss": true,
+      "isRaidBoss": false,
+      "useBossHpGauge": true,
+      "aiResponse": "NotInterested",
+      "hp": 108,
+      "meleeAttack": 100,
+      "shotAttack": 80,
+      "defense": 80,
+      "enemyReceiveDamageRate": 0.47999998927116394,
+      "captureRateCorrect": 0.699999988079071
+    },
+    {
+      "rowId": "BOSS_BlackMetalDragon",
+      "speciesId": "BlackMetalDragon",
+      "bpClassId": "BOSS_BlackMetalDragon",
+      "isBoss": true,
+      "isRaidBoss": false,
+      "useBossHpGauge": true,
+      "aiResponse": "Boss",
+      "hp": 120,
+      "meleeAttack": 100,
+      "shotAttack": 125,
+      "defense": 125,
+      "enemyReceiveDamageRate": 0.23999999463558197,
+      "captureRateCorrect": 0.699999988079071
+    },
+    {
+      "rowId": "BOSS_Ronin",
+      "speciesId": "Ronin",
+      "bpClassId": "BOSS_Ronin",
+      "isBoss": true,
+      "isRaidBoss": false,
+      "useBossHpGauge": true,
+      "aiResponse": "Boss",
+      "hp": 96,
+      "meleeAttack": 100,
+      "shotAttack": 125,
+      "defense": 80,
+      "enemyReceiveDamageRate": 0.23999999463558197,
+      "captureRateCorrect": 0.699999988079071
+    }
+  ],
+  "raidSlabReferenceRows": [
+    {
+      "rowId": "RAID_NightLady_Dark_2",
+      "isRaidBoss": true,
+      "enemyReceiveDamageRate": 0.09000000357627869
+    },
+    {
+      "rowId": "RAID_KingBahamut_Dragon_2",
+      "isRaidBoss": true,
+      "enemyReceiveDamageRate": 0.09000000357627869
+    },
+    {
+      "rowId": "RAID_DarkMechaDragon_2",
+      "isRaidBoss": true,
+      "enemyReceiveDamageRate": 0.08500000089406967
+    },
+    {
+      "rowId": "RAID_YakushimaBoss002_2",
+      "isRaidBoss": true,
+      "enemyReceiveDamageRate": 0.25
+    },
+    {
+      "rowId": "RAID_LegendDeer_2",
+      "isRaidBoss": true,
+      "enemyReceiveDamageRate": 0.20000000298023224
+    }
+  ],
+  "assetEntries": [
+    {
+      "path": "Pal/Content/Pal/DataTable/Character/DT_PalMonsterParameter.uasset",
+      "bytes": 43963,
+      "sha256": "6FE59113255772E78D7C5CB5D8313A7DE50C7C684AA2D9FF2BB8A2C3C546C96F",
+      "containsAsciiNames": ["Boss_Anubis", "BOSS_PinkCat", "BOSS_WeaselDragon", "BOSS_BlackMetalDragon", "BOSS_Ronin"]
+    },
+    {
+      "path": "Pal/Content/Pal/DataTable/Character/DT_PalMonsterParameter.uexp",
+      "bytes": 186037,
+      "sha256": "4C8EE319B9C2CCA9B0D83EDEFD7675D4185DD50F645EACB11CB59550AAE26507"
+    },
+    {
+      "path": "Pal/Content/Pal/DataTable/Character/DT_PalBPClass.uasset",
+      "bytes": 131688,
+      "sha256": "D8FD52DC23A41FF84BA8A36EDCF7BAD563B744AEA0CF0426636CB36CDA953AD2",
+      "containsAsciiNames": ["Boss_Anubis", "BOSS_PinkCat", "BOSS_WeaselDragon", "BOSS_BlackMetalDragon", "BOSS_Ronin", "BP_Anubis_MiddleBoss_C", "BP_PinkCat_BOSS_C", "BP_WeaselDragon_BOSS_C", "BP_BlackMetalDragon_BOSS_C", "BP_Ronin_Boss_C"]
+    },
+    {
+      "path": "Pal/Content/Pal/DataTable/Character/DT_PalBPClass.uexp",
+      "bytes": 28114,
+      "sha256": "4D3EAFCDF6928411950248EC8A83FAFCFEC0CFAC0669CD7F6A276745456723E0"
+    },
+    {
+      "path": "Pal/Content/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_81_1_grass_FBOSS_14.uasset",
+      "bytes": 2655,
+      "sha256": "A67C6C508EAAF408DE69DDAF24183E4E5DE3776EE851DAE911E4599C816C2E5E",
+      "containsAsciiNames": ["Boss_Anubis"]
+    },
+    {
+      "path": "Pal/Content/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_50_2_dungeon_grass_boss.uasset",
+      "bytes": 3818,
+      "sha256": "F65A835B148DF1961A6D30FA09699D7BBA128959329E37D3FC4AABAD97A9581D",
+      "containsAsciiNames": ["BOSS_PinkCat"]
+    },
+    {
+      "path": "Pal/Content/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_1_10_plain_F_Boss_FairyDragon.uasset",
+      "bytes": 2621,
+      "sha256": "40CF9AFEC4F310B616AB49000579E009565DA5745181FABDE0A65A8C291B66C2",
+      "containsAsciiNames": ["BOSS_WeaselDragon"]
+    },
+    {
+      "path": "Pal/Content/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_50_12_dungeon_snow_boss.uasset",
+      "bytes": 3194,
+      "sha256": "A92501D1E8CBB586B7067157413A16E6D3BC14F36A655C8207BEAFDAC9534219",
+      "containsAsciiNames": ["BOSS_WeaselDragon"]
+    },
+    {
+      "path": "Pal/Content/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_50_13_dungeon_Sakurajima_boss.uasset",
+      "bytes": 3121,
+      "sha256": "A6321767050067F53052AFAD0BD6E4CC4FAB73F0CF7450D0853C29C3867BEDC1",
+      "containsAsciiNames": ["BOSS_WeaselDragon"]
+    },
+    {
+      "path": "Pal/Content/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_81_1_grass_FBOSS_6.uasset",
+      "bytes": 2555,
+      "sha256": "7379779C57CDCABEAED5A20D9DEECF614595E88FE47A81AB36A317E008953740",
+      "containsAsciiNames": ["BOSS_Ronin"]
+    },
+    {
+      "path": "Pal/Content/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_50_8_dungeon_volcano_boss.uasset",
+      "bytes": 2935,
+      "sha256": "F45C3A1788FB301115208C9F6527167AB287F31E2A7C458FE5AC7347F1618345",
+      "containsAsciiNames": ["BOSS_Ronin"]
+    },
+    {
+      "path": "Pal/Content/Pal/Blueprint/Spawner/SheetsVariant/BP_PalSpawner_Sheets_sanctuary_2_volcano_FBOSS.uasset",
+      "bytes": 2701,
+      "sha256": "078B5CE9C08B87BD4D8F36C98E17A3125F18F7BF30820A2EE22D92C547541D1D",
+      "containsAsciiNames": ["BOSS_BlackMetalDragon"]
+    },
+    {
+      "path": "Pal/Content/Pal/Blueprint/Character/Monster/PalActorBP/Anubis/BP_Anubis_MiddleBoss.uasset",
+      "bytes": 9965,
+      "sha256": "0FC0E0146BDEB3547F192FE6E7C97B8CE3D13F48C084D052F7A9C7E3971D28F3"
+    },
+    {
+      "path": "Pal/Content/Pal/Blueprint/Character/Monster/PalActorBP/PinkCat/BP_PinkCat_BOSS.uasset",
+      "bytes": 8630,
+      "sha256": "738E388BC3E9F3FCCBD5DD37212C1087BDB46930200A09C7A65BE3CB0260AE56"
+    },
+    {
+      "path": "Pal/Content/Pal/Blueprint/Character/Monster/PalActorBP/WeaselDragon/BP_WeaselDragon_BOSS.uasset",
+      "bytes": 9456,
+      "sha256": "C222D111EBE412695ADEB6F60E5D35FE614E6637F7D0E2B52FA73212195A035D"
+    },
+    {
+      "path": "Pal/Content/Pal/Blueprint/Character/Monster/PalActorBP/BlackMetalDragon/BP_BlackMetalDragon_BOSS.uasset",
+      "bytes": 9857,
+      "sha256": "D6FFD6871C7B1131A22D94AFD004DA39C4A1037C7D30A51B94ACB6D7977423AD"
+    },
+    {
+      "path": "Pal/Content/Pal/Blueprint/Character/Monster/PalActorBP/Ronin/BP_Ronin_Boss.uasset",
+      "bytes": 9898,
+      "sha256": "6FE3A835B592E82D51B500560BE34370AB1FFC77F5961601E1150DB638B0E53C"
+    }
+  ],
+  "conclusion": {
+    "confirmedNativeBossParameterRows": 5,
+    "confirmedNativeBossActorAssets": 5,
+    "confirmedCandidateSpawnerAssets": 8,
+    "replacementSlotRequiredForConfirmedFive": false,
+    "liveSpawnerBindingsConfirmed": 0,
+    "raidSlabProfilesCommitted": 0,
+    "feybreakSpeciesIdConfirmed": false,
+    "activationAllowed": false
+  }
+}

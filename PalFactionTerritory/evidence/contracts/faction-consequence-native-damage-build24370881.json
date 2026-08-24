@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "1.0.0",
+  "source": {
+    "steamBuildId": "24370881",
+    "objectDumpFileName": "UE4SS_ObjectDump.txt",
+    "objectDumpSha256": "D8864A14FB50501EF48477D27A0A6C66ED06C63A5454C2ADD1D82800C67AFE5C",
+    "objectDumpGeneratedAtLocal": "2026-07-22T00:07:11+08:00",
+    "currentHostBuildIdAtAudit": "24575825",
+    "auditedAt": "2026-08-22"
+  },
+  "hook": {
+    "path": "/Script/Pal.PalCharacterParameterComponent:OnDamage",
+    "parameter": {
+      "name": "DamageResult",
+      "structPath": "/Script/Pal.PalDamageResult"
+    }
+  },
+  "damageResultFields": {
+    "Damage": {
+      "type": "IntProperty",
+      "offset": "0x0"
+    },
+    "Attacker": {
+      "type": "ObjectProperty",
+      "class": "/Script/Engine.Actor",
+      "offset": "0x8"
+    },
+    "Defender": {
+      "type": "ObjectProperty",
+      "class": "/Script/Engine.Actor",
+      "offset": "0x10"
+    },
+    "ActualDamage": {
+      "type": "IntProperty",
+      "offset": "0x50"
+    }
+  },
+  "runtimePolicy": {
+    "exactRegisteredDefenderOnly": true,
+    "directLocalPlayerOnly": true,
+    "positiveActualDamageOnly": true,
+    "currentBuildSettlementEnabled": false,
+    "probeMayMutateReputation": false,
+    "palworldSaveMutation": false,
+    "reason": "The only local ObjectDump predates Build 24575825; current-host callback shape and attacker attribution require live confirmation."
+  }
+}

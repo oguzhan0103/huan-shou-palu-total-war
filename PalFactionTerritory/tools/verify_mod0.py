@@ -80,14 +80,20 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "content_module_loader.lua",
         SCRIPTS_ROOT / "pwft" / "localization_runtime.lua",
         SCRIPTS_ROOT / "pwft" / "ending_runtime.lua",
+        SCRIPTS_ROOT / "pwft" / "ending_effect_native_production.lua",
         SCRIPTS_ROOT / "pwft" / "commerce_bridge.lua",
         SCRIPTS_ROOT / "pwft" / "faction_api.lua",
+        SCRIPTS_ROOT / "pwft" / "faction_consequence_router.lua",
+        SCRIPTS_ROOT / "pwft" / "faction_consequence_native_binding.lua",
         SCRIPTS_ROOT / "pwft" / "faction_commerce.lua",
         SCRIPTS_ROOT / "pwft" / "faction_defense.lua",
+        SCRIPTS_ROOT / "pwft" / "human_defense_result_bridge.lua",
+        SCRIPTS_ROOT / "pwft" / "task_defense_closure.lua",
         SCRIPTS_ROOT / "pwft" / "faction_economy.lua",
         SCRIPTS_ROOT / "pwft" / "faction_economy_merchant_runtime.lua",
         SCRIPTS_ROOT / "pwft" / "faction_economy_shop_catalog.lua",
         SCRIPTS_ROOT / "pwft" / "faction_guard.lua",
+        SCRIPTS_ROOT / "pwft" / "faction_npc_attitude_native_production.lua",
         SCRIPTS_ROOT / "pwft" / "faction_join.lua",
         SCRIPTS_ROOT / "pwft" / "faction_merchant_runtime.lua",
         SCRIPTS_ROOT / "pwft" / "faction_progression.lua",
@@ -95,6 +101,10 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "faction_ui_presenter.lua",
         SCRIPTS_ROOT / "pwft" / "json.lua",
         SCRIPTS_ROOT / "pwft" / "native_character_adapter.lua",
+        SCRIPTS_ROOT / "pwft" / "npc_leader_guard_native_production.lua",
+        SCRIPTS_ROOT / "pwft" / "reward_delivery_bus.lua",
+        SCRIPTS_ROOT / "pwft" / "reward_item_native_adapter.lua",
+        SCRIPTS_ROOT / "pwft" / "reward_delivery_live_test.lua",
         SCRIPTS_ROOT / "pwft" / "pal_reconciliation.lua",
         SCRIPTS_ROOT / "pwft" / "pal_raid_result_adapter.lua",
         SCRIPTS_ROOT / "pwft" / "pal_raid_native_binding.lua",
@@ -108,19 +118,53 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "progression_store.lua",
         SCRIPTS_ROOT / "pwft" / "quest_runtime.lua",
         SCRIPTS_ROOT / "pwft" / "strategic_world.lua",
+        SCRIPTS_ROOT / "pwft" / "strategic_world_native_production.lua",
+        SCRIPTS_ROOT / "pwft" / "strategic_world_readiness.lua",
         SCRIPTS_ROOT / "pwft" / "unique_pal_campaign.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_boss_provider_bus.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_boss_native_production.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_world_effect_bus.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_bridge.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_adapter.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_production.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_live_test.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_probe.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_ransom_shop_bridge.lua",
+        SCRIPTS_ROOT / "pwft" / "unique_pal_world_effect_native_production.lua",
         SCRIPTS_ROOT / "pwft" / "runtime.lua",
         SCRIPTS_ROOT / "pwft" / "settlement_raid.lua",
         SCRIPTS_ROOT / "pwft" / "world_balance.lua",
         SCRIPTS_ROOT / "pwft" / "pal_faction_island_mask.lua",
+        SCRIPTS_ROOT / "pwft_b5_acceptance" / "manifest.lua",
+        SCRIPTS_ROOT / "pwft_b5_acceptance" / "localization_keys.lua",
+        SCRIPTS_ROOT / "pwft_b5_acceptance" / "quest_template.lua",
+        SCRIPTS_ROOT / "pwft_b5_acceptance" / "bundle.lua",
+        SCRIPTS_ROOT / "pwft_b5_acceptance" / "content_module.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "manifest.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "localization_keys.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "localization_catalogs.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "strategic_world.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "unique_pal_campaign.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "ending_routes.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "native_bindings.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "world_effect_bindings.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "strategic_native_bindings.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "npc_attitude_bindings.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "ending_effect_bindings.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "bundle.lua",
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "content_module.lua",
         PROJECT_ROOT / "mod0" / "tests" / "policy_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_api_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "faction_consequence_router_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "faction_consequence_native_binding_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "commerce_bridge_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_commerce_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_economy_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_economy_merchant_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_economy_shop_catalog_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_services_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "human_defense_result_bridge_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "task_defense_closure_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_ui_presenter_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_merchant_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "faction_join_spec.lua",
@@ -140,8 +184,27 @@ def main() -> int:
         PROJECT_ROOT / "mod0" / "tests" / "localization_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "quest_runtime_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "strategic_world_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "strategic_world_native_production_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "strategic_world_readiness_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "unique_pal_campaign_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_boss_provider_bus_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_boss_native_production_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_world_effect_bus_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_world_effect_native_production_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_bridge_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_adapter_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_production_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_ransom_native_delivery_e2e_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_live_test_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_native_delivery_probe_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "unique_pal_ransom_shop_bridge_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "ending_runtime_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "ending_effect_native_production_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "faction_npc_attitude_native_production_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "npc_leader_guard_native_production_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "reward_delivery_bus_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "reward_item_native_adapter_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "reward_delivery_live_test_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "content_pack_author_sdk_e2e_spec.lua",
         PROJECT_ROOT / "examples" / "minimal-content-pack" / "README.md",
         PROJECT_ROOT / "examples" / "minimal-content-pack" / "pack.lua",
@@ -156,6 +219,7 @@ def main() -> int:
         PROJECT_ROOT / "examples" / "minimal-content-pack" / "bundle.lua",
         PROJECT_ROOT / "examples" / "minimal-content-pack" / "content_module.lua",
         PROJECT_ROOT / "scripts" / "validate-content-pack.ps1",
+        PROJECT_ROOT / "scripts" / "stage-b5-task-defense-live-test.ps1",
         PROJECT_ROOT / "tools" / "validate_content_pack.lua",
         PROJECT_ROOT / "mod0" / "tests" / "json_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "native_character_adapter_spec.lua",
@@ -170,18 +234,93 @@ def main() -> int:
         PROJECT_ROOT / "contracts" / "content_pack.v1.json",
         PROJECT_ROOT / "contracts" / "content_bundle.v1.json",
         PROJECT_ROOT / "contracts" / "strategic_world.v1.json",
+        PROJECT_ROOT / "contracts" / "strategic_world_readiness.v1.json",
+        PROJECT_ROOT / "contracts" / "npc_leader_guard_native_production.v1.json",
+        PROJECT_ROOT / "contracts" / "reward_delivery_native.v1.json",
         PROJECT_ROOT / "contracts" / "unique_pal_campaign.v1.json",
+        PROJECT_ROOT / "contracts" / "unique_pal_boss_provider.v1.json",
+        PROJECT_ROOT / "contracts" / "unique_pal_world_effects.v1.json",
+        PROJECT_ROOT / "contracts" / "unique_pal_native_assets.v1.json",
+        PROJECT_ROOT / "contracts" / "unique_pal_delivery_production.v1.json",
         PROJECT_ROOT / "contracts" / "ending_routes.v1.json",
         PROJECT_ROOT
         / "evidence"
         / "contracts"
         / "pal-raid-result-adapter-build24467282.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "contracts"
+        / "faction-consequence-native-damage-build24370881.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "contracts"
+        / "unique-pal-native-assets-build24575825.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "contracts"
+        / "unique-pal-native-delivery-build24575825.json",
         PROJECT_ROOT / "contracts" / "faction_commerce.v1.json",
         PROJECT_ROOT / "contracts" / "faction_economy.v1.json",
         PROJECT_ROOT / "contracts" / "faction_economy_shops.v1.json",
         PROJECT_ROOT / "tools" / "build_faction_economy_shops.mjs",
         PROJECT_ROOT / "tools" / "verify_faction_economy_shops.py",
         PROJECT_ROOT / "tools" / "verify_pal_raid_result_adapter_contract.py",
+        PROJECT_ROOT / "tools" / "verify_unique_pal_native_assets.py",
+        PROJECT_ROOT / "tools" / "verify_unique_pal_native_delivery_contract.py",
+        PROJECT_ROOT / "tools" / "verify_unique_pal_delivery_production_contract.py",
+        PROJECT_ROOT / "tools" / "verify_progression_sidecar_live_evidence.py",
+        PROJECT_ROOT / "tools" / "verify_world_level_live_evidence.py",
+        PROJECT_ROOT / "tools" / "verify_pal_faction_rage_live_evidence.py",
+        PROJECT_ROOT / "tools" / "verify_companion_commerce_live_evidence.py",
+        PROJECT_ROOT / "tools" / "verify_b4_rayne_merchant_visual_evidence.py",
+        PROJECT_ROOT / "tools" / "verify_b5_task_defense_live_evidence.py",
+        PROJECT_ROOT / "tools" / "verify_b6_dynamic_economy_live_evidence.py",
+        PROJECT_ROOT / "tools" / "verify_a9_reward_live_evidence.py",
+        PROJECT_ROOT
+        / "evidence"
+        / "live-tests"
+        / "build24575825-20260822-progression-sidecar"
+        / "verification.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "live-tests"
+        / "build24575825-20260823-b4-rayne-merchant-visual"
+        / "verification.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "live-tests"
+        / "build24575825-20260823-b5-task-defense"
+        / "verification.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "live-tests"
+        / "build24575825-20260823-b6-dynamic-economy-war"
+        / "verification.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "live-tests"
+        / "build24575825-20260822-world-level-80"
+        / "verification.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "live-tests"
+        / "build24575825-20260823-pal-faction-rage"
+        / "verification.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "live-tests"
+        / "build24575825-20260823-companion-commerce"
+        / "verification.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "live-tests"
+        / "build24575825-20260824-a9-native-reward"
+        / "verification.json",
+        PROJECT_ROOT
+        / "evidence"
+        / "live-tests"
+        / "build24575825-20260824-a9-native-reward"
+        / "reward-delivery-excerpt.log",
         PROJECT_ROOT / "scripts" / "build-faction-economy-shops.ps1",
         PROJECT_ROOT / "evidence" / "asset_json" / "DT_PalMonsterParameter.mapped.json",
         HUMAN_PARAMETER_ASSET,
@@ -220,6 +359,94 @@ def main() -> int:
         cwd=PROJECT_ROOT,
         check=True,
     )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_unique_pal_native_assets.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_unique_pal_native_delivery_contract.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_unique_pal_delivery_production_contract.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_progression_sidecar_live_evidence.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_world_level_live_evidence.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_pal_faction_rage_live_evidence.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_companion_commerce_live_evidence.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_b4_rayne_merchant_visual_evidence.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_b5_task_defense_live_evidence.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_b6_dynamic_economy_live_evidence.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "tools" / "verify_a9_reward_live_evidence.py"),
+        ],
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
 
     assignments = json.loads(
         (PROJECT_ROOT / "contracts" / "territory_assignments.v1.json").read_text(encoding="utf-8")
@@ -227,8 +454,60 @@ def main() -> int:
     factions = json.loads(
         (PROJECT_ROOT / "contracts" / "factions.v1.json").read_text(encoding="utf-8")
     )
+    strategic_readiness = json.loads(
+        (PROJECT_ROOT / "contracts" / "strategic_world_readiness.v1.json")
+        .read_text(encoding="utf-8")
+    )
+    require(
+        strategic_readiness["api"] == "PWFT_STRATEGIC_WORLD_READINESS_V1",
+        "B7 readiness contract API drifted",
+    )
+    require(
+        len(strategic_readiness["requiredChecks"]) == 9,
+        "B7 readiness contract check count drifted",
+    )
+    require(
+        strategic_readiness["acceptanceBoundary"]["readinessPassIsLiveAcceptance"]
+        is False
+        and strategic_readiness["acceptanceBoundary"]["liveEvidenceRequired"]
+        is True
+        and strategic_readiness["acceptanceBoundary"]["PalworldSaveMutation"]
+        is False,
+        "B7 readiness contract evidence or save boundary drifted",
+    )
     progression = json.loads(
         (PROJECT_ROOT / "contracts" / "faction_progression.v1.json").read_text(encoding="utf-8")
+    )
+    native_damage_evidence = json.loads(
+        (
+            PROJECT_ROOT
+            / "evidence"
+            / "contracts"
+            / "faction-consequence-native-damage-build24370881.json"
+        ).read_text(encoding="utf-8")
+    )
+    unique_pal_boss_provider = json.loads(
+        (PROJECT_ROOT / "contracts" / "unique_pal_boss_provider.v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    unique_pal_world_effects = json.loads(
+        (PROJECT_ROOT / "contracts" / "unique_pal_world_effects.v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    unique_pal_native_assets = json.loads(
+        (PROJECT_ROOT / "contracts" / "unique_pal_native_assets.v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    unique_pal_native_evidence = json.loads(
+        (
+            PROJECT_ROOT
+            / "evidence"
+            / "contracts"
+            / "unique-pal-native-assets-build24575825.json"
+        ).read_text(encoding="utf-8")
     )
     pal_reconciliation = json.loads(
         (PROJECT_ROOT / "contracts" / "pal_reconciliation.v1.json").read_text(encoding="utf-8")
@@ -259,6 +538,185 @@ def main() -> int:
     require(
         progression["baselineStatus"] == "user_confirmed_mechanics_baseline_2026-07-28",
         "faction progression baseline not active",
+    )
+    native_damage = progression["reputationSources"]["consequence"][
+        "routingPolicy"
+    ]["nativeDamageBinding"]
+    require(
+        native_damage["sourceBuildId"]
+        == "historical-objectdump-pre-24575825"
+        and native_damage["currentHostBuildId"] == "24575825"
+        and native_damage["settlementEnabled"] is False
+        and native_damage["probeEnabled"] is True,
+        "unverified current-build damage settlement must remain probe-only",
+    )
+    require(
+        native_damage["hookPath"]
+        == "/Script/Pal.PalCharacterParameterComponent:OnDamage"
+        and native_damage["damageResultStruct"]
+        == "/Script/Pal.PalDamageResult"
+        and native_damage["attackerField"] == "Attacker"
+        and native_damage["defenderField"] == "Defender"
+        and native_damage["actualDamageField"] == "ActualDamage",
+        "native damage callback contract drifted",
+    )
+    require(
+        native_damage["sourceObjectDumpSha256"]
+        == native_damage_evidence["source"]["objectDumpSha256"]
+        and native_damage_evidence["source"]["steamBuildId"]
+        != native_damage["currentHostBuildId"]
+        and native_damage_evidence["runtimePolicy"][
+            "currentBuildSettlementEnabled"
+        ]
+        is False,
+        "native damage evidence provenance or fail-closed gate drifted",
+    )
+    require(
+        unique_pal_boss_provider["schemaVersion"] == "1.0.0"
+        and unique_pal_boss_provider["providerApi"]
+        == "PWFT_UNIQUE_PAL_BOSS_PROVIDER_BUS_V1",
+        "P1 unique-Pal Boss provider contract is missing",
+    )
+    require(
+        unique_pal_boss_provider["bossWhitelistPolicy"]["nonUniqueSpeciesSuppressed"]
+        is True
+        and unique_pal_boss_provider["bindingPolicy"][
+            "unknownSpeciesActorOrSlotFailsClosed"
+        ]
+        is True,
+        "P1 Boss whitelist and verified binding policy must fail closed",
+    )
+    require(
+        unique_pal_boss_provider["raidSlabBalancePolicy"][
+            "captureAllowedMustRemainTrue"
+        ]
+        is True
+        and unique_pal_boss_provider["defeatPolicy"][
+            "ownerRemainsWildOrUnclaimed"
+        ]
+        is True,
+        "P1 Boss balance or non-transfer defeat policy drifted",
+    )
+    require(
+        unique_pal_native_assets["PalworldBuildId"] == "24575825"
+        and len(unique_pal_native_assets["confirmedEntries"]) == 5
+        and all(
+            entry["nativeBoss"]["bindingStatus"].startswith("pending-")
+            for entry in unique_pal_native_assets["confirmedEntries"]
+        )
+        and unique_pal_native_assets["activationPolicy"][
+            "nativeSpawnEnabledByCatalog"
+        ]
+        is False
+        and unique_pal_native_assets["activationPolicy"][
+            "irreversibleWorldEffectsEnabledByCatalog"
+        ]
+        is False,
+        "current-Build native asset inventory must remain definitions-only and fail closed",
+    )
+    require(
+        len(unique_pal_native_assets["tentativeEntries"]) == 1
+        and unique_pal_native_assets["tentativeEntries"][0]["displayNameZhHans"]
+        == "空涡龙"
+        and unique_pal_native_assets["tentativeEntries"][0]["speciesId"] is None
+        and unique_pal_native_evidence["conclusion"][
+            "confirmedNativeBossParameterRows"
+        ]
+        == 5
+        and unique_pal_native_evidence["conclusion"][
+            "confirmedNativeBossActorAssets"
+        ]
+        == 5
+        and unique_pal_native_evidence["conclusion"][
+            "confirmedCandidateSpawnerAssets"
+        ]
+        == 8
+        and unique_pal_native_evidence["conclusion"][
+            "liveSpawnerBindingsConfirmed"
+        ]
+        == 0
+        and unique_pal_native_evidence["conclusion"]["activationAllowed"] is False,
+        "unique-Pal native evidence count, tentative species, or activation gate drifted",
+    )
+    require(
+        unique_pal_world_effects["schemaVersion"] == "1.0.0"
+        and unique_pal_world_effects["providerApi"]
+        == "PWFT_UNIQUE_PAL_WORLD_EFFECT_BUS_V1",
+        "P2 unique-Pal world-effect provider contract is missing",
+    )
+    require(
+        unique_pal_world_effects["extinctionPolicy"][
+            "loadedActorCleanupExactBindingsOnly"
+        ]
+        is True
+        and unique_pal_world_effects["extinctionPolicy"][
+            "broadActorScanAllowed"
+        ]
+        is False
+        and unique_pal_world_effects["extinctionPolicy"][
+            "buildingsPreserved"
+        ]
+        is True,
+        "P2 extinction cleanup and empty-city policy must remain exact and reversible",
+    )
+    require(
+        unique_pal_world_effects["ransomPolicy"][
+            "exactCurrencyAndAmountRequired"
+        ]
+        is True
+        and unique_pal_world_effects["ransomPolicy"][
+            "failedPalDeliveryRemainsRetryable"
+        ]
+        is True
+        and unique_pal_world_effects["warPolicy"]["backgroundWar"][
+            "modelMayDecideResult"
+        ]
+        is False,
+        "P2 ransom delivery or war authority boundary drifted",
+    )
+    require(
+        unique_pal_world_effects["ransomShopBridgePolicy"][
+            "paymentChannel"
+        ]
+        == "native-server-authoritative-shop-buy-result"
+        and unique_pal_world_effects["ransomShopBridgePolicy"][
+            "commerceReputationAward"
+        ]
+        == 0
+        and unique_pal_world_effects["ransomShopBridgePolicy"][
+            "directCurrencyMutation"
+        ]
+        is False
+        and unique_pal_world_effects["ransomShopBridgePolicy"][
+            "paymentAndPalDeliveryRemainSeparate"
+        ]
+        is True
+        and unique_pal_world_effects["ransomShopBridgePolicy"][
+            "currentNativeProductBindings"
+        ]
+        == 0,
+        "P2 native ransom shop route must remain exact, zero-reputation, and unbound",
+    )
+    pal_delivery_bridge_policy = unique_pal_world_effects[
+        "palDeliveryBridgePolicy"
+    ]
+    require(
+        pal_delivery_bridge_policy["bridgeApi"]
+        == "PWFT_UNIQUE_PAL_NATIVE_DELIVERY_BRIDGE_V1"
+        and pal_delivery_bridge_policy["route"]
+        == "verified-server-spawn-capture-storage-readback"
+        and pal_delivery_bridge_policy["storageCapacityPreflightRequired"]
+        is True
+        and pal_delivery_bridge_policy["stableIndividualIdentityRequired"]
+        is True
+        and pal_delivery_bridge_policy["postCaptureStorageReadbackRequired"]
+        is True
+        and pal_delivery_bridge_policy["retryCannotCreateOrCaptureTwice"]
+        is True
+        and pal_delivery_bridge_policy["directContainerMutation"] is False
+        and pal_delivery_bridge_policy["debugCaptureApiAllowed"] is False
+        and pal_delivery_bridge_policy["currentNativeBindings"] == 0,
+        "P2 native Pal delivery transaction bridge safety gates drifted",
     )
     require(len(progression["humanFactionIds"]) == 7, "expected 7 human progression factions")
     require(len(progression["palFactionIds"]) == 5, "expected 5 Pal progression factions")
@@ -461,8 +919,63 @@ def main() -> int:
         "Leader must unlock player guards",
     )
     require(
-        progression["designPolicy"]["reputationDecreaseEnabled"] is False,
-        "reputation decrease must remain outside the current phase",
+        progression["schemaVersion"] == "1.1.0"
+        and progression["designPolicy"]["reputationDecreaseEnabled"] is True,
+        "P0 signed reputation contract must be enabled",
+    )
+    mutation_policy = progression["reputationMutationPolicy"]
+    require(
+        mutation_policy["schemaVersion"] == "1.0.0"
+        and mutation_policy["humanFactionsOnly"] is True
+        and mutation_policy["palFactionDecreaseAllowed"] is False,
+        "reputation decrease must remain human-faction-only",
+    )
+    require(
+        mutation_policy["minimumReputation"] == -1200
+        and mutation_policy["maximumReputation"] == 1200
+        and mutation_policy["operationIdRequired"] is True
+        and mutation_policy["operationSignatureRequired"] is True
+        and mutation_policy["idempotencyConflictPolicy"] == "reject",
+        "reputation bounds or idempotency contract drifted",
+    )
+    require(
+        mutation_policy["arbitraryClientMutationAllowed"] is False
+        and mutation_policy["ollamaMutationAllowed"] is False,
+        "client and Ollama reputation mutation must remain forbidden",
+    )
+    require(
+        [authority["id"] for authority in mutation_policy["authorities"]]
+        == [
+            "pwft.task-award.v1",
+            "pwft.defense-award.v1",
+            "pwft.commerce-award.v1",
+            "pwft.faction-consequence.v1",
+        ],
+        "authoritative reputation producer list drifted",
+    )
+    require(
+        progression["membershipPolicy"]["retainJoinedMembershipAtZero"] is True
+        and progression["membershipPolicy"]["retainJoinedMembershipBelowZero"] is True
+        and progression["relationPolicy"]["joinedHumanHostileRelation"] == "Hostile"
+        and progression["rankPolicy"]["automaticDemotion"] is True,
+        "membership retention or automatic demotion policy drifted",
+    )
+    require(
+        progression["guardPolicy"]["revokeWhenRankLosesAccess"] is True,
+        "guard permission revocation policy is missing",
+    )
+    require(
+        progression["reputationSources"]["commerce"]["totalCapPerWindow"] == 20
+        and progression["reputationSources"]["commerce"]["negativeRecoveryCapPerWindow"] == 20
+        and progression["reputationSources"]["commerce"]["nonNegativeCapPerWindow"] == 20,
+        "accepted commerce 20-point total window cap drifted",
+    )
+    require(
+        progression["reputationSources"]["consequence"]["direction"]
+        == "negative-only"
+        and progression["reputationSources"]["consequence"]["maximumPenaltyPerEvent"]
+        == 300,
+        "negative consequence source policy drifted",
     )
     require(
         progression["designPolicy"]["palworldSaveMutationAllowed"] is False,
@@ -577,6 +1090,15 @@ def main() -> int:
     policy_text = (SCRIPTS_ROOT / "pwft" / "policy.lua").read_text(encoding="utf-8")
     progression_text = (SCRIPTS_ROOT / "pwft" / "faction_progression.lua").read_text(encoding="utf-8")
     faction_api_text = (SCRIPTS_ROOT / "pwft" / "faction_api.lua").read_text(encoding="utf-8")
+    faction_consequence_router_text = (
+        SCRIPTS_ROOT / "pwft" / "faction_consequence_router.lua"
+    ).read_text(encoding="utf-8")
+    faction_consequence_native_binding_text = (
+        SCRIPTS_ROOT / "pwft" / "faction_consequence_native_binding.lua"
+    ).read_text(encoding="utf-8")
+    content_action_runtime_text = (
+        SCRIPTS_ROOT / "pwft" / "content_action_runtime.lua"
+    ).read_text(encoding="utf-8")
     faction_commerce_text = (SCRIPTS_ROOT / "pwft" / "faction_commerce.lua").read_text(encoding="utf-8")
     faction_economy_shop_text = (
         SCRIPTS_ROOT / "pwft" / "faction_economy_shop_catalog.lua"
@@ -630,6 +1152,61 @@ def main() -> int:
     ).read_text(encoding="utf-8")
     quest_runtime_text = (
         SCRIPTS_ROOT / "pwft" / "quest_runtime.lua"
+    ).read_text(encoding="utf-8")
+    task_defense_closure_text = (
+        SCRIPTS_ROOT / "pwft" / "task_defense_closure.lua"
+    ).read_text(encoding="utf-8")
+    b5_acceptance_module_text = (
+        SCRIPTS_ROOT / "pwft_b5_acceptance" / "content_module.lua"
+    ).read_text(encoding="utf-8")
+    b5_acceptance_quest_text = (
+        SCRIPTS_ROOT / "pwft_b5_acceptance" / "quest_template.lua"
+    ).read_text(encoding="utf-8")
+    b5_acceptance_bundle_text = (
+        SCRIPTS_ROOT / "pwft_b5_acceptance" / "bundle.lua"
+    ).read_text(encoding="utf-8")
+    unique_pal_boss_provider_text = (
+        SCRIPTS_ROOT / "pwft" / "unique_pal_boss_provider_bus.lua"
+    ).read_text(encoding="utf-8")
+    unique_pal_boss_native_production_text = (
+        SCRIPTS_ROOT / "pwft" / "unique_pal_boss_native_production.lua"
+    ).read_text(encoding="utf-8")
+    b7_unique_pal_module_text = (
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "content_module.lua"
+    ).read_text(encoding="utf-8")
+    b7_unique_pal_bindings_text = (
+        SCRIPTS_ROOT / "pwft_b7_unique_pals" / "native_bindings.lua"
+    ).read_text(encoding="utf-8")
+    strategic_world_readiness_text = (
+        SCRIPTS_ROOT / "pwft" / "strategic_world_readiness.lua"
+    ).read_text(encoding="utf-8")
+    unique_pal_world_effect_text = (
+        SCRIPTS_ROOT / "pwft" / "unique_pal_world_effect_bus.lua"
+    ).read_text(encoding="utf-8")
+    unique_pal_world_effect_production_text = (
+        SCRIPTS_ROOT
+        / "pwft"
+        / "unique_pal_world_effect_native_production.lua"
+    ).read_text(encoding="utf-8")
+    b7_unique_pal_world_bindings_text = (
+        SCRIPTS_ROOT
+        / "pwft_b7_unique_pals"
+        / "world_effect_bindings.lua"
+    ).read_text(encoding="utf-8")
+    unique_pal_native_delivery_text = (
+        SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_bridge.lua"
+    ).read_text(encoding="utf-8")
+    unique_pal_native_delivery_adapter_text = (
+        SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_adapter.lua"
+    ).read_text(encoding="utf-8")
+    unique_pal_native_delivery_production_text = (
+        SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_production.lua"
+    ).read_text(encoding="utf-8")
+    unique_pal_native_delivery_live_test_text = (
+        SCRIPTS_ROOT / "pwft" / "unique_pal_native_delivery_live_test.lua"
+    ).read_text(encoding="utf-8")
+    unique_pal_ransom_shop_text = (
+        SCRIPTS_ROOT / "pwft" / "unique_pal_ransom_shop_bridge.lua"
     ).read_text(encoding="utf-8")
     commerce_bridge_text = (SCRIPTS_ROOT / "pwft" / "commerce_bridge.lua").read_text(encoding="utf-8")
     world_balance_text = (SCRIPTS_ROOT / "pwft" / "world_balance.lua").read_text(encoding="utf-8")
@@ -879,7 +1456,11 @@ def main() -> int:
     require("pwft.commerce" in runtime_text, "commerce console diagnostics missing")
     require("FACTION_MERCHANT_RUNTIME_READY" in runtime_text, "merchant runtime readiness log missing")
     require("pwft.progress" in runtime_text, "progression console diagnostics missing")
-    require("grant_reputation" in progression_text, "reputation award API missing")
+    require("grant_reputation" in progression_text, "legacy positive reputation wrapper missing")
+    require("apply_reputation_delta" in progression_text, "unified signed reputation API missing")
+    require("reputation-operation-id-conflict" in progression_text, "reputation signature conflict gate missing")
+    require("processedReputationOperations" in progression_text, "reputation operation signature ledger missing")
+    require("LEGACY_STATE_SCHEMA_VERSION" in progression_text, "progression snapshot migration path missing")
     require("negativeRecoveryCapPerWindow" in progression_text, "commerce recovery cap missing")
     require("nonNegativeCapPerWindow" in progression_text, "friendly commerce cap missing")
     require("apply_commerce_diplomacy_recovery" in progression_text, "automatic commerce diplomacy recovery missing")
@@ -897,8 +1478,309 @@ def main() -> int:
     require("award_task" in faction_api_text, "task content API missing")
     require("award_defense" in faction_api_text, "defense content API missing")
     require("award_commerce" in faction_api_text, "commerce content API missing")
+    require("apply_reputation_delta" in faction_api_text, "authoritative signed reputation content API missing")
+    require("reputationDecrease = true" in faction_api_text, "signed reputation capability missing")
+    require(
+        "FactionConsequenceRouter.create" in runtime_text
+        and "_G.PWFT_FACTION_CONSEQUENCE_API_V1" in runtime_text
+        and "factionConsequenceRouter:unbind_world" in runtime_text
+        and "on_faction_consequence_recorded" in runtime_text
+        and "FACTION_CONSEQUENCE_ROUTER_READY" in runtime_text,
+        "authoritative faction-consequence router runtime lifecycle is incomplete",
+    )
+    require(
+        "FactionConsequenceNativeBinding.create" in runtime_text
+        and "_G.PWFT_FACTION_CONSEQUENCE_NATIVE_BINDING_V1" in runtime_text
+        and "factionConsequenceNativeBinding:unbind_world" in runtime_text
+        and "FACTION_CONSEQUENCE_NATIVE_READY" in runtime_text,
+        "native faction-consequence binding runtime lifecycle is incomplete",
+    )
+    require(
+        "/Script/Pal.PalCharacterParameterComponent:OnDamage"
+        in faction_consequence_native_binding_text
+        and "self.policy.attackerField"
+        in faction_consequence_native_binding_text
+        and "self.policy.defenderField"
+        in faction_consequence_native_binding_text
+        and "self.policy.actualDamageField"
+        in faction_consequence_native_binding_text
+        and "native-consequence-settlement-gated"
+        in faction_consequence_native_binding_text,
+        "native damage probe or current-build settlement gate is incomplete",
+    )
+    require(
+        "targetsByActor[defender]"
+        in faction_consequence_native_binding_text
+        and "attacker ~= local_player"
+        in faction_consequence_native_binding_text
+        and "broadActorScan = false"
+        in faction_consequence_native_binding_text,
+        "native damage exact-target or direct-player safety gate is incomplete",
+    )
+    require(
+        "exactActorAndClassBinding = true" in faction_consequence_router_text
+        and "nativeConfirmationRequired = true" in faction_consequence_router_text
+        and "worldGenerationFencing = true" in faction_consequence_router_text
+        and "event.actorRef == binding.actorRef" in faction_consequence_router_text
+        and "unbind_actor" in faction_consequence_router_text
+        and "modelMayDispatch = false" in faction_consequence_router_text,
+        "native consequence binding safety gates are incomplete",
+    )
+    require(
+        all(
+            reason in faction_consequence_router_text
+            for reason in (
+                "friendly-fire",
+                "civilian-harm",
+                "mission-failure",
+                "contract-breach",
+                "war-consequence",
+            )
+        ),
+        "faction-consequence reason routing is incomplete",
+    )
+    require(
+        'kind == "apply_faction_consequence"' in content_action_runtime_text
+        and "factionConsequenceRouter:dispatch" in content_action_runtime_text
+        and "pwft.consequence.content-action.v1" in content_action_runtime_text,
+        "content mission/contract consequence dispatch is not wired",
+    )
     require("reconcile_pal" in faction_api_text, "Pal reconciliation content API missing")
-    require("eventId" in progression_text, "idempotent reputation event IDs missing")
+    require("operationId" in progression_text, "idempotent reputation operation IDs missing")
+    require("reconcile_entitlement" in faction_guard_text, "guard demotion recall path missing")
+    require("reconcile_all_entitlements" in faction_guard_text, "guard restore reconciliation path missing")
+    require("reconcile_access" in quest_runtime_text, "quest permission reconciliation path missing")
+    require("quest-access-suspended" in quest_runtime_text, "quest access-loss suspension missing")
+    require("PROGRESSION_GRANT_DISABLED" in runtime_text, "arbitrary console reputation grant must remain disabled")
+    require(
+        "UniquePalBossProviderBus.create" in runtime_text
+        and "PWFT_UNIQUE_PAL_BOSS_PROVIDER_BUS_V1" in runtime_text
+        and "uniquePalBossProviderBus:unbind_world" in runtime_text,
+        "P1 unique-Pal Boss provider runtime lifecycle is incomplete",
+    )
+    require(
+        "StrategicWorldReadiness.create" in runtime_text
+        and "PWFT_STRATEGIC_WORLD_READINESS_V1" in runtime_text
+        and "B7_STRATEGIC_WORLD_READINESS" in runtime_text
+        and "strategicWorldReadiness:status()" in runtime_text,
+        "B7 strategic-world readiness lifecycle is incomplete",
+    )
+    require(
+        "content-key-required" in strategic_world_readiness_text
+        and "native-bindings-required" in strategic_world_readiness_text
+        and "ready-for-b7-live-acceptance"
+        in strategic_world_readiness_text
+        and "liveEvidenceRequired = true"
+        in strategic_world_readiness_text
+        and "liveAccepted = false" in strategic_world_readiness_text
+        and "storyContentIncluded = false"
+        in strategic_world_readiness_text
+        and "PalworldSaveMutation = false"
+        in strategic_world_readiness_text
+        and "broadActorScan == false"
+        in strategic_world_readiness_text
+        and "componentStatuses = statuses"
+        not in strategic_world_readiness_text
+        and "io." not in strategic_world_readiness_text,
+        "B7 readiness content, exact-binding, or evidence boundary is incomplete",
+    )
+    require(
+        "verified-unique-pal-boss-binding-required"
+        in unique_pal_boss_provider_text
+        and "native-unique-pal-callback-generation-rejected"
+        in unique_pal_boss_provider_text
+        and "replacement-slot" in unique_pal_boss_provider_text,
+        "P1 verified native/replacement binding gates are incomplete",
+    )
+    require(
+        "confirm_spawn" in unique_pal_boss_provider_text
+        and "confirm_defeat" in unique_pal_boss_provider_text
+        and "confirm_capture" in unique_pal_boss_provider_text
+        and "confirm_timeout" in unique_pal_boss_provider_text,
+        "P1 authoritative native callback surface is incomplete",
+    )
+    require(
+        "UniquePalBossNativeProduction.create" in runtime_text
+        and "PWFT_UNIQUE_PAL_BOSS_NATIVE_PRODUCTION_V1" in runtime_text
+        and "uniquePalBossNativeProduction:unbind_world" in runtime_text
+        and "UNIQUE_PAL_BOSS_NATIVE_PRODUCTION_READY" in runtime_text,
+        "B7 production Boss runtime lifecycle is incomplete",
+    )
+    require(
+        "PalNPCManager.SpawnNPCForServer"
+        in unique_pal_boss_native_production_text
+        and "PalCaptureSuccess" in unique_pal_boss_native_production_text
+        and "OnDeadCharacter" in unique_pal_boss_native_production_text
+        and "another-unique-pal-window-already-active"
+        in unique_pal_boss_native_production_text
+        and "broadActorScan = false"
+        in unique_pal_boss_native_production_text
+        and "storyContentIncluded = false"
+        in unique_pal_boss_native_production_text,
+        "B7 production Boss exact-instance, single-window, or story boundary is incomplete",
+    )
+    require(
+        '"pwft_b7_unique_pals.content_module"' in config_text
+        and "defaultEnabled = true" in b7_unique_pal_module_text
+        and b7_unique_pal_bindings_text.count("BOSS_") >= 4
+        and "Boss_Anubis" in b7_unique_pal_bindings_text
+        and "feybreak" not in b7_unique_pal_bindings_text.lower(),
+        "B7 five-Pal mechanics pack is not enabled with the verified base-island bindings",
+    )
+    require(
+        "UniquePalWorldEffectBus.create" in runtime_text
+        and "PWFT_UNIQUE_PAL_WORLD_EFFECT_BUS_V1" in runtime_text
+        and "uniquePalWorldEffectBus:unbind_world" in runtime_text,
+        "P2 unique-Pal world-effect runtime lifecycle is incomplete",
+    )
+    require(
+        "world-spawn-suppression" in unique_pal_world_effect_text
+        and "loaded-actor-cleanup" in unique_pal_world_effect_text
+        and "empty-city" in unique_pal_world_effect_text
+        and "merchant-filter" in unique_pal_world_effect_text
+        and "broadActorScan = false" in unique_pal_world_effect_text,
+        "P2 extinction and exact-cleanup provider outputs are incomplete",
+    )
+    require(
+        "confirm_background_war" in unique_pal_world_effect_text
+        and "confirm_player_defense" in unique_pal_world_effect_text
+        and "confirm_ransom_payment" in unique_pal_world_effect_text
+        and "confirm_pal_delivery" in unique_pal_world_effect_text
+        and "pal-delivery" in unique_pal_world_effect_text,
+        "P2 war, defense, ransom, or Pal-delivery bridge is incomplete",
+    )
+    require(
+        "UniquePalWorldEffectNativeProduction.create" in runtime_text
+        and "PWFT_UNIQUE_PAL_WORLD_EFFECT_NATIVE_PRODUCTION_V1"
+        in runtime_text
+        and "uniquePalWorldEffectNativeProduction:unbind_world"
+        in runtime_text
+        and "UNIQUE_PAL_WORLD_EFFECT_PRODUCTION_READY" in runtime_text,
+        "B7 production world-effect runtime lifecycle is incomplete",
+    )
+    require(
+        "declare_destruction_war"
+        in unique_pal_world_effect_production_text
+        and "confirm_background_war"
+        in unique_pal_world_effect_production_text
+        and "confirm_player_defense"
+        in unique_pal_world_effect_production_text
+        and "configure_unique_pal_ransom"
+        in unique_pal_world_effect_production_text
+        and "handle_delivery" in unique_pal_world_effect_production_text
+        and "directMapActorDeletion = false"
+        in unique_pal_world_effect_production_text
+        and "PalworldSaveMutation = false"
+        in unique_pal_world_effect_production_text,
+        "B7 production destruction-war, defense, ransom, or delivery route is incomplete",
+    )
+    require(
+        b7_unique_pal_world_bindings_text.count("targetBindingId = binding_id")
+        == 1
+        and b7_unique_pal_world_bindings_text.count("uniquePalId =") >= 5
+        and b7_unique_pal_world_bindings_text.count("cityAnchorKey =") == 1
+        and "pwft.unique.anubis" in b7_unique_pal_world_bindings_text
+        and "pwft.unique.ronin" in b7_unique_pal_world_bindings_text
+        and "pwft.island.sakurajima"
+        in b7_unique_pal_world_bindings_text,
+        "B7 five-target world-effect or delivery bindings are incomplete",
+    )
+    require(
+        "serverAuthoritativePrice" in unique_pal_ransom_shop_text
+        and "serverAuthoritativePaymentResult"
+        in unique_pal_ransom_shop_text
+        and "skipCommerceReputation = true"
+        in unique_pal_ransom_shop_text
+        and "confirm_ransom_payment" in unique_pal_ransom_shop_text
+        and "directCurrencyMutation = false"
+        in unique_pal_ransom_shop_text
+        and "palDeliveryIncluded = false"
+        in unique_pal_ransom_shop_text,
+        "P2 native ransom shop bridge safety gates are incomplete",
+    )
+    require(
+        "capacityPreflight" in unique_pal_native_delivery_text
+        and "stableIndividualIdentity" in unique_pal_native_delivery_text
+        and "serverAuthoritativeSpawn" in unique_pal_native_delivery_text
+        and "serverAuthoritativeCapture" in unique_pal_native_delivery_text
+        and "verify_storage" in unique_pal_native_delivery_text
+        and "nativeIndividualKey" in unique_pal_native_delivery_text
+        and "directContainerMutation = false"
+        in unique_pal_native_delivery_text
+        and "debugCaptureApiAllowed = false"
+        in unique_pal_native_delivery_text,
+        "P2 native Pal delivery transaction bridge gates are incomplete",
+    )
+    require(
+        "options.allowMutatingDelivery == true"
+        in unique_pal_native_delivery_adapter_text
+        and "GetPageIndexExistEmptySlot"
+        in unique_pal_native_delivery_adapter_text
+        and "SpawnNPCForServer"
+        in unique_pal_native_delivery_adapter_text
+        and "GetIndividualID"
+        in unique_pal_native_delivery_adapter_text
+        and "PalCaptureSuccess"
+        in unique_pal_native_delivery_adapter_text
+        and "FindByHandle"
+        in unique_pal_native_delivery_adapter_text
+        and "native-pal-storage-individual-mismatch"
+        in unique_pal_native_delivery_adapter_text
+        and "directContainerMutation = false"
+        in unique_pal_native_delivery_adapter_text
+        and "PalworldSaveMutation = false"
+        in unique_pal_native_delivery_adapter_text,
+        "P2 current-build native Pal delivery adapter gates are incomplete",
+    )
+    require(
+        "UniquePalNativeDeliveryAdapter.create" in runtime_text
+        and "UniquePalNativeDeliveryProduction.create" in runtime_text
+        and "UniquePalNativeDeliveryLiveTest.create" in runtime_text
+        and "PWFT_UNIQUE_PAL_NATIVE_DELIVERY_PRODUCTION_V1"
+        in runtime_text
+        and "PWFT_UNIQUE_PAL_NATIVE_DELIVERY_ADAPTER_V1"
+        not in runtime_text
+        and "PWFT_UNIQUE_PAL_NATIVE_DELIVERY_LIVE_TEST_V1"
+        in runtime_text
+        and "contentBindingRequired = true"
+        in unique_pal_native_delivery_production_text
+        and "feybreakTentativeEnabled = false"
+        in unique_pal_native_delivery_production_text
+        and "serverAuthoritativeSpawn = true"
+        in unique_pal_native_delivery_production_text
+        and "serverAuthoritativeCapture = true"
+        in unique_pal_native_delivery_production_text
+        and "directContainerMutation = false"
+        in unique_pal_native_delivery_production_text
+        and "PalworldSaveMutation = false"
+        in unique_pal_native_delivery_production_text,
+        "native Pal production delivery registration gates are incomplete",
+    )
+    require(
+        "uniquePalNativeDeliveryLiveTest = {" in config_text
+        and "Destructive QA only" in config_text
+        and "options.enabled == true"
+        in unique_pal_native_delivery_live_test_text
+        and "native-pal-delivery-live-test-verified"
+        in unique_pal_native_delivery_live_test_text
+        and "directContainerMutation = false"
+        in unique_pal_native_delivery_live_test_text,
+        "one-shot native Pal delivery live-test gate is incomplete",
+    )
+    require(
+        "UniquePalNativeDeliveryBridge.create" in runtime_text
+        and "PWFT_UNIQUE_PAL_NATIVE_DELIVERY_BRIDGE_V1" in runtime_text
+        and "uniquePalNativeDeliveryBridge:unbind_world" in runtime_text,
+        "P2 native Pal delivery bridge runtime lifecycle is incomplete",
+    )
+    require(
+        "UniquePalRansomShopBridge.create" in runtime_text
+        and "PWFT_UNIQUE_PAL_RANSOM_SHOP_BRIDGE_V1" in runtime_text
+        and "uniquePalRansomShopBridge:unbind_world" in runtime_text
+        and 'event.settlementKind == "unique-pal-ransom"'
+        in runtime_text,
+        "P2 native ransom shop bridge runtime lifecycle is incomplete",
+    )
     require(
         pal_reconciliation["baselineStatus"]
         == "user_confirmed_token_discourse_mechanics_2026-08-05",
@@ -1011,6 +1893,50 @@ def main() -> int:
     require("snapshotOwnedByProgression" in quest_runtime_text, "quest state must remain attached to progression snapshot")
     require("INLINE_TEXT_FIELDS" in quest_runtime_text, "quest inline narrative rejection missing")
     require("io." not in quest_runtime_text, "quest runtime cannot write files directly")
+    require(
+        "TaskDefenseClosure.create" in runtime_text
+        and "PWFT_TASK_DEFENSE_CLOSURE_V1" in runtime_text
+        and "state.taskDefenseClosure:open" in runtime_text
+        and "state.taskDefenseClosure:settle" in runtime_text
+        and "TASK_DEFENSE_CLOSURE" in runtime_text,
+        "B5 task/defense combined runtime route is incomplete",
+    )
+    require(
+        'OBJECTIVE_AUTHORITY = "pwft.defense.v1"'
+        in task_defense_closure_text
+        and "authority = OBJECTIVE_AUTHORITY" in task_defense_closure_text
+        and 'source = "defense"' in task_defense_closure_text
+        and 'kind = "completed"' in task_defense_closure_text
+        and "objective.replayed == true and 0" in task_defense_closure_text
+        and "absenceOrDefeatAwardsZero = true" in task_defense_closure_text
+        and "storyContentIncluded = false" in task_defense_closure_text
+        and "PalworldSaveMutation = false" in task_defense_closure_text
+        and "io." not in task_defense_closure_text,
+        "B5 task/defense authority, replay, or safety gate is incomplete",
+    )
+    require(
+        "storyContentIncludedByBase = false" in config_text
+        and "defaultEnabled = false" in b5_acceptance_module_text
+        and "storyContentIncluded = false" in b5_acceptance_module_text,
+        "B5 mechanics-only acceptance content must remain disabled by default while B7 uses its own pack",
+    )
+    require(
+        'eventSource = "defense"' in b5_acceptance_quest_text
+        and 'outcome = "victory"' in b5_acceptance_quest_text
+        and "playerParticipated = true" in b5_acceptance_quest_text
+        and "pwft.faction.rayne_syndicate" in b5_acceptance_quest_text
+        and "pwft.island.central_southeast_archipelago"
+        in b5_acceptance_quest_text,
+        "B5 acceptance objective does not match the Small Settlement owner and territory",
+    )
+    require(
+        'local QuestTemplate = require("pwft_b5_acceptance.quest_template")'
+        in b5_acceptance_bundle_text
+        and "questTemplates = {\n        QuestTemplate," in b5_acceptance_bundle_text
+        and 'questTemplates = {\n        require("pwft_b5_acceptance.quest_template")'
+        not in b5_acceptance_bundle_text,
+        "B5 content bundle must not leak Lua require multi-return values into questTemplates",
+    )
     require("PAL_RECONCILIATION_READY" in runtime_text, "Pal reconciliation readiness log missing")
     require("PAL_RAID_RESULT_ADAPTER_READY" in runtime_text, "Pal raid-result adapter readiness log missing")
     require("PAL_DISCOURSE_RUNTIME_READY" in runtime_text, "Pal discourse runtime readiness log missing")
@@ -1209,8 +2135,20 @@ def main() -> int:
     require("AdditionalEnemyMaxHPRate" in world_balance_text, "native enemy HP rate missing")
     require("AdditionalEnemyInflictDamageRate" in world_balance_text, "native enemy damage rate missing")
     require("SetUncapturable" in world_balance_text, "native uncapturable route missing")
+    require("IsUncapturable" in world_balance_text, "native uncapturable readback missing")
+    require("GetSpawnedCharacterType" in world_balance_text, "native Predator-type readback missing")
+    require("PAL_FACTION_RAGE_VERIFIED" in world_balance_text, "B2 rage verification marker missing")
+    require("PAL_FACTION_RAGE_EXCLUDED" in world_balance_text, "B2 exclusion marker missing")
+    require("PAL_FACTION_RAGE_PROBE_OBSERVED" in world_balance_text, "B2 controlled probe missing")
     require("IsPlayersOtomo" in world_balance_text, "player Pal exclusion missing")
     require("IsAssignedToAnyWork" in world_balance_text, "base worker exclusion missing")
+    require(
+        "OwnerPlayerUId" in world_balance_text
+        and "rage_group_is_world_enemy" in world_balance_text
+        and "world-ungrouped-owner-empty" in world_balance_text
+        and "owner-state-unavailable" in world_balance_text,
+        "B2 group-0 wild eligibility must be owner-GUID gated and fail closed",
+    )
     require(
         "local function unwrap_hook_param" in world_balance_text
         and "local function unwrap(value)" not in world_balance_text,
@@ -1228,6 +2166,45 @@ def main() -> int:
     require(
         "WorldBalance.has_enabled_feature" in world_balance_text,
         "world-balance feature gate helper missing",
+    )
+    require(
+        "liveAudit = {" in config_text
+        and 'characterId = "Boss_Anubis"' in config_text
+        and "saveWrites = false" in config_text,
+        "default-off world-level live audit and transient Boss probe missing",
+    )
+    require(
+        "LEVEL_OVERRIDE_VERIFIED" in world_balance_text
+        and "LEVEL_AUDIT_SUMMARY" in world_balance_text
+        and "LEVEL_AUDIT_LOAD_MAP_READY" in world_balance_text
+        and "broadScan=false" in world_balance_text,
+        "event-driven world-level effective readback evidence missing",
+    )
+    require(
+        "level_group_is_world_managed" in world_balance_text
+        and "group_type == 0" in world_balance_text
+        and "player-guild-group:" in world_balance_text,
+        "B1 wild-Pal initialization eligibility and player-guild exclusion missing",
+    )
+    require(
+        "RegisterKeyBind(Key[boss_probe.key], boss_callback)" in world_balance_text
+        and "key=Ctrl+%s" not in world_balance_text,
+        "B1 transient Boss probe must use its unmodified QA hotkey",
+    )
+    require(
+        'require("UEHelpers")' in world_balance_text
+        and 'FindFirstOf, class_name' in world_balance_text
+        and 'safe_property(controller, "AcknowledgedPawn")' in world_balance_text,
+        "B1 transient Boss probe local-player resolution fallback missing",
+    )
+    require(
+        'safe_property(individual, "SaveParameter")' in world_balance_text
+        and 'safe_struct_assign(' in world_balance_text
+        and '"Level",' in world_balance_text
+        and "levelWriteActors" in world_balance_text
+        and 'instance.lastApplySource == "native-initialize-post"' in world_balance_text
+        and "RegisterHook(path, callback, post_callback)" not in world_balance_text,
+        "B1 level override must use one bounded eligible-actor native Level write without unsafe post hooks",
     )
     require("RegisterLoop" not in world_balance_text, "world balance must not use a permanent loop")
     require("RegisterHook" in world_balance_text, "character initialization hook missing")

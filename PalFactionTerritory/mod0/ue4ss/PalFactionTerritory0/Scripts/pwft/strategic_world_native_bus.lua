@@ -528,6 +528,35 @@ function StrategicWorldNativeBus:bind_actor(definition)
     })
 end
 
+function StrategicWorldNativeBus:unbind_actor(definition)
+    assert(type(definition) == "table",
+        "native strategic unbind request is required")
+    local binding_id = require_text(
+        definition.bindingId,
+        "native strategic unbind binding ID"
+    )
+    local binding = self.bindings[binding_id]
+    if binding == nil then
+        return result(true,
+            "native-strategic-actor-already-unbound", {
+            bindingId = binding_id,
+        })
+    end
+    if definition.providerId ~= binding.providerId
+        or definition.actorKey ~= binding.actorKey
+        or definition.actorClassKey ~= binding.actorClassKey then
+        self.rejectedCount = self.rejectedCount + 1
+        return result(false,
+            "native-strategic-unbind-exact-match-required")
+    end
+    self.bindings[binding_id] = nil
+    return result(true, "native-strategic-actor-unbound", {
+        bindingId = binding_id,
+        bindingKind = binding.bindingKind,
+        strategicId = binding.strategicId,
+    })
+end
+
 function StrategicWorldNativeBus:unbind_world()
     local count = 0
     for _ in pairs(self.bindings) do
@@ -642,15 +671,39 @@ end
 
 function StrategicWorldNativeBus:status()
     local provider_count = 0
+    local fully_capable_provider_count = 0
     local binding_count = 0
+    local binding_count_by_kind = {
+        ["unique-pal"] = 0,
+        ["city-anchor"] = 0,
+        ["city-boss"] = 0,
+    }
     local result_count = 0
-    for _ in pairs(self.providers) do provider_count = provider_count + 1 end
-    for _ in pairs(self.bindings) do binding_count = binding_count + 1 end
+    for _, provider in pairs(self.providers) do
+        provider_count = provider_count + 1
+        local complete = provider.enabled == true
+        for event_kind in pairs(ALLOWED_EVENT_KINDS) do
+            if provider.allowedEventKinds[event_kind] ~= true then
+                complete = false
+            end
+        end
+        if complete then
+            fully_capable_provider_count =
+                fully_capable_provider_count + 1
+        end
+    end
+    for _, binding in pairs(self.bindings) do
+        binding_count = binding_count + 1
+        binding_count_by_kind[binding.bindingKind] =
+            (binding_count_by_kind[binding.bindingKind] or 0) + 1
+    end
     for _ in pairs(self.results) do result_count = result_count + 1 end
     return {
         apiVersion = self.version,
         providerCount = provider_count,
+        fullyCapableProviderCount = fully_capable_provider_count,
         bindingCount = binding_count,
+        bindingCountByKind = binding_count_by_kind,
         resultCount = result_count,
         acceptedCount = self.acceptedCount,
         rejectedCount = self.rejectedCount,

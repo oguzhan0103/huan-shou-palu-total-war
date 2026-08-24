@@ -7,15 +7,15 @@ return {
     ["gameBuild"] = "Steam v1.0.1 / build 24181527",
     ["contractHashes"] = {
         ["factions.v1.json"] = "14ccacd6806a19dae4c2e4e781d8cefd42e346a1bf8b752a678653212fcc46a2",
-        ["faction_commerce.v1.json"] = "fe0330ec6fa0c9d91ddac10cbbb0ae0ed49972d2d0c83a60c7a52b0d9dbb3b07",
-        ["faction_economy.v1.json"] = "f6b001bddbc078aed7fa129241dc57382eb72fffb21a4766e90ac06f6b6eae41",
-        ["faction_economy_shops.v1.json"] = "7711e15558e4c9ea784421cf503af2d591e40976a9fac6cd0630b74a7680c54e",
-        ["pal_reconciliation.v1.json"] = "65d465f6aeb5927c058c7233d63d73036803c3ef5e1ca8a54e102cd4a6b82807",
-        ["faction_progression.v1.json"] = "a4435da16d35adefcf25cee1a99f9174809f974dd5c53a74f2d8360ea8729a86",
+        ["faction_commerce.v1.json"] = "4db023a98df2ebf45c31a9d7c82e64342f3dba7051160b3cc5895c034cb360e9",
+        ["faction_economy.v1.json"] = "55cd5db5a55cfcdd043cb870e0cf305dc0ce45bebc2198aceb9d61265d876d34",
+        ["faction_economy_shops.v1.json"] = "32d67b2613b2dbc9d0bbe8473bc12b27749dd1ddbb635d9d251f6aec3877d8c5",
+        ["pal_reconciliation.v1.json"] = "312a14163d9a6e2f21acc1ab5c9d15b4585a6dd8880f7386891c9dde77a66065",
+        ["faction_progression.v1.json"] = "b9c5954e92702e828fa63fc5223af38c62642f2993fe15af0626dcc8a9999fca",
         ["territory_assignments.v1.json"] = "0b4542014338178ab311f73a876dea640a1d393e9cd68801b3c852e2849e0f7b",
         ["fast_travel_territories.v1.json"] = "a2945338ca661ef001b1603a077209f06efae5fad2b25a43d432acde9419dbf4",
         ["island_territories.v2.json"] = "2a24d45822234f9064cdaee26c56423ab59cf074a54e780ce7aa79be1eb39e27",
-        ["tower_territories.v1.json"] = "5b2dd4521fc602753ad729284660157742bb82162ed41488ebd812dbfe9e5478"
+        ["tower_territories.v1.json"] = "f731043a4016dded2822f5263e8479cca2286b4103213ab924f2bcdf1ada3514"
     },
     ["counts"] = {
         ["factions"] = 12,
@@ -1616,17 +1616,86 @@ return {
         }
     },
     ["progression"] = {
-        ["schemaVersion"] = "1.0.0",
+        ["schemaVersion"] = "1.1.0",
         ["gameBuild"] = "Steam v1.0.1 / build 24181527",
         ["baselineStatus"] = "user_confirmed_mechanics_baseline_2026-07-28",
         ["balanceStatus"] = "provisional_until_live_balance_review",
         ["designPolicy"] = {
             ["multipleHumanMembershipsAllowed"] = true,
-            ["reputationDecreaseEnabled"] = false,
+            ["reputationDecreaseEnabled"] = true,
             ["storyContentIncluded"] = false,
             ["taskContentIncluded"] = false,
             ["modOwnedPersistenceRequired"] = true,
             ["palworldSaveMutationAllowed"] = false
+        },
+        ["reputationMutationPolicy"] = {
+            ["schemaVersion"] = "1.0.0",
+            ["humanFactionsOnly"] = true,
+            ["palFactionDecreaseAllowed"] = false,
+            ["zeroDeltaAllowed"] = false,
+            ["minimumReputation"] = -1200,
+            ["maximumReputation"] = 1200,
+            ["newMutationBoundsPolicy"] = "clamp",
+            ["legacyOutOfBoundsPolicy"] = "preserve_until_authoritative_mutation",
+            ["operationIdRequired"] = true,
+            ["operationSignatureRequired"] = true,
+            ["idempotencyConflictPolicy"] = "reject",
+            ["arbitraryClientMutationAllowed"] = false,
+            ["ollamaMutationAllowed"] = false,
+            ["authorities"] = {
+                {
+                    ["id"] = "pwft.task-award.v1",
+                    ["directions"] = {
+                        "positive"
+                    },
+                    ["sources"] = {
+                        "task"
+                    },
+                    ["reasonCodes"] = {
+                        "task-completed"
+                    }
+                },
+                {
+                    ["id"] = "pwft.defense-award.v1",
+                    ["directions"] = {
+                        "positive"
+                    },
+                    ["sources"] = {
+                        "defense"
+                    },
+                    ["reasonCodes"] = {
+                        "defense-resolved"
+                    }
+                },
+                {
+                    ["id"] = "pwft.commerce-award.v1",
+                    ["directions"] = {
+                        "positive"
+                    },
+                    ["sources"] = {
+                        "commerce"
+                    },
+                    ["reasonCodes"] = {
+                        "commerce-confirmed"
+                    }
+                },
+                {
+                    ["id"] = "pwft.faction-consequence.v1",
+                    ["directions"] = {
+                        "negative"
+                    },
+                    ["sources"] = {
+                        "consequence"
+                    },
+                    ["reasonCodes"] = {
+                        "friendly-fire",
+                        "civilian-harm",
+                        "contract-breach",
+                        "mission-failure",
+                        "war-consequence"
+                    }
+                }
+            }
         },
         ["humanFactionIds"] = {
             "pwft.faction.rayne_syndicate",
@@ -1656,12 +1725,15 @@ return {
             ["hostileBelowReputation"] = 0,
             ["nonMemberNonHostileRelation"] = "Friendly",
             ["joinedHumanRelation"] = "Player",
+            ["joinedHumanHostileRelation"] = "Hostile",
             ["palNonHostileRelation"] = "Friendly",
             ["palMaximumRelation"] = "Friendly"
         },
         ["membershipPolicy"] = {
             ["joinMinimumReputation"] = 0,
             ["humanOnly"] = true,
+            ["retainJoinedMembershipAtZero"] = true,
+            ["retainJoinedMembershipBelowZero"] = true,
             ["joinOperationProvidedByContent"] = true,
             ["joinDiplomacyEffectsStatus"] = "runtime_overlay_content_adapter_and_native_presenter_ready",
             ["joinDiplomacyEffects"] = {
@@ -1750,6 +1822,8 @@ return {
         },
         ["rankPolicy"] = {
             ["automaticPromotion"] = true,
+            ["automaticDemotion"] = true,
+            ["minimumJoinedRank"] = "Member",
             ["ranks"] = {
                 {
                     ["id"] = "Member",
@@ -1785,6 +1859,7 @@ return {
                 "Lord"
             },
             ["maximumActivePerFaction"] = 1,
+            ["revokeWhenRankLosesAccess"] = true,
             ["providerStatus"] = "native_blueprint_provider_and_player_entry_ready",
             ["controllerClassPath"] = "/Game/Pal/Blueprint/Controller/NPC/BP_NPCAIController_Visitor_Guardman.BP_NPCAIController_Visitor_Guardman_C",
             ["leaderBinding"] = "VisitorLeader=local-player",
@@ -1814,7 +1889,8 @@ return {
                 ["enabled"] = true,
                 ["primarySource"] = false,
                 ["windowPolicy"] = "external_window_id",
-                ["negativeRecoveryCapPerWindow"] = 80,
+                ["totalCapPerWindow"] = 20,
+                ["negativeRecoveryCapPerWindow"] = 20,
                 ["nonNegativeCapPerWindow"] = 20,
                 ["canRestoreToNonHostile"] = true,
                 ["canReachLordAlone"] = false,
@@ -1830,6 +1906,72 @@ return {
                     ["fixedMarketCommercialTruceRequired"] = true,
                     ["visitingCaravansWhileHostileAllowed"] = false,
                     ["balanceStatus"] = "provisional_offline_baseline_2026-07-29"
+                }
+            },
+            ["consequence"] = {
+                ["enabled"] = true,
+                ["primarySource"] = false,
+                ["direction"] = "negative-only",
+                ["maximumPenaltyPerEvent"] = 300,
+                ["humanOnly"] = true,
+                ["authority"] = "pwft.faction-consequence.v1",
+                ["storyContentIncluded"] = false,
+                ["routingPolicy"] = {
+                    ["schemaVersion"] = "1.0.0",
+                    ["eventSchemaVersion"] = "1.0.0",
+                    ["exactActorAndClassRequired"] = true,
+                    ["nativeConfirmationRequired"] = true,
+                    ["worldGenerationRequiredForActorEvents"] = true,
+                    ["modelDispatchAllowed"] = false,
+                    ["arbitraryClientDispatchAllowed"] = false,
+                    ["nativeDamageBinding"] = {
+                        ["schemaVersion"] = "1.0.0",
+                        ["sourceBuildId"] = "historical-objectdump-pre-24575825",
+                        ["currentHostBuildId"] = "24575825",
+                        ["sourceObjectDumpSha256"] = "D8864A14FB50501EF48477D27A0A6C66ED06C63A5454C2ADD1D82800C67AFE5C",
+                        ["hookPath"] = "/Script/Pal.PalCharacterParameterComponent:OnDamage",
+                        ["damageResultStruct"] = "/Script/Pal.PalDamageResult",
+                        ["attackerField"] = "Attacker",
+                        ["defenderField"] = "Defender",
+                        ["actualDamageField"] = "ActualDamage",
+                        ["exactRegisteredDefenderOnly"] = true,
+                        ["directLocalPlayerOnly"] = true,
+                        ["positiveActualDamageOnly"] = true,
+                        ["minimumIntervalSecondsPerTarget"] = 5,
+                        ["penaltyByActorRole"] = {
+                            ["faction-member"] = 5,
+                            ["civilian"] = 10
+                        },
+                        ["probeEnabled"] = true,
+                        ["settlementEnabled"] = false,
+                        ["settlementGate"] = "build-24575825-objectdump-and-live-attribution-required",
+                        ["storyContentIncluded"] = false
+                    },
+                    ["providers"] = {
+                        {
+                            ["id"] = "pwft.consequence.native-actor.v1",
+                            ["authoritySource"] = "pwft.native-faction-consequence.v1",
+                            ["reasonCodes"] = {
+                                "friendly-fire",
+                                "civilian-harm"
+                            }
+                        },
+                        {
+                            ["id"] = "pwft.consequence.content-action.v1",
+                            ["authoritySource"] = "pwft.content-action-runtime.v1",
+                            ["reasonCodes"] = {
+                                "contract-breach",
+                                "mission-failure"
+                            }
+                        },
+                        {
+                            ["id"] = "pwft.consequence.economy-war.v1",
+                            ["authoritySource"] = "pwft.faction-economy-war.v1",
+                            ["reasonCodes"] = {
+                                "war-consequence"
+                            }
+                        }
+                    }
                 }
             },
             ["pal_reconciliation"] = {
