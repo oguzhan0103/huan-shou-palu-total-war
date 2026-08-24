@@ -27,7 +27,7 @@ end
 
 local policy = {
     schemaVersion = "1.0.0",
-    sourceBuildId = "24370881",
+    sourceBuildId = "historical-objectdump-pre-24575825",
     currentHostBuildId = "24575825",
     hookPath = "/Script/Pal.PalCharacterParameterComponent:OnDamage",
     attackerField = "Attacker",
@@ -138,7 +138,10 @@ assert(type(restore_listener) == "function")
 local started = binding:start()
 assert(started.ok and binding:status().hookReady == true)
 assert(hook_path == NativeBinding.paths.damage)
-assert(binding:status().sourceBuildId == "24370881")
+assert(
+    binding:status().sourceBuildId
+        == "historical-objectdump-pre-24575825"
+)
 assert(binding:status().currentHostBuildId == "24575825")
 assert(binding:status().currentHostSignatureVerified == false)
 assert(binding:status().settlementEnabled == false)

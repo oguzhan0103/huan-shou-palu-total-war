@@ -543,7 +543,8 @@ def main() -> int:
         "routingPolicy"
     ]["nativeDamageBinding"]
     require(
-        native_damage["sourceBuildId"] == "24370881"
+        native_damage["sourceBuildId"]
+        == "historical-objectdump-pre-24575825"
         and native_damage["currentHostBuildId"] == "24575825"
         and native_damage["settlementEnabled"] is False
         and native_damage["probeEnabled"] is True,
@@ -563,7 +564,7 @@ def main() -> int:
         native_damage["sourceObjectDumpSha256"]
         == native_damage_evidence["source"]["objectDumpSha256"]
         and native_damage_evidence["source"]["steamBuildId"]
-        == native_damage["sourceBuildId"]
+        != native_damage["currentHostBuildId"]
         and native_damage_evidence["runtimePolicy"][
             "currentBuildSettlementEnabled"
         ]

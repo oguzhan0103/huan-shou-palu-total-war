@@ -1926,7 +1926,7 @@ return {
                     ["arbitraryClientDispatchAllowed"] = false,
                     ["nativeDamageBinding"] = {
                         ["schemaVersion"] = "1.0.0",
-                        ["sourceBuildId"] = "24370881",
+                        ["sourceBuildId"] = "historical-objectdump-pre-24575825",
                         ["currentHostBuildId"] = "24575825",
                         ["sourceObjectDumpSha256"] = "D8864A14FB50501EF48477D27A0A6C66ED06C63A5454C2ADD1D82800C67AFE5C",
                         ["hookPath"] = "/Script/Pal.PalCharacterParameterComponent:OnDamage",

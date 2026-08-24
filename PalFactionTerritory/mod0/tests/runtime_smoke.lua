@@ -208,7 +208,7 @@ assert(
 )
 assert(
     state.factionConsequenceNativeBinding:status().sourceBuildId
-        == "24370881"
+        == "historical-objectdump-pre-24575825"
 )
 assert(
     state.factionConsequenceNativeBinding:status()
