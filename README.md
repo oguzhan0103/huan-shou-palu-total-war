@@ -92,8 +92,11 @@ Core 源码附件同时包含 `PalFactionTerritory/companion/` 外接操作台�
 
 ## 参与开发
 
-内容作者从 `PalFactionTerritory/examples/minimal-content-pack/` 开始。贡献代码或
-内容前请阅读 [贡献指南](./CONTRIBUTING.md)、[安全策略](./SECURITY.md) 和
+项目现已公开征集七势力代表、帕鲁信物与论道、任务链、资源战争、领主护卫、
+高难奖励、三条结局、本地模型角色包和新地图唯一帕鲁设定。请先阅读
+[剧情密钥征集说明](./剧情密钥征集说明.md)，再从
+`PalFactionTerritory/examples/minimal-content-pack/` 开始。贡献代码或内容前还应
+阅读 [贡献指南](./CONTRIBUTING.md)、[安全策略](./SECURITY.md) 和
 [第三方资产说明](./THIRD_PARTY_NOTICES.md)。
 
 玄绒龙已从活动 Mod 和公开发布范围撤出。本仓库不包含其模型、纹理、FBX、Cook

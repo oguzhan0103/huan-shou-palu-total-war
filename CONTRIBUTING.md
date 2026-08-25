@@ -4,7 +4,9 @@
 
 ## 内容作者
 
-请从 `PalFactionTerritory/examples/minimal-content-pack/` 开始。内容包负责声明本地化键和玩法数据，不应修改 Core：
+当前公开认领范围、逐模块必填字段、版权边界和提案格式见
+[`剧情密钥征集说明.md`](./剧情密钥征集说明.md)。请从
+`PalFactionTerritory/examples/minimal-content-pack/` 开始。内容包负责声明本地化键和玩法数据，不应修改 Core：
 
 1. 使用唯一命名空间和 SemVer 版本。
 2. 只在清单中声明本地化键，不把剧情正文内联到机制合同。
