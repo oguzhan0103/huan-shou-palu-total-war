@@ -347,10 +347,20 @@ function NativeCharacterAdapter.create(options)
             options.nativeActorFallbackRadius or 2500,
         executeWithDelay =
             options.executeWithDelay or _G.ExecuteWithDelay,
+        loopAsync = options.loopAsync or _G.LoopAsync,
         executeInGameThread =
             options.executeInGameThread or _G.ExecuteInGameThread,
         logger = options.logger,
         records = {},
+        -- Recursive ExecuteWithDelay chains accumulate native Lua callback
+        -- registry entries on UE4SS 3.0.1.  The live Build 24575825 client
+        -- eventually crashed in lua_getiuservalue after 95 guard pulses.  A
+        -- single lifecycle-scoped LoopAsync callback owns each durable follow
+        -- clock instead.  Keep both closures strongly referenced until process
+        -- exit so UE4SS never observes a released callback while unwinding it.
+        guardFollowLoopActive = {},
+        guardFollowAsyncCallbacks = {},
+        guardFollowGameCallbacks = {},
         -- Palworld's AI hate system can retain a valid actor reference after
         -- OnDeadCharacter has already authoritatively fired. Remember those
         -- exact actors so guard follow does not wait for reflected IsDead.
@@ -2499,8 +2509,11 @@ function NativeCharacterAdapter:_guard_follow_once(record)
 end
 
 function NativeCharacterAdapter:_schedule_guard_follow(record)
-    if type(self.executeWithDelay) ~= "function" then
-        return false, "ExecuteWithDelay-unavailable"
+    local use_loop_async = type(self.loopAsync) == "function"
+        and type(self.executeInGameThread) == "function"
+    if not use_loop_async
+        and type(self.executeWithDelay) ~= "function" then
+        return false, "guard-follow-scheduler-unavailable"
     end
     if record.cancelled == true
         or self.records[record.runtimeId] ~= record
@@ -2508,42 +2521,90 @@ function NativeCharacterAdapter:_schedule_guard_follow(record)
         return false, "guard-follow-not-scheduled"
     end
     record.followScheduled = true
-    local callback = function()
-        local execute = function()
-            record.followScheduled = false
-            if record.cancelled == true
-                or self.records[record.runtimeId] ~= record then
-                return
-            end
-            local ok, reason = self:_guard_follow_once(record)
-            if reason == "guard-downed" then
-                return
-            end
-            if ok then
-                record.followFailureCount = 0
-            else
-                record.followFailureCount =
-                    (record.followFailureCount or 0) + 1
+    local runtime_id = record.runtimeId
+    local function run_pulse(reschedule)
+        local current = self.records[runtime_id]
+        if type(current) ~= "table" or current.cancelled == true then
+            self.guardFollowLoopActive[runtime_id] = false
+            return false
+        end
+        current.followScheduled = false
+        local ok, reason = self:_guard_follow_once(current)
+        if reason == "guard-downed" then
+            self.guardFollowLoopActive[runtime_id] = false
+            return false
+        end
+        if ok then
+            current.followFailureCount = 0
+        else
+            current.followFailureCount =
+                (current.followFailureCount or 0) + 1
+            self:_log(string.format(
+                "PLAYER_GUARD_FOLLOW_RETRY runtime=%s failure=%d limit=%d reason=%s",
+                runtime_id,
+                current.followFailureCount,
+                self.guardFollowMaxFailures,
+                tostring(reason)
+            ))
+            if current.followFailureCount
+                >= self.guardFollowMaxFailures then
+                current.following = false
+                current.followStopped = true
+                self.guardFollowLoopActive[runtime_id] = false
                 self:_log(string.format(
-                    "PLAYER_GUARD_FOLLOW_RETRY runtime=%s failure=%d limit=%d reason=%s",
-                    record.runtimeId,
-                    record.followFailureCount,
-                    self.guardFollowMaxFailures,
+                    "PLAYER_GUARD_FOLLOW_STOPPED runtime=%s reason=%s",
+                    runtime_id,
                     tostring(reason)
                 ))
-                if record.followFailureCount
-                    >= self.guardFollowMaxFailures then
-                    record.following = false
-                    record.followStopped = true
-                    self:_log(string.format(
-                        "PLAYER_GUARD_FOLLOW_STOPPED runtime=%s reason=%s",
-                        record.runtimeId,
-                        tostring(reason)
-                    ))
-                    return
-                end
+                return false
             end
-            self:_schedule_guard_follow(record)
+        end
+        if reschedule == true then
+            self:_schedule_guard_follow(current)
+        else
+            current.followScheduled = true
+        end
+        return true
+    end
+
+    if use_loop_async then
+        if self.guardFollowLoopActive[runtime_id] == true then
+            return false, "guard-follow-loop-already-active"
+        end
+        self.guardFollowLoopActive[runtime_id] = true
+        local game_callback = function()
+            run_pulse(false)
+        end
+        local callback = function()
+            if self.guardFollowLoopActive[runtime_id] ~= true
+                or type(self.records[runtime_id]) ~= "table" then
+                -- Return true only after the Lua-owned lifecycle fence has
+                -- closed.  The strong references below remain in place, which
+                -- avoids UE4SS 3.0.1's stale registry-ref crash on teardown.
+                return true
+            end
+            self.executeInGameThread(game_callback)
+            return false
+        end
+        self.guardFollowGameCallbacks[runtime_id] = game_callback
+        self.guardFollowAsyncCallbacks[runtime_id] = callback
+        self.loopAsync(self.guardFollowIntervalMs, callback)
+        record.followScheduler = "LoopAsync"
+        self:_log(string.format(
+            "PLAYER_GUARD_FOLLOW_SCHEDULER_READY runtime=%s mode=LoopAsync intervalMs=%d recursiveDelay=false",
+            runtime_id,
+            self.guardFollowIntervalMs
+        ))
+        return true, "guard-follow-loop-scheduled"
+    end
+
+    local callback = function()
+        local execute = function()
+            local current = self.records[runtime_id]
+            if type(current) ~= "table" or current.cancelled == true then
+                return
+            end
+            run_pulse(true)
         end
         if type(self.executeInGameThread) == "function" then
             self.executeInGameThread(execute)
@@ -2552,6 +2613,7 @@ function NativeCharacterAdapter:_schedule_guard_follow(record)
         end
     end
     self.executeWithDelay(self.guardFollowIntervalMs, callback)
+    record.followScheduler = "ExecuteWithDelay-fallback"
     return true, "guard-follow-scheduled"
 end
 
@@ -2779,6 +2841,7 @@ function NativeCharacterAdapter:despawn(actor, reason)
         removed_record.cancelled = true
         removed_record.followScheduled = false
         removed_record.following = false
+        self.guardFollowLoopActive[removed_record.runtimeId] = false
     end
     local ok, destroy_error = pcall(function()
         actor:K2_DestroyActor()
@@ -2818,6 +2881,9 @@ function NativeCharacterAdapter:abandon_world_records(reason)
             record.cancelled = true
             record.pending = false
             record.callbacks = {}
+            if record.runtimeId ~= nil then
+                self.guardFollowLoopActive[record.runtimeId] = false
+            end
         end
     end
     self.records = {}

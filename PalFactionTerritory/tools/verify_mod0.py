@@ -115,6 +115,10 @@ def main() -> int:
         SCRIPTS_ROOT / "pwft" / "registry.lua",
         SCRIPTS_ROOT / "pwft" / "policy.lua",
         SCRIPTS_ROOT / "pwft" / "progression_identity.lua",
+        SCRIPTS_ROOT / "pwft" / "multiplayer_profile_authority.lua",
+        SCRIPTS_ROOT / "pwft" / "multiplayer_native_binding.lua",
+        SCRIPTS_ROOT / "pwft" / "multiplayer_player_services.lua",
+        SCRIPTS_ROOT / "pwft" / "multiplayer_read_model.lua",
         SCRIPTS_ROOT / "pwft" / "progression_store.lua",
         SCRIPTS_ROOT / "pwft" / "quest_runtime.lua",
         SCRIPTS_ROOT / "pwft" / "strategic_world.lua",
@@ -224,12 +228,17 @@ def main() -> int:
         PROJECT_ROOT / "mod0" / "tests" / "json_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "native_character_adapter_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "progression_identity_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "multiplayer_profile_authority_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "multiplayer_native_binding_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "multiplayer_player_services_spec.lua",
+        PROJECT_ROOT / "mod0" / "tests" / "multiplayer_read_model_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "progression_store_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "runtime_smoke.lua",
         PROJECT_ROOT / "mod0" / "tests" / "world_balance_spec.lua",
         PROJECT_ROOT / "mod0" / "tests" / "settlement_raid_spec.lua",
         PROJECT_ROOT / "contracts" / "fast_travel_territories.v1.json",
         PROJECT_ROOT / "contracts" / "faction_progression.v1.json",
+        PROJECT_ROOT / "contracts" / "multiplayer_authority.v1.json",
         PROJECT_ROOT / "contracts" / "pal_reconciliation.v1.json",
         PROJECT_ROOT / "contracts" / "content_pack.v1.json",
         PROJECT_ROOT / "contracts" / "content_bundle.v1.json",
@@ -483,8 +492,42 @@ def main() -> int:
             PROJECT_ROOT
             / "evidence"
             / "contracts"
-            / "faction-consequence-native-damage-build24370881.json"
+            / "faction-consequence-native-damage-build24575825.json"
         ).read_text(encoding="utf-8")
+    )
+    multiplayer_authority = json.loads(
+        (PROJECT_ROOT / "contracts" / "multiplayer_authority.v1.json")
+        .read_text(encoding="utf-8")
+    )
+    require(
+        multiplayer_authority["authorityPolicy"][
+            "serverAuthoritativeControllerRequired"
+        ]
+        is True
+        and multiplayer_authority["authorityPolicy"][
+            "arbitraryClientMutationAllowed"
+        ]
+        is False
+        and multiplayer_authority["authorityPolicy"][
+            "unknownControllerFailsClosed"
+        ]
+        is True,
+        "multiplayer server-authority boundary drifted",
+    )
+    require(
+        multiplayer_authority["acceptanceBoundary"][
+            "automatedTestsAreLiveAcceptance"
+        ]
+        is False
+        and multiplayer_authority["acceptanceBoundary"][
+            "realSecondClientRequired"
+        ]
+        is True
+        and multiplayer_authority["acceptanceBoundary"][
+            "realDedicatedServerRequired"
+        ]
+        is True,
+        "multiplayer live-acceptance boundary drifted",
     )
     unique_pal_boss_provider = json.loads(
         (PROJECT_ROOT / "contracts" / "unique_pal_boss_provider.v1.json").read_text(
@@ -543,33 +586,57 @@ def main() -> int:
         "routingPolicy"
     ]["nativeDamageBinding"]
     require(
-        native_damage["sourceBuildId"]
-        == "historical-objectdump-pre-24575825"
+        native_damage["sourceBuildId"] == "24575825"
         and native_damage["currentHostBuildId"] == "24575825"
-        and native_damage["settlementEnabled"] is False
-        and native_damage["probeEnabled"] is True,
-        "unverified current-build damage settlement must remain probe-only",
+        and native_damage["probeEnabled"] is True
+        and native_damage["liveAttributionVerified"]
+        == native_damage_evidence["runtimePolicy"]["liveAttributionVerified"]
+        and native_damage["settlementEnabled"]
+        == native_damage_evidence["runtimePolicy"][
+            "currentBuildSettlementEnabled"
+        ],
+        "current-build damage signature/attribution/settlement gate drifted",
     )
     require(
-        native_damage["hookPath"]
+        native_damage["eventNotifyHookPath"]
+        == "/Script/Pal.PalEventNotify_Character:OnCharacterDamaged_ServerInternal"
+        and native_damage["actualProcessedHookPath"]
+        == "/Script/Pal.PalDamageReactionComponent:CallOnActualDamageProcessed_ToAll"
+        and native_damage["authoritativeHookPath"]
+        == "/Script/Pal.PalPlayerController:DamageReactionComponent_ProcessDamage_ToServer_ToNPC"
+        and native_damage["parameterDamageHookPath"]
         == "/Script/Pal.PalCharacterParameterComponent:OnDamage"
+        and native_damage["parameterDamageHookRejected"] is True
         and native_damage["damageResultStruct"]
         == "/Script/Pal.PalDamageResult"
         and native_damage["attackerField"] == "Attacker"
         and native_damage["defenderField"] == "Defender"
-        and native_damage["actualDamageField"] == "ActualDamage",
+        and native_damage["actualDamageField"] == "ActualDamage"
+        and native_damage["authoritativeDamageField"]
+        == "NativeDamageValue"
+        and native_damage["noDamageField"] == "NoDamage"
+        and native_damage["directControllerPawnOnly"] is True
+        and native_damage["processedActualDamageSupported"] is False
+        and native_damage["serverNpcDamageSupported"] is True,
         "native damage callback contract drifted",
     )
     require(
         native_damage["sourceObjectDumpSha256"]
         == native_damage_evidence["source"]["objectDumpSha256"]
         and native_damage_evidence["source"]["steamBuildId"]
-        != native_damage["currentHostBuildId"]
+        == native_damage["currentHostBuildId"]
         and native_damage_evidence["runtimePolicy"][
-            "currentBuildSettlementEnabled"
+            "currentBuildSignatureVerified"
         ]
-        is False,
-        "native damage evidence provenance or fail-closed gate drifted",
+        is True
+        and (
+            native_damage["settlementEnabled"] is False
+            or native_damage_evidence["runtimePolicy"][
+                "liveAttributionVerified"
+            ]
+            is True
+        ),
+        "native damage current-build evidence provenance or live gate drifted",
     )
     require(
         unique_pal_boss_provider["schemaVersion"] == "1.0.0"
@@ -1150,6 +1217,12 @@ def main() -> int:
     progression_identity_text = (
         SCRIPTS_ROOT / "pwft" / "progression_identity.lua"
     ).read_text(encoding="utf-8")
+    multiplayer_profile_authority_text = (
+        SCRIPTS_ROOT / "pwft" / "multiplayer_profile_authority.lua"
+    ).read_text(encoding="utf-8")
+    multiplayer_native_binding_text = (
+        SCRIPTS_ROOT / "pwft" / "multiplayer_native_binding.lua"
+    ).read_text(encoding="utf-8")
     quest_runtime_text = (
         SCRIPTS_ROOT / "pwft" / "quest_runtime.lua"
     ).read_text(encoding="utf-8")
@@ -1272,6 +1345,36 @@ def main() -> int:
     require(
         "string.rep(\"0\", 32)" in progression_identity_text,
         "zero GUID rejection is missing",
+    )
+    require(
+        "MultiplayerProfileAuthority.create" in runtime_text
+        and "MultiplayerNativeBinding.create" in runtime_text
+        and "_G.PWFT_MULTIPLAYER_AUTHORITY_V1" in runtime_text
+        and "_G.PWFT_MULTIPLAYER_NATIVE_BINDING_V1" in runtime_text
+        and "register_local_multiplayer_context" in runtime_text,
+        "multiplayer profile authority runtime lifecycle is incomplete",
+    )
+    require(
+        "K2_PostLogin" in multiplayer_native_binding_text
+        and "K2_OnLogout" in multiplayer_native_binding_text
+        and "serverAuthoritative" in multiplayer_native_binding_text
+        and "multiplayer-client-observer-only"
+        in multiplayer_native_binding_text
+        and "dedicatedServerWithoutLocalController"
+        in multiplayer_native_binding_text,
+        "multiplayer native login/logout authority binding is incomplete",
+    )
+    require(
+        "sessionsByController" in multiplayer_profile_authority_text
+        and "sessionsByPlayer" in multiplayer_profile_authority_text
+        and "contextsByPlayer" in multiplayer_profile_authority_text
+        and "multiplayer-controller-generation-stale"
+        in multiplayer_profile_authority_text
+        and "multiplayer-context-persistence-failed"
+        in multiplayer_profile_authority_text
+        and "arbitraryClientMutation = false"
+        in multiplayer_profile_authority_text,
+        "multiplayer per-player session isolation is incomplete",
     )
     require("ProgressionStore.create(" in runtime_text, "progression sidecar store is not wired")
     require(
@@ -1496,22 +1599,38 @@ def main() -> int:
         "native faction-consequence binding runtime lifecycle is incomplete",
     )
     require(
-        "/Script/Pal.PalCharacterParameterComponent:OnDamage"
+        "resolvePlayerContext" in runtime_text
+        and "native-consequence-player-context-unavailable"
+        in faction_consequence_native_binding_text
+        and "exactServerPlayerContextAttribution"
+        in faction_consequence_native_binding_text
+        and "unresolvedPlayerContextFailsClosed"
+        in faction_consequence_native_binding_text,
+        "multiplayer consequence attribution must fail closed per player",
+    )
+    require(
+        "/Script/Pal.PalPlayerController:DamageReactionComponent_ProcessDamage_ToServer_ToNPC"
         in faction_consequence_native_binding_text
         and "self.policy.attackerField"
         in faction_consequence_native_binding_text
-        and "self.policy.defenderField"
+        and "self.policy.authoritativeDamageField"
         in faction_consequence_native_binding_text
-        and "self.policy.actualDamageField"
+        and "self.policy.noDamageField"
+        in faction_consequence_native_binding_text
+        and "self:_controller_pawn(controller)"
         in faction_consequence_native_binding_text
         and "native-consequence-settlement-gated"
         in faction_consequence_native_binding_text,
         "native damage probe or current-build settlement gate is incomplete",
     )
     require(
-        "targetsByActor[defender]"
+        "self:_target_for_actor(defender)"
         in faction_consequence_native_binding_text
-        and "attacker ~= local_player"
+        and "self:_same_actor(attacker, controller_pawn)"
+        in faction_consequence_native_binding_text
+        and "targetsByActorKey"
+        in faction_consequence_native_binding_text
+        and "self.serverRpcHook"
         in faction_consequence_native_binding_text
         and "broadActorScan = false"
         in faction_consequence_native_binding_text,
@@ -1805,7 +1924,11 @@ def main() -> int:
         and raid_adapter_policy["leaderDesignation"]
         == "first-spawn-of-final-wave"
         and raid_adapter_policy["timerCleanupMaySettleRaid"] is False
-        and raid_adapter_policy["remoteOrUnresolvedAttributionAwardsToken"]
+        and raid_adapter_policy["exactRemotePlayerAttributionAwardsToken"]
+        is True
+        and raid_adapter_policy["settlementRoutesToExactPlayerSidecar"]
+        is True
+        and raid_adapter_policy["unresolvedAttributionAwardsToken"]
         is False,
         "Pal raid-result adapter activation or fail-closed policy drifted",
     )

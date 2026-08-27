@@ -1,3 +1,5 @@
+local ProgressionIdentity = require("pwft.progression_identity")
+
 local PalRaidResultAdapter = {}
 
 local API_VERSION = "1.0.0"
@@ -74,6 +76,8 @@ local function public_event(event)
         leaderDead = event.leaderDead,
         leaderKillCredited = event.leaderKillCredited,
         leaderAttributionKind = event.leaderAttributionKind,
+        leaderCreditedPlayerUid = event.leaderCreditedPlayerUid,
+        settlementPlayerUid = event.settlementPlayerUid,
         playerSideWon = event.playerSideWon,
         allWavesCleared = event.allWavesCleared,
         lifecycleKind = event.lifecycleKind,
@@ -104,15 +108,29 @@ local function same_death(death, observation)
             == (observation.attackerIsPlayersOtomo == true)
         and death.trainerMatchesLocalPlayer
             == (observation.trainerMatchesLocalPlayer == true)
+        and death.playerUid
+            == ProgressionIdentity.normalize_guid(observation.playerUid)
+        and death.trainerPlayerUid
+            == ProgressionIdentity.normalize_guid(
+                observation.trainerPlayerUid)
 end
 
-function PalRaidResultAdapter.create(pal_reconciliation, config)
+function PalRaidResultAdapter.create(
+    pal_reconciliation,
+    config,
+    options
+)
     assert(type(pal_reconciliation) == "table", "Pal reconciliation service is required")
     assert(type(pal_reconciliation.record_raid_result) == "function", "Pal reconciliation service lacks raid settlement")
+    options = options or {}
+    assert(options.resolvePlayerService == nil
+            or type(options.resolvePlayerService) == "function",
+        "Pal raid player-service resolver must be a function")
     local policy = validate_policy(pal_reconciliation.contract, config)
     return setmetatable({
         version = API_VERSION,
         service = pal_reconciliation,
+        resolvePlayerService = options.resolvePlayerService,
         policy = policy,
         attendanceBindingEnabled =
             config.attendanceRaidResultBindingEnabled == true,
@@ -124,7 +142,10 @@ function PalRaidResultAdapter.create(pal_reconciliation, config)
             directLocalPlayerCredit = true,
             localOwnedPalCredit = true,
             attendanceRaidAggregation = true,
-            remotePlayerCredit = false,
+            exactPlayerUidCredit = true,
+            remotePlayerCredit = true,
+            exactPlayerServiceRouting =
+                options.resolvePlayerService ~= nil,
             timerSettlement = false,
             PalworldSaveMutation = false,
         },
@@ -192,6 +213,8 @@ function PalRaidResultAdapter:begin_event(observation)
         leaderDead = false,
         leaderKillCredited = false,
         leaderAttributionKind = nil,
+        leaderCreditedPlayerUid = nil,
+        settlementPlayerUid = nil,
     }
     self.events[raid_event_id] = event
     return result(true, "raid-event-started", public_event(event))
@@ -298,7 +321,24 @@ function PalRaidResultAdapter:record_death(raid_event_id, observation)
 
     local attribution_kind = "unresolved"
     local credited = false
-    if observation.attackerKind == "local-player"
+    local credited_player_uid = nil
+    local direct_player_uid = ProgressionIdentity.normalize_guid(
+        observation.playerUid)
+    local trainer_player_uid = ProgressionIdentity.normalize_guid(
+        observation.trainerPlayerUid)
+    if observation.attackerKind == "player"
+        and direct_player_uid ~= nil
+        and observation.attributionAuthority == PLAYER_UID_AUTHORITY then
+        attribution_kind = "exact-player"
+        credited = true
+        credited_player_uid = direct_player_uid
+    elseif observation.attackerKind == "pal"
+        and trainer_player_uid ~= nil
+        and observation.attributionAuthority == OWNED_PAL_AUTHORITY then
+        attribution_kind = "exact-player-owned-pal"
+        credited = true
+        credited_player_uid = trainer_player_uid
+    elseif observation.attackerKind == "local-player"
         and observation.attackerMatchesLocalPlayer == true
         and observation.attributionAuthority == PLAYER_UID_AUTHORITY then
         attribution_kind = "direct-local-player"
@@ -318,6 +358,9 @@ function PalRaidResultAdapter:record_death(raid_event_id, observation)
         attackerMatchesLocalPlayer = observation.attackerMatchesLocalPlayer == true,
         attackerIsPlayersOtomo = observation.attackerIsPlayersOtomo == true,
         trainerMatchesLocalPlayer = observation.trainerMatchesLocalPlayer == true,
+        playerUid = direct_player_uid,
+        trainerPlayerUid = trainer_player_uid,
+        creditedPlayerUid = credited_player_uid,
         attributionKind = attribution_kind,
         playerCredited = credited,
     }
@@ -327,6 +370,7 @@ function PalRaidResultAdapter:record_death(raid_event_id, observation)
         event.leaderDead = true
         event.leaderKillCredited = credited
         event.leaderAttributionKind = attribution_kind
+        event.leaderCreditedPlayerUid = credited_player_uid
     end
     return result(true,
         credited and "raid-death-player-credited" or "raid-death-not-player-credited",
@@ -374,12 +418,34 @@ function PalRaidResultAdapter:finish_event(raid_event_id, observation)
         return result(false, "complete-native-outcome-required", public_event(event))
     end
 
+    local settlement_service = self.service
+    local settlement_player_uid = event.leaderCreditedPlayerUid
+    if settlement_player_uid ~= nil
+        and self.resolvePlayerService ~= nil then
+        local called, service, service_error = pcall(
+            self.resolvePlayerService,
+            settlement_player_uid
+        )
+        if not called or type(service) ~= "table"
+            or type(service.record_raid_result) ~= "function" then
+            return result(false,
+                "raid-player-reconciliation-unavailable", {
+                    event = public_event(event),
+                    playerUid = settlement_player_uid,
+                    serviceError = tostring(called
+                        and service_error or service),
+                })
+        end
+        settlement_service = service
+    end
+
     event.active = false
     event.resolved = true
+    event.settlementPlayerUid = settlement_player_uid
     event.playerSideWon = observation.playerSideWon == true
         and observation.allWavesCleared == true
     event.allWavesCleared = observation.allWavesCleared == true
-    local service_result = self.service:record_raid_result(
+    local service_result = settlement_service:record_raid_result(
         event.palFactionId,
         {
             raidEventId = event.raidEventId,

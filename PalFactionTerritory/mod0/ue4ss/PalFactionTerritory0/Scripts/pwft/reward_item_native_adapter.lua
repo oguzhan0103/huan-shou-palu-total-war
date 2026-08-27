@@ -119,6 +119,69 @@ local function get_local_controller(adapters)
     return nil, "local-player-controller-not-ready"
 end
 
+local function controller_uid(controller)
+    return ProgressionIdentity.normalize_guid(
+        safe_call(controller, "GetPlayerUId"))
+end
+
+local function find_player_controller(adapters, player_uid)
+    if type(adapters.resolvePlayerController) == "function" then
+        local ok, controller, resolve_error = pcall(
+            adapters.resolvePlayerController,
+            player_uid
+        )
+        if ok and is_valid(controller) then
+            if controller_uid(controller) ~= player_uid then
+                return nil,
+                    "reward-item-player-controller-identity-mismatch"
+            end
+            return controller, "multiplayer-session", nil
+        end
+        if ok and resolve_error
+            == "multiplayer-player-controller-ambiguous" then
+            return nil, "reward-item-player-controller-ambiguous"
+        end
+    end
+
+    local finder = adapters.findAllOf or _G.FindAllOf
+    if type(finder) == "function" then
+        local matches = {}
+        local seen = {}
+        for _, class_name in ipairs({
+            "PalPlayerController", "PalPlayerController_C",
+        }) do
+            local ok, controllers = pcall(finder, class_name)
+            if ok and type(controllers) == "table" then
+                for _, raw_controller in pairs(controllers) do
+                    local controller = unwrap(raw_controller)
+                    local key = full_name(controller)
+                    if is_valid(controller)
+                        and string.find(key, "Default__", 1, true) == nil
+                        and controller_uid(controller) == player_uid
+                        and not seen[key] then
+                        seen[key] = true
+                        matches[#matches + 1] = controller
+                    end
+                end
+                if #matches > 0 then break end
+            end
+        end
+        if #matches == 1 then
+            return matches[1], "FindAllOf(exact-player)", nil
+        end
+        if #matches > 1 then
+            return nil, "reward-item-player-controller-ambiguous"
+        end
+    end
+
+    local local_controller, local_source = get_local_controller(adapters)
+    if local_controller ~= nil
+        and controller_uid(local_controller) == player_uid then
+        return local_controller, local_source, nil
+    end
+    return nil, "reward-item-player-controller-not-ready"
+end
+
 local function find_player_inventory(adapters, player_uid, native_name)
     local finder = adapters.findAllOf or _G.FindAllOf
     if type(finder) ~= "function" then
@@ -222,6 +285,7 @@ function RewardItemNativeAdapter.create(configuration, options)
             exactInventoryReadback = true,
             exactOwnerPlayerUIdMatch = true,
             listenServerInternalRoute = true,
+            serverRemotePlayerInternalRoute = true,
             clientServerRequestRoute = true,
             directCurrencyMutation = false,
             directSavePayloadMutation = false,
@@ -284,14 +348,10 @@ function RewardItemNativeAdapter:preflight(request)
             retryable = false,
         })
     end
-    local controller, controller_source = get_local_controller(self.adapters)
+    local controller, controller_source = find_player_controller(
+        self.adapters, request.playerUid)
     if controller == nil then
-        return result(false, controller_source, { retryable = true })
-    end
-    local controller_uid = ProgressionIdentity.normalize_guid(
-        safe_call(controller, "GetPlayerUId"))
-    if controller_uid ~= request.playerUid then
-        return result(false, "reward-item-local-controller-identity-mismatch", {
+        return result(false, controller_source, {
             retryable = true,
         })
     end
@@ -310,6 +370,12 @@ function RewardItemNativeAdapter:preflight(request)
     if has_authority then
         native_route = "PalPlayerInventoryData.AddItem_ServerInternal"
     else
+        if safe_call(controller, "IsLocalPlayerController") ~= true then
+            return result(false,
+                "reward-item-client-controller-not-local", {
+                    retryable = false,
+                })
+        end
         local transmitter = safe_property(controller, "Transmitter")
         network_component = safe_call(transmitter, "GetPlayer")
         if not is_valid(network_component) then

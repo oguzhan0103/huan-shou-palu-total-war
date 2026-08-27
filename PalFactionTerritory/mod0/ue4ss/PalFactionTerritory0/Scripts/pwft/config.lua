@@ -224,8 +224,56 @@ return {
                 characterClassPath =
                     "/Game/Pal/Blueprint/Character/NPC/Normal/"
                         .. "BP_NPC_Hunter.BP_NPC_Hunter_C",
-                spawnBackDistance = 180,
-                spawnSideDistance = 160,
+                -- Keep the QA target directly in front of the local player with
+                -- enough separation for a real unarmed hit to exercise Pal's
+                -- native damage chain without synthetic ApplyDamage.
+                spawnBackDistance = -180,
+                spawnSideDistance = 0,
+                -- Automation fallback for environments where injected
+                -- Ctrl+function-key chords do not reach UE4SS.  A staging
+                -- script may enable an external sequence/command file; the
+                -- formal source never polls it.
+                commandFileEnabled = false,
+                commandFilePath = "",
+                commandPollIntervalMs = 250,
+                -- QA-only current-Build damage attribution probe. A staging
+                -- script may enable this together with the guard live test;
+                -- the spawned exact Actor is then registered as the sole
+                -- friendly-fire target and is unregistered on recall/death.
+                -- Formal source keeps the target disabled and never scans
+                -- ordinary world NPCs.
+                consequenceProbe = {
+                    enabled = false,
+                    bindingIdPrefix = "pwft.qa.native-damage",
+                    actorRole = "faction-member",
+                    -- Empty in formal source.  The live-test staging script
+                    -- may supply Pal's ordinary NPC controller for a distinct
+                    -- QA actor; production guards keep their visitor-guard
+                    -- controller and behaviour.
+                    targetControllerClassPath = "",
+                    -- A staged probe may put only its freshly spawned exact
+                    -- actor into Pal's native combat/hostile state.  Formal
+                    -- source remains false, so production followers never
+                    -- target their owner and no world NPC is scanned.
+                    forceHostileTarget = false,
+                    -- Formal source never invokes callbacks directly.  The
+                    -- staging script may enable an exact-target QA call to
+                    -- Pal's own post-damage notification UFunction.  Runtime
+                    -- logs label that route syntheticCallback=true, so it is
+                    -- evidence of hook/signature wiring, not a claimed melee
+                    -- hit or HP mutation.
+                    triggerActualProcessedCallback = false,
+                    -- Staging may instead create a transient wild-Pal target
+                    -- through PalNPCManager. Generic ApplyDamage is only a
+                    -- diagnostic HP mutation; the target is placed directly
+                    -- in front of the player so a real player attack can prove
+                    -- Pal's ActualDamageProcessed attribution. Formal source
+                    -- is false and staged actors are explicitly destroyed.
+                    nativePalTarget = false,
+                    manualAttackDistance = 115,
+                    triggerKey = "F6",
+                    baseDamage = 1,
+                },
             },
         },
         persistence = {
@@ -246,6 +294,34 @@ return {
                 },
             },
         },
+    },
+
+    -- Multiplayer progression remains server-authoritative.  The current
+    -- Build exposes GameMode login/logout plus exact controller PlayerUId, so
+    -- listen hosts and headless dedicated servers can maintain one Mod-owned
+    -- sidecar context per connected player.  Clients are observers only and
+    -- cannot submit arbitrary reputation mutations.
+    multiplayerAuthority = {
+        enabled = true,
+        currentBuildVerified = true,
+        buildId = "24575825",
+        objectDumpSha256 =
+            "3e84e8a6936b7d1c33de6cfc034c4a200655a3e762cbc2ec4c6a57516476ec78",
+        postLoginHookPath =
+            "/Script/Engine.GameModeBase:K2_PostLogin",
+        logoutHookPath =
+            "/Script/Engine.GameModeBase:K2_OnLogout",
+        identityRetryDelaysMs = {
+            0,
+            250,
+            1000,
+            3000,
+            8000,
+        },
+        remoteProfilesEnabled = true,
+        dedicatedServerHeadless = true,
+        clientMutationEnabled = false,
+        storyContentIncluded = false,
     },
 
     -- Finite Pal reconciliation is implemented as a Mod-owned service inside

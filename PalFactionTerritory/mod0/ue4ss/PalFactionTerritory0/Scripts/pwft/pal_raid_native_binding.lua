@@ -1,3 +1,5 @@
+local ProgressionIdentity = require("pwft.progression_identity")
+
 local PalRaidNativeBinding = {}
 
 local API_VERSION = "1.0.0"
@@ -142,7 +144,7 @@ end
 
 local function controller_uid(controller)
     local ok, uid = call(controller, "GetPlayerUId")
-    return ok and guid_key(uid) or nil
+    return ok and ProgressionIdentity.normalize_guid(uid) or nil
 end
 
 local function incident_info(incident)
@@ -393,19 +395,11 @@ function PalRaidNativeBinding:_pal_utility()
 end
 
 function PalRaidNativeBinding:_death_attribution(attacker)
-    local local_controller = self:_local_controller()
-    local local_uid = controller_uid(local_controller)
-    if local_uid == nil then
-        return {
-            attackerKind = "unresolved",
-            attributionAuthority = "local-player-uid-unavailable",
-        }
-    end
-
     local attacker_controller = nil
     local controller_ok, controller = call(attacker, "GetController")
     if controller_ok then attacker_controller = controller end
     if not valid(attacker_controller) then
+        local local_controller = self:_local_controller()
         local pawn_ok, pawn = call(local_controller, "K2_GetPawn")
         if pawn_ok
             and self:_object_key(pawn) == self:_object_key(attacker) then
@@ -413,10 +407,10 @@ function PalRaidNativeBinding:_death_attribution(attacker)
         end
     end
     local attacker_uid = controller_uid(attacker_controller)
-    if attacker_uid ~= nil and attacker_uid == local_uid then
+    if attacker_uid ~= nil then
         return {
-            attackerKind = "local-player",
-            attackerMatchesLocalPlayer = true,
+            attackerKind = "player",
+            playerUid = attacker_uid,
             attributionAuthority = PLAYER_UID_AUTHORITY,
         }
     end
@@ -435,12 +429,11 @@ function PalRaidNativeBinding:_death_attribution(attacker)
     local trainer_uid = trainer_ok
         and controller_uid(trainer_controller)
         or nil
-    if otomo_ok and is_otomo == true
-        and trainer_uid ~= nil and trainer_uid == local_uid then
+    if trainer_uid ~= nil then
         return {
             attackerKind = "pal",
-            attackerIsPlayersOtomo = true,
-            trainerMatchesLocalPlayer = true,
+            attackerIsPlayersOtomo = otomo_ok and is_otomo == true,
+            trainerPlayerUid = trainer_uid,
             attributionAuthority = OWNED_PAL_AUTHORITY,
         }
     end
@@ -449,7 +442,7 @@ function PalRaidNativeBinding:_death_attribution(attacker)
         attackerMatchesLocalPlayer = false,
         attackerIsPlayersOtomo = otomo_ok and is_otomo == true,
         trainerMatchesLocalPlayer = false,
-        attributionAuthority = "remote-or-unresolved-native-attacker",
+        attributionAuthority = "unresolved-native-attacker",
     }
 end
 
@@ -474,6 +467,8 @@ function PalRaidNativeBinding:_on_death(incident, dead_info)
         victimActorKey = victim_key,
         lastAttackerActorKey = self:_object_key(attacker),
         attackerKind = attribution.attackerKind,
+        playerUid = attribution.playerUid,
+        trainerPlayerUid = attribution.trainerPlayerUid,
         attackerMatchesLocalPlayer =
             attribution.attackerMatchesLocalPlayer,
         attackerIsPlayersOtomo =

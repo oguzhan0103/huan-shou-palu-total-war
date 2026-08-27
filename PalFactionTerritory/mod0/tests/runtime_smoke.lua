@@ -125,6 +125,8 @@ assert(state.factionResourceLedger ~= nil)
 assert(state.factionEconomyWar ~= nil)
 assert(state.rewardPolicy ~= nil)
 assert(state.rewardDeliveryBus ~= nil)
+assert(state.multiplayerPlayerServices ~= nil)
+assert(state.multiplayerReadModel ~= nil)
 assert(state.rewardItemNativeAdapter ~= nil)
 assert(state.rewardDeliveryLiveTest ~= nil)
 assert(state.factionCommerce ~= nil)
@@ -173,6 +175,20 @@ assert(
 assert(Config.factionProgression.persistence.enabled == true)
 assert(Config.factionProgression.persistence.deferredIdentity == true)
 assert(state.factionApi.version == "1.1.0")
+assert(state.multiplayerProfileAuthority ~= nil)
+assert(state.multiplayerNativeBinding ~= nil)
+assert(state.multiplayerNativeBindingStart.ok == true)
+assert(_G.PWFT_MULTIPLAYER_AUTHORITY_V1
+    == state.multiplayerProfileAuthority)
+assert(_G.PWFT_MULTIPLAYER_NATIVE_BINDING_V1
+    == state.multiplayerNativeBinding)
+local multiplayer_status = state.multiplayerNativeBinding:status()
+assert(multiplayer_status.postLoginHookReady == true)
+assert(multiplayer_status.logoutHookReady == true)
+assert(multiplayer_status.trackedControllerCount == 0)
+assert(multiplayer_status.capabilities
+    .dedicatedServerWithoutLocalController == true)
+assert(Config.multiplayerAuthority.clientMutationEnabled == false)
 assert(state.factionCommerce.version == "1.0.0")
 assert(state.factionEconomy.version == "1.0.0")
 assert(state.factionEconomyStatic.version == "1.1.0")
@@ -208,7 +224,7 @@ assert(
 )
 assert(
     state.factionConsequenceNativeBinding:status().sourceBuildId
-        == "historical-objectdump-pre-24575825"
+        == "24575825"
 )
 assert(
     state.factionConsequenceNativeBinding:status()
@@ -216,20 +232,39 @@ assert(
 )
 assert(
     state.factionConsequenceNativeBinding:status()
-        .currentHostSignatureVerified == false
+        .currentHostSignatureVerified == true
 )
 assert(
     state.factionConsequenceNativeBinding:status()
-        .settlementEnabled == false
+        .settlementEnabled == true
 )
 assert(
     state.factionConsequenceNativeBinding:status().broadActorScan
         == false
 )
 assert(
+    state.factionConsequenceNativeBinding:status()
+        .exactServerPlayerContextAttribution == true
+)
+assert(
+    hooks[
+        "/Script/Pal.PalEventNotify_Character:OnCharacterDamaged_ServerInternal"
+    ] == nil
+)
+assert(
+    hooks[
+        "/Script/Pal.PalDamageReactionComponent:CallOnActualDamageProcessed_ToAll"
+    ] == nil
+)
+assert(
+    hooks[
+        "/Script/Pal.PalPlayerController:DamageReactionComponent_ProcessDamage_ToServer_ToNPC"
+    ] ~= nil
+)
+assert(
     hooks[
         "/Script/Pal.PalCharacterParameterComponent:OnDamage"
-    ] ~= nil
+    ] == nil
 )
 assert(_G.PWFT_COMPANION_LEDGER_V1 == state.companionLedger)
 assert(
@@ -271,6 +306,10 @@ assert(_G.PWFT_FACTION_RESOURCE_LEDGER_V1
 assert(_G.PWFT_FACTION_ECONOMY_WAR_V1 == state.factionEconomyWar)
 assert(_G.PWFT_REWARD_POLICY_V1 == state.rewardPolicy)
 assert(_G.PWFT_REWARD_DELIVERY_V1 == state.rewardDeliveryBus)
+assert(_G.PWFT_MULTIPLAYER_PLAYER_SERVICES_V1
+    == state.multiplayerPlayerServices)
+assert(_G.PWFT_MULTIPLAYER_READ_MODEL_V1
+    == state.multiplayerReadModel)
 assert(_G.PWFT_REWARD_ITEM_NATIVE_ADAPTER_V1
     == state.rewardItemNativeAdapter)
 assert(_G.PWFT_REWARD_DELIVERY_LIVE_TEST_V1
@@ -292,6 +331,10 @@ assert(b7_readiness.PalworldSaveMutation == false)
 assert(state.endingEffectProviderBus:status().modelCommitAuthority == false)
 assert(state.rewardPolicy:status().capabilities.modelAuthority == false)
 assert(state.rewardDeliveryBus:status().providerCount == 1)
+assert(state.multiplayerPlayerServices:status()
+    .playerContextCount == 0)
+assert(state.multiplayerReadModel:status()
+    .capabilities.nativeTransportBound == false)
 assert(state.rewardDeliveryBus:status().channelCount == 0)
 assert(state.rewardDeliveryBus:status().capabilities.currencyMutation == false)
 assert(state.rewardItemNativeAdapter:status().buildId == "24575825")
@@ -326,6 +369,10 @@ assert(state.contentModuleLoader.context
         == state.npcLeaderGuardNativeProduction)
 assert(state.contentModuleLoader.context.rewardDeliveryBus
     == state.rewardDeliveryBus)
+assert(state.contentModuleLoader.context.multiplayerPlayerServices
+    == state.multiplayerPlayerServices)
+assert(state.contentModuleLoader.context.multiplayerReadModel
+    == state.multiplayerReadModel)
 assert(state.strategicWorld:status().contentPackCount == 1)
 assert(state.strategicWorld:status().uniquePalCount == 5)
 assert(state.endingRuntime:status().routeCount == 1)

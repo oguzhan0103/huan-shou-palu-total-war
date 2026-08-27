@@ -1,8 +1,9 @@
-# 《幻兽帕鲁全面战争》v1.0.5 安装、更新与卸载
+# 《幻兽帕鲁全面战争》v1.0.6 联机测试预览安装、更新与卸载
 
 兼容目标：Windows Steam 版 Palworld Build `24575825`
-发布形式：source-only 开源机制基座
-玩家总说明：[请先看 v1.0.5 下载与卸载说明](./请先看_幻兽帕鲁全面战争_v1.0.5_下载与卸载说明.md)
+发布形式：source-only 开源机制基座／多人联机预览
+联机测试总说明：[请先看 v1.0.6 多人联机测试任务书](./请先看_幻兽帕鲁全面战争_v1.0.6_多人联机测试任务书.md)
+稳定版说明：[v1.0.5 下载与卸载说明](./请先看_幻兽帕鲁全面战争_v1.0.5_下载与卸载说明.md)
 
 ## 一、发布边界
 
@@ -35,12 +36,12 @@ Palworld/Pal/Binaries/Win64/dwmapi.dll
 Palworld/Pal/Binaries/Win64/ue4ss/Mods/
 ```
 
-## 三、安装 v1.0.5 运行时
+## 三、安装 v1.0.6 联机测试运行时
 
 1. 下载：
 
 ```text
-PalFactionTerritory0-v1.0.5-build24575825-runtime-source.zip
+PalFactionTerritory0-v1.0.6-build24575825-runtime-source.zip
 ```
 
 2. 使用同页 `.sha256.json` 校验压缩包。
@@ -65,10 +66,14 @@ ue4ss/快速卸载_幻兽帕鲁全面战争.cmd
 [PalFactionTerritory0] READY
 FACTION_PROGRESSION_READY
 CONTENT_RUNTIME_READY
+MULTIPLAYER_AUTHORITY_READY
 ```
 
 不要安装或启用 `PalFactionTerritoryQAHarness0`。正式包中的 B1/B2/A9/B7 QA 热键和
 外部命令文件入口默认关闭。
+
+联机测试时，两台电脑必须使用同一个预发布标签或完整提交号。测试结束后双击
+`CommunityTestTools/收集联机测试证据.cmd`，按任务书提交两边的脱敏证据包。
 
 ## 四、更新
 

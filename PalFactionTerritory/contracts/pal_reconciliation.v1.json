@@ -53,9 +53,13 @@
     "attendanceOutcomeAuthority": "pwft-attendance-all-members-dead-v1",
     "acceptedLeaderKillAttribution": [
       "direct-local-player",
-      "local-player-owned-pal"
+      "local-player-owned-pal",
+      "exact-player",
+      "exact-player-owned-pal"
     ],
-    "remoteOrUnresolvedAttributionAwardsToken": false,
+    "exactRemotePlayerAttributionAwardsToken": true,
+    "settlementRoutesToExactPlayerSidecar": true,
+    "unresolvedAttributionAwardsToken": false,
     "timerCleanupMaySettleRaid": false,
     "conflictingEvidenceBehavior": "block-event-fail-closed"
   },

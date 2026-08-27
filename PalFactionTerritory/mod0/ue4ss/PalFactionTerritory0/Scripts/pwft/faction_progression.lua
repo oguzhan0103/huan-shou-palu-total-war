@@ -312,13 +312,19 @@ local function validate_contract(contract)
     require_non_empty_string(native_damage.currentHostBuildId, "native damage current host build ID")
     require_non_empty_string(native_damage.sourceObjectDumpSha256, "native damage ObjectDump hash")
     assert(string.len(native_damage.sourceObjectDumpSha256) == 64, "native damage ObjectDump hash must be SHA-256")
-    require_non_empty_string(native_damage.hookPath, "native damage hook path")
+    require_non_empty_string(native_damage.eventNotifyHookPath,
+        "native damage server-event hook path")
     require_non_empty_string(native_damage.damageResultStruct, "native damage result struct")
     require_non_empty_string(native_damage.attackerField, "native damage attacker field")
     require_non_empty_string(native_damage.defenderField, "native damage defender field")
     require_non_empty_string(native_damage.actualDamageField, "native damage actual-damage field")
     assert(native_damage.exactRegisteredDefenderOnly == true, "native damage requires an exact registered defender")
-    assert(native_damage.directLocalPlayerOnly == true, "native damage requires the direct local player")
+    assert(native_damage.directPlayerActorOnly == true,
+        "native damage requires a direct player actor")
+    assert(native_damage.directLocalPlayerOnly == false,
+        "native damage server event must support remote player actors")
+    assert(native_damage.remotePlayerControllerSupported == true,
+        "native damage server event must preserve multiplayer attribution")
     assert(native_damage.positiveActualDamageOnly == true, "native damage requires positive actual damage")
     require_number(native_damage.minimumIntervalSecondsPerTarget, "native damage target interval")
     assert(native_damage.minimumIntervalSecondsPerTarget > 0, "native damage target interval must be positive")
@@ -328,7 +334,18 @@ local function validate_contract(contract)
     assert(native_damage.penaltyByActorRole["faction-member"] > 0, "faction-member damage penalty must be positive")
     assert(native_damage.penaltyByActorRole.civilian > 0, "civilian damage penalty must be positive")
     assert(native_damage.probeEnabled == true, "native damage probe must be enabled")
-    assert(native_damage.settlementEnabled == false, "unverified current-build native damage settlement must fail closed")
+    assert(type(native_damage.liveAttributionVerified) == "boolean",
+        "native damage live-attribution status must be boolean")
+    require_non_empty_string(native_damage.liveAttributionEvidence,
+        "native damage live-attribution evidence")
+    assert(type(native_damage.settlementEnabled) == "boolean",
+        "native damage settlement status must be boolean")
+    if native_damage.settlementEnabled then
+        assert(native_damage.sourceBuildId == native_damage.currentHostBuildId,
+            "native damage settlement requires the current-Build signature")
+        assert(native_damage.liveAttributionVerified == true,
+            "native damage settlement requires live attribution evidence")
+    end
     require_non_empty_string(native_damage.settlementGate, "native damage settlement gate")
     assert(native_damage.storyContentIncluded == false, "native damage binding cannot include story content")
     local consequence_providers = {}

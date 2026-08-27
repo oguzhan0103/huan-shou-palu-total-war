@@ -81,6 +81,9 @@ def _build_registry() -> dict[str, Any]:
     economy_shops_path = CONTRACTS_DIR / "faction_economy_shops.v1.json"
     pal_reconciliation_path = CONTRACTS_DIR / "pal_reconciliation.v1.json"
     progression_path = CONTRACTS_DIR / "faction_progression.v1.json"
+    multiplayer_authority_path = (
+        CONTRACTS_DIR / "multiplayer_authority.v1.json"
+    )
     assignments_path = CONTRACTS_DIR / "territory_assignments.v1.json"
     fast_travel_path = CONTRACTS_DIR / "fast_travel_territories.v1.json"
     islands_path = CONTRACTS_DIR / "island_territories.v2.json"
@@ -92,6 +95,9 @@ def _build_registry() -> dict[str, Any]:
     economy_shops_contract = _read_json(economy_shops_path)
     pal_reconciliation_contract = _read_json(pal_reconciliation_path)
     progression_contract = _read_json(progression_path)
+    multiplayer_authority_contract = _read_json(
+        multiplayer_authority_path
+    )
     assignments_contract = _read_json(assignments_path)
     fast_travel_contract = _read_json(fast_travel_path)
     islands_contract = _read_json(islands_path)
@@ -101,6 +107,11 @@ def _build_registry() -> dict[str, Any]:
         raise ValueError("territory partition is not the user-approved frozen baseline")
     if progression_contract.get("baselineStatus") != "user_confirmed_mechanics_baseline_2026-07-28":
         raise ValueError("faction progression is not the user-confirmed mechanics baseline")
+    if (
+        multiplayer_authority_contract.get("workPackage")
+        != "technical-multiplayer-authority-foundation"
+    ):
+        raise ValueError("multiplayer authority contract is not active")
     if commerce_contract.get("baselineStatus") != "mechanics_complete_balance_provisional_2026-07-28":
         raise ValueError("faction commerce mechanics baseline is not active")
     if (
@@ -392,6 +403,9 @@ def _build_registry() -> dict[str, Any]:
             "faction_economy_shops.v1.json": _sha256(economy_shops_path),
             "pal_reconciliation.v1.json": _sha256(pal_reconciliation_path),
             "faction_progression.v1.json": _sha256(progression_path),
+            "multiplayer_authority.v1.json": _sha256(
+                multiplayer_authority_path
+            ),
             "territory_assignments.v1.json": _sha256(assignments_path),
             "fast_travel_territories.v1.json": _sha256(fast_travel_path),
             "island_territories.v2.json": _sha256(islands_path),
@@ -419,6 +433,7 @@ def _build_registry() -> dict[str, Any]:
         "economyShops": economy_shops_contract,
         "palReconciliation": pal_reconciliation_contract,
         "progression": progression_contract,
+        "multiplayerAuthority": multiplayer_authority_contract,
         "mapModes": islands_contract["designPolicy"]["mapModes"],
         "islandOrder": island_order,
         "islands": islands,
