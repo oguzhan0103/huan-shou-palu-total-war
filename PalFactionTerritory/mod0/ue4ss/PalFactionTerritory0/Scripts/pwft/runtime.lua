@@ -80,6 +80,14 @@ local PalRaidResultAdapter =
     require("pwft.pal_raid_result_adapter")
 local PalRaidNativeBinding =
     require("pwft.pal_raid_native_binding")
+local MultiplayerNativeBinding =
+    require("pwft.multiplayer_native_binding")
+local MultiplayerProfileAuthority =
+    require("pwft.multiplayer_profile_authority")
+local MultiplayerPlayerServices =
+    require("pwft.multiplayer_player_services")
+local MultiplayerReadModel =
+    require("pwft.multiplayer_read_model")
 local ProgressionIdentity = require("pwft.progression_identity")
 local ProgressionStore = require("pwft.progression_store")
 local QuestRuntime = require("pwft.quest_runtime")
@@ -2573,7 +2581,7 @@ local function find_local_player_transform()
                                     Pitch = tonumber(safe_property(rotation, "Pitch")) or 0,
                                     Yaw = tonumber(safe_property(rotation, "Yaw")) or 0,
                                     Roll = tonumber(safe_property(rotation, "Roll")) or 0,
-                                }, nil, pawn
+                                }, nil, pawn, controller
                             end
                         end
                     end
@@ -3278,14 +3286,67 @@ local function register_guard_live_test(config, state)
     end
     state.guardLiveTestSequence = 0
     state.guardLiveTestHandle = nil
+    state.guardLiveTestConsequenceBindingId = nil
+    state.guardLiveTestNativePalHandles = nil
+    state.guardLiveTestNativePalActor = nil
     state.guardLiveTestProvider =
         state.nativeCharacterAdapter:create_guard_provider(
             qa.characterId,
             qa.characterClassPath
         )
+    local function unregister_consequence_target(reason, actor_ref)
+        local binding_id = state.guardLiveTestConsequenceBindingId
+        if binding_id == nil then return end
+        local unregistered = state.factionConsequenceNativeBinding
+            :unregister_actor(binding_id, actor_ref)
+        log(string.format(
+            "PLAYER_GUARD_DAMAGE_PROBE_UNREGISTER binding=%s ok=%s reason=%s detail=%s saveWrites=0",
+            tostring(binding_id),
+            tostring(unregistered.ok),
+            tostring(unregistered.reason),
+            tostring(reason)
+        ))
+        if unregistered.ok then
+            state.guardLiveTestConsequenceBindingId = nil
+        end
+    end
+    local function cleanup_native_pal_targets(reason)
+        local actors = {}
+        if is_valid_object(state.guardLiveTestNativePalActor) then
+            actors[state.guardLiveTestNativePalActor] = true
+        end
+        for _, handle in ipairs(
+            state.guardLiveTestNativePalHandles or {}
+        ) do
+            local ok, actor = pcall(function()
+                return handle:TryGetIndividualActor()
+            end)
+            if ok and is_valid_object(actor) then actors[actor] = true end
+        end
+        local destroyed = 0
+        for actor in pairs(actors) do
+            local ok = pcall(function() actor:K2_DestroyActor() end)
+            if ok then destroyed = destroyed + 1 end
+        end
+        state.guardLiveTestNativePalActor = nil
+        state.guardLiveTestNativePalHandles = nil
+        log(string.format(
+            "PLAYER_GUARD_DAMAGE_QA_PAL_CLEANUP reason=%s destroyed=%d saveWrites=0",
+            tostring(reason),
+            destroyed
+        ))
+    end
     local callback = function()
         local execute = function()
             if state.guardLiveTestHandle ~= nil then
+                local registered_actor =
+                    state.guardLiveTestNativePalActor
+                    or state.guardLiveTestHandle.actor
+                unregister_consequence_target(
+                    "live-test-toggle",
+                    registered_actor
+                )
+                cleanup_native_pal_targets("live-test-toggle")
                 local recalled = state.guardLiveTestProvider.recall(
                     state.guardLiveTestHandle,
                     "live-test-toggle"
@@ -3326,6 +3387,19 @@ local function register_guard_live_test(config, state)
                 "qa-%04d",
                 state.guardLiveTestSequence
             )
+            local consequence_qa = qa.consequenceProbe or {}
+            local target_controller_class_path = nil
+            if consequence_qa.enabled == true
+                and type(consequence_qa.targetControllerClassPath)
+                    == "string"
+                and consequence_qa.targetControllerClassPath ~= "" then
+                -- The production follower remains on the visitor-guard
+                -- controller.  QA may instead request Pal's ordinary NPC
+                -- controller so the exact registered test actor is clearly
+                -- isolated from the production follower route.
+                target_controller_class_path =
+                    consequence_qa.targetControllerClassPath
+            end
             local deployed, handle_or_error = pcall(
                 state.guardLiveTestProvider.deploy,
                 qa.factionId,
@@ -3338,6 +3412,8 @@ local function register_guard_live_test(config, state)
                         Roll = 0,
                     },
                     followTarget = pawn,
+                    controllerClassPath =
+                        target_controller_class_path,
                     onTerminated = function(detail)
                         local live_handle =
                             state.guardLiveTestHandle
@@ -3347,6 +3423,10 @@ local function register_guard_live_test(config, state)
                             and live_handle.runtimeId
                                 == detail.runtimeId
                         if matches then
+                            unregister_consequence_target(
+                                "guard-terminated",
+                                detail and detail.actor
+                            )
                             state.guardLiveTestHandle = nil
                         end
                         log(string.format(
@@ -3368,6 +3448,74 @@ local function register_guard_live_test(config, state)
                 return
             end
             state.guardLiveTestHandle = handle_or_error
+            if consequence_qa.enabled == true then
+                local binding_id = string.format(
+                    "%s.%04d",
+                    tostring(consequence_qa.bindingIdPrefix),
+                    state.guardLiveTestSequence
+                )
+                local registered = state.factionConsequenceNativeBinding
+                    :register_actor({
+                        bindingId = binding_id,
+                        factionId = qa.factionId,
+                        actorRole = consequence_qa.actorRole,
+                        actorRef = handle_or_error.actor,
+                    })
+                if not registered.ok then
+                    state.guardLiveTestProvider.recall(
+                        handle_or_error,
+                        "damage-probe-registration-failed"
+                    )
+                    state.guardLiveTestHandle = nil
+                    log(string.format(
+                        "PLAYER_GUARD_DAMAGE_PROBE_FAILED binding=%s reason=%s saveWrites=0",
+                        binding_id,
+                        tostring(registered.reason)
+                    ))
+                    return
+                end
+                state.guardLiveTestConsequenceBindingId = binding_id
+                if consequence_qa.forceHostileTarget == true then
+                    local hostile_ok, hostile_detail = pcall(function()
+                        local actor = handle_or_error.actor
+                        local controller = actor:GetController()
+                        assert(is_valid_object(controller),
+                            "spawned-NPC-controller-unavailable")
+                        controller:SetActiveAI(true)
+                        actor:ChangeBattleModeFlag_ToAll(true)
+                        controller:AddTargetPlayer_ForEnemy(pawn)
+                        return safe_full_name(controller)
+                    end)
+                    log(string.format(
+                        "PLAYER_GUARD_DAMAGE_PROBE_HOSTILE binding=%s ok=%s controller=%s exactActorOnly=true saveWrites=0",
+                        binding_id,
+                        tostring(hostile_ok),
+                        tostring(hostile_detail)
+                    ))
+                    if not hostile_ok then
+                        unregister_consequence_target(
+                            "hostile-probe-setup-failed",
+                            handle_or_error.actor
+                        )
+                        state.guardLiveTestProvider.recall(
+                            handle_or_error,
+                            "hostile-probe-setup-failed"
+                        )
+                        state.guardLiveTestHandle = nil
+                        return
+                    end
+                end
+                log(string.format(
+                    "PLAYER_GUARD_DAMAGE_PROBE_REGISTERED binding=%s faction=%s role=%s actor=%s class=%s settlement=%s saveWrites=0",
+                    binding_id,
+                    qa.factionId,
+                    consequence_qa.actorRole,
+                    tostring(registered.actorKey),
+                    tostring(registered.actorClassKey),
+                    tostring(state.factionConsequenceNativeBinding
+                        :status().settlementEnabled)
+                ))
+            end
             log(string.format(
                 "PLAYER_GUARD_LIVE_TEST_DEPLOYED faction=%s request=%s actor=%s follow=%s player=(%.2f,%.2f,%.2f) spawn=(%.2f,%.2f,%.2f) saveWrites=0",
                 qa.factionId,
@@ -3394,11 +3542,329 @@ local function register_guard_live_test(config, state)
         { ModifierKey.CONTROL },
         callback
     )
+    local consequence_qa = qa.consequenceProbe or {}
+    local damage_callback = nil
+    if consequence_qa.enabled == true then
+        local trigger_key = consequence_qa.triggerKey
+        if type(trigger_key) ~= "string"
+            or Key[trigger_key] == nil then
+            log("PLAYER_GUARD_DAMAGE_QA_TRIGGER_UNAVAILABLE key="
+                .. tostring(trigger_key))
+        else
+            damage_callback = function()
+                local execute = function()
+                    local handle = state.guardLiveTestHandle
+                    local binding_id =
+                        state.guardLiveTestConsequenceBindingId
+                    if type(handle) ~= "table"
+                        or not is_valid_object(handle.actor)
+                        or binding_id == nil then
+                        log("PLAYER_GUARD_DAMAGE_QA_TRIGGER_REJECTED reason=registered-live-target-required saveWrites=0")
+                        return
+                    end
+                    local player_location, _, player_error, pawn, controller =
+                        find_local_player_transform()
+                    if not is_valid_object(pawn)
+                        or not is_valid_object(controller) then
+                        log(string.format(
+                            "PLAYER_GUARD_DAMAGE_QA_TRIGGER_REJECTED reason=%s saveWrites=0",
+                            tostring(player_error
+                                or "local-player-controller-unavailable")
+                        ))
+                        return
+                    end
+                    local amount = tonumber(
+                        consequence_qa.baseDamage
+                    ) or 1
+                    local function apply_to_target(
+                        target_actor,
+                        active_binding_id
+                    )
+                        local method = "GameplayStatics.ApplyDamage"
+                        local synthetic_callback = false
+                        local applied, returned
+                        if consequence_qa
+                                .triggerActualProcessedCallback == true then
+                            method = "CallOnActualDamageProcessed_ToAll"
+                            synthetic_callback = true
+                            local damage_component = safe_property(
+                                target_actor,
+                                "DamageReactionComponent"
+                            )
+                            if not is_valid_object(damage_component) then
+                                log("PLAYER_GUARD_DAMAGE_QA_TRIGGER_REJECTED reason=DamageReactionComponent-unavailable saveWrites=0")
+                                return
+                            end
+                            applied, returned = pcall(function()
+                                return damage_component
+                                    :CallOnActualDamageProcessed_ToAll(
+                                        pawn,
+                                        target_actor,
+                                        amount
+                                    )
+                            end)
+                        else
+                        local gameplay_statics = nil
+                        if type(StaticFindObject) == "function" then
+                            local found, value = pcall(
+                                StaticFindObject,
+                                "/Script/Engine.Default__GameplayStatics"
+                            )
+                            if found and is_valid_object(value) then
+                                gameplay_statics = value
+                            end
+                        end
+                        if gameplay_statics == nil then
+                            log("PLAYER_GUARD_DAMAGE_QA_TRIGGER_REJECTED reason=GameplayStatics-unavailable saveWrites=0")
+                            return
+                        end
+                        applied, returned = pcall(function()
+                            return gameplay_statics:ApplyDamage(
+                                target_actor,
+                                amount,
+                                controller,
+                                pawn,
+                                nil
+                            )
+                        end)
+                        end
+                        log(string.format(
+                            "PLAYER_GUARD_DAMAGE_QA_TRIGGER binding=%s amount=%s applied=%s return=%s attacker=%s defender=%s method=%s syntheticCallback=%s hpMutation=%s saveWrites=0",
+                            tostring(active_binding_id),
+                            tostring(amount),
+                            tostring(applied),
+                            tostring(returned),
+                            safe_full_name(pawn),
+                            safe_full_name(target_actor),
+                            method,
+                            tostring(synthetic_callback),
+                            tostring(not synthetic_callback)
+                        ))
+                    end
+                    if consequence_qa.nativePalTarget == true
+                        and not is_valid_object(
+                            state.guardLiveTestNativePalActor
+                        ) then
+                        -- The attendance spawner's first slot is (+450,+450,+100)
+                        -- from its center. Shift the QA-only center so that the
+                        -- exact actor selected for attribution appears directly
+                        -- in front of the local player and can be struck through
+                        -- the real player-combat pipeline. This does not alter the
+                        -- accepted settlement-raid spawn layout.
+                        local pal_spawn_center = player_location
+                        local pal_spawn_front_distance = tonumber(
+                            consequence_qa.manualAttackDistance
+                        ) or 115
+                        local forward_ok, forward = pcall(function()
+                            return pawn:GetActorForwardVector()
+                        end)
+                        if forward_ok and forward ~= nil then
+                            pal_spawn_center = {
+                                X = (tonumber(player_location.X) or 0)
+                                    + ((tonumber(forward.X) or 0)
+                                        * pal_spawn_front_distance)
+                                    - 450,
+                                Y = (tonumber(player_location.Y) or 0)
+                                    + ((tonumber(forward.Y) or 0)
+                                        * pal_spawn_front_distance)
+                                    - 450,
+                                Z = (tonumber(player_location.Z) or 0)
+                                    + ((tonumber(forward.Z) or 0)
+                                        * pal_spawn_front_distance)
+                                    - 100,
+                            }
+                        end
+                        local handles, spawn_error = SettlementRaid._test
+                            .spawn_native_attendance_wave(
+                                state.settlementRaid,
+                                controller,
+                                pal_spawn_center
+                            )
+                        if #handles == 0 then
+                            log("PLAYER_GUARD_DAMAGE_QA_PAL_FAILED reason="
+                                .. tostring(spawn_error))
+                            return
+                        end
+                        state.guardLiveTestNativePalHandles = handles
+                        local attempts = 0
+                        local function resolve_pal_target()
+                            attempts = attempts + 1
+                            local target_actor = nil
+                            for _, pal_handle in ipairs(handles) do
+                                local ok, actor = pcall(function()
+                                    return pal_handle
+                                        :TryGetIndividualActor()
+                                end)
+                                if ok and is_valid_object(actor) then
+                                    target_actor = actor
+                                    break
+                                end
+                            end
+                            if target_actor == nil and attempts < 40 then
+                                ExecuteWithDelay(250, resolve_pal_target)
+                                return
+                            end
+                            if target_actor == nil then
+                                log("PLAYER_GUARD_DAMAGE_QA_PAL_FAILED reason=actor-unresolved attempts="
+                                    .. tostring(attempts))
+                                return
+                            end
+                            unregister_consequence_target(
+                                "qa-native-pal-rebind",
+                                handle.actor
+                            )
+                            local pal_binding_id = tostring(binding_id)
+                                .. ".pal"
+                            local registered = state
+                                .factionConsequenceNativeBinding
+                                :register_actor({
+                                    bindingId = pal_binding_id,
+                                    factionId = qa.factionId,
+                                    actorRole = consequence_qa.actorRole,
+                                    actorRef = target_actor,
+                                })
+                            if not registered.ok then
+                                log("PLAYER_GUARD_DAMAGE_QA_PAL_FAILED reason="
+                                    .. tostring(registered.reason))
+                                return
+                            end
+                            state.guardLiveTestConsequenceBindingId =
+                                pal_binding_id
+                            state.guardLiveTestNativePalActor =
+                                target_actor
+                            log(string.format(
+                                "PLAYER_GUARD_DAMAGE_QA_PAL_READY binding=%s actor=%s class=%s handles=%d attempts=%d exactActorOnly=true manualAttackDistance=%s forwardResolved=%s saveWrites=0",
+                                pal_binding_id,
+                                tostring(registered.actorKey),
+                                tostring(registered.actorClassKey),
+                                #handles,
+                                attempts,
+                                tostring(pal_spawn_front_distance),
+                                tostring(forward_ok and forward ~= nil)
+                            ))
+                            apply_to_target(
+                                target_actor,
+                                pal_binding_id
+                            )
+                        end
+                        if type(ExecuteWithDelay) == "function" then
+                            ExecuteWithDelay(250, resolve_pal_target)
+                        else
+                            resolve_pal_target()
+                        end
+                        return
+                    end
+                    apply_to_target(
+                        state.guardLiveTestNativePalActor
+                            or handle.actor,
+                        state.guardLiveTestConsequenceBindingId
+                            or binding_id
+                    )
+                end
+                if type(ExecuteInGameThread) == "function" then
+                    ExecuteInGameThread(execute)
+                else
+                    execute()
+                end
+            end
+            state.callbacks.playerGuardDamageQaTrigger =
+                damage_callback
+            RegisterKeyBind(
+                Key[trigger_key],
+                { ModifierKey.CONTROL },
+                damage_callback
+            )
+            log(string.format(
+                "PLAYER_GUARD_DAMAGE_QA_TRIGGER_READY key=Ctrl+%s method=%s baseDamage=%s syntheticCallback=%s saveWrites=0",
+                trigger_key,
+                consequence_qa.triggerActualProcessedCallback == true
+                    and "CallOnActualDamageProcessed_ToAll"
+                    or "GameplayStatics.ApplyDamage",
+                tostring(consequence_qa.baseDamage),
+                tostring(consequence_qa
+                    .triggerActualProcessedCallback == true)
+            ))
+        end
+    end
+    if qa.commandFileEnabled == true then
+        local command_path = qa.commandFilePath
+        if type(command_path) ~= "string" or command_path == "" then
+            log("PLAYER_GUARD_COMMAND_FILE_UNAVAILABLE reason=path")
+        else
+            local last_sequence = nil
+            local function read_command()
+                local file = io.open(command_path, "r")
+                if file == nil then return nil, nil end
+                local content = file:read("*a") or ""
+                file:close()
+                local sequence = string.match(
+                    content,
+                    "sequence%s*=%s*([%w%-%._]+)"
+                )
+                local command = string.match(
+                    content,
+                    "command%s*=%s*([%a%-_]+)"
+                )
+                return sequence, command
+            end
+            local function poll()
+                local sequence, command = read_command()
+                if sequence == nil
+                    or command == nil
+                    or sequence == last_sequence then
+                    return false
+                end
+                last_sequence = sequence
+                local normalized = string.lower(command)
+                local selected = nil
+                if normalized == "toggle"
+                    or normalized == "spawn"
+                    or normalized == "recall" then
+                    selected = callback
+                elseif normalized == "damage" then
+                    selected = damage_callback
+                end
+                if type(selected) ~= "function" then
+                    log(string.format(
+                        "PLAYER_GUARD_COMMAND_FILE_RESULT sequence=%s command=%s dispatched=false reason=unknown-or-disabled-command saveWrites=0",
+                        tostring(sequence),
+                        tostring(normalized)
+                    ))
+                    return false
+                end
+                selected()
+                log(string.format(
+                    "PLAYER_GUARD_COMMAND_FILE_RESULT sequence=%s command=%s dispatched=true saveWrites=0",
+                    tostring(sequence),
+                    tostring(normalized)
+                ))
+                return false
+            end
+            state.callbacks.playerGuardCommandFilePoll = poll
+            state.callbacks.playerGuardCommandFilePollOnce = poll
+            -- UE4SS can lose an async timer registered during the boot-world
+            -- transition.  Keep one explicit QA-only, unmodified fallback so
+            -- automation can synchronously consume the same fenced command.
+            if Key.P ~= nil then
+                state.callbacks.playerGuardCommandFileKeyTrigger = poll
+                RegisterKeyBind(Key.P, poll)
+                log("PLAYER_GUARD_COMMAND_FILE_KEY_READY key=P qaOnly=true")
+            end
+            log(string.format(
+                "PLAYER_GUARD_COMMAND_FILE_READY path=%s trigger=M commands=spawn|damage|recall qaOnly=true saveWrites=0",
+                command_path
+            ))
+        end
+    end
     log(string.format(
-        "PLAYER_GUARD_LIVE_TEST_READY key=Ctrl+%s faction=%s character=%s entitlementBypass=qa-only saveWrites=0",
+        "PLAYER_GUARD_LIVE_TEST_READY key=Ctrl+%s faction=%s character=%s entitlementBypass=qa-only damageProbe=%s damageTrigger=Ctrl+%s saveWrites=0",
         qa.key,
         qa.factionId,
-        qa.characterId
+        qa.characterId,
+        tostring(qa.consequenceProbe
+            and qa.consequenceProbe.enabled == true),
+        tostring(qa.consequenceProbe
+            and qa.consequenceProbe.triggerKey)
     ))
 end
 
@@ -5350,6 +5816,19 @@ local function register_runtime_probes(config, registry, policy, state)
                         log("UNIQUE_PAL_BOSS_COMMAND_MAP_KEY_TRIGGER dispatched=true qaOnly=true")
                     end
                 end
+                local guard_poll_once = state.callbacks
+                    and state.callbacks.playerGuardCommandFilePollOnce
+                if type(guard_poll_once) == "function" then
+                    local ok, dispatched = pcall(guard_poll_once)
+                    if not ok then
+                        log(string.format(
+                            "PLAYER_GUARD_COMMAND_MAP_KEY_TRIGGER_FAILED error=%s",
+                            tostring(dispatched)
+                        ))
+                    elseif dispatched == false then
+                        log("PLAYER_GUARD_COMMAND_MAP_KEY_TRIGGER checked=true qaOnly=true")
+                    end
+                end
                 schedule_map_widget_probe(state, 750)
             end
             state.callbacks.nativeMapOpenObserver = map_open_observer
@@ -5431,6 +5910,8 @@ local function register_runtime_probes(config, registry, policy, state)
         and config.palReconciliation
             .nativeRaidResultBindingEnabled == true
     if (config.factionCommerce.economyMerchantPresence.enabled == true
+        or (config.multiplayerAuthority ~= nil
+            and config.multiplayerAuthority.enabled == true)
         or config.palReconciliation.agentBridge.enabled == true
         or config.uniquePalNativeDeliveryProbe.enabled == true
         or config.factionNpcAttitudes ~= nil
@@ -5508,6 +5989,31 @@ local function register_runtime_probes(config, registry, policy, state)
                     "runtime-world-unloading"
                 )
             end
+            if state.multiplayerPlayerServices ~= nil then
+                local player_services_unbound =
+                    state.multiplayerPlayerServices:unbind_world(
+                        "runtime-world-unloading"
+                    )
+                log(string.format(
+                    "MULTIPLAYER_PLAYER_SERVICES_UNBOUND ok=%s reason=%s generation=%s",
+                    tostring(player_services_unbound.ok == true),
+                    tostring(player_services_unbound.reason),
+                    tostring(player_services_unbound
+                        .previousWorldGeneration)
+                ))
+            end
+            if state.multiplayerNativeBinding ~= nil then
+                local multiplayer_unbound =
+                    state.multiplayerNativeBinding:unbind_world(
+                        "runtime-world-unloading"
+                    )
+                log(string.format(
+                    "MULTIPLAYER_WORLD_UNBOUND ok=%s reason=%s generation=%s",
+                    tostring(multiplayer_unbound.ok == true),
+                    tostring(multiplayer_unbound.reason),
+                    tostring(multiplayer_unbound.previousWorldGeneration)
+                ))
+            end
             if state.factionConsequenceRouter ~= nil then
                 state.factionConsequenceRouter:unbind_world(
                     "runtime-world-unloading"
@@ -5560,6 +6066,8 @@ local function register_runtime_probes(config, registry, policy, state)
     end
 
     if (config.enableTowerBindingProbe
+        or (config.multiplayerAuthority ~= nil
+            and config.multiplayerAuthority.enabled == true)
         or identity_probe_enabled
         or native_raid_hook_retry_enabled
         or config.uniquePalNativeDeliveryProbe.enabled == true
@@ -5575,6 +6083,44 @@ local function register_runtime_probes(config, registry, policy, state)
             end
             if state.agentDialogueOperator ~= nil then
                 state.agentDialogueOperator:on_world_loaded()
+            end
+            if state.multiplayerProfileAuthority ~= nil then
+                local multiplayer_bound =
+                    state.multiplayerProfileAuthority:bind_world(
+                        nil,
+                        state.nativeWorldGeneration
+                    )
+                log(string.format(
+                    "MULTIPLAYER_WORLD_BOUND ok=%s reason=%s generation=%d",
+                    tostring(multiplayer_bound.ok == true),
+                    tostring(multiplayer_bound.reason),
+                    state.nativeWorldGeneration
+                ))
+            end
+            if state.multiplayerPlayerServices ~= nil then
+                local services_bound =
+                    state.multiplayerPlayerServices:bind_world(
+                        state.nativeWorldGeneration
+                    )
+                log(string.format(
+                    "MULTIPLAYER_PLAYER_SERVICES_BOUND ok=%s reason=%s generation=%d",
+                    tostring(services_bound.ok == true),
+                    tostring(services_bound.reason),
+                    state.nativeWorldGeneration
+                ))
+            end
+            if state.multiplayerNativeBinding ~= nil then
+                local multiplayer_scan =
+                    state.multiplayerNativeBinding:on_world_loaded(
+                        state.nativeWorldGeneration
+                    )
+                log(string.format(
+                    "MULTIPLAYER_CONTROLLER_SCAN ok=%s reason=%s discovered=%d generation=%d",
+                    tostring(multiplayer_scan.ok == true),
+                    tostring(multiplayer_scan.reason),
+                    tonumber(multiplayer_scan.discovered) or 0,
+                    state.nativeWorldGeneration
+                ))
             end
             if state.rewardDeliveryBus ~= nil then
                 local reward_bound = state.rewardDeliveryBus:bind_world(
@@ -5693,6 +6239,22 @@ function Runtime.start(config, registry, policy)
     assert(type(config.uniquePalNativeDeliveryProduction.approvedSpeciesByUniquePalId) == "table", "unique-Pal native delivery production whitelist is required")
     assert(config.uniquePalNativeDeliveryProduction.approvedSpeciesByUniquePalId["pwft.unique.feybreak"] == nil, "tentative Feybreak unique Pal must remain fail-closed")
     assert(config.factionProgression.enabled == true, "faction progression core must be enabled")
+    assert(type(config.multiplayerAuthority) == "table", "multiplayer authority must be explicitly configured")
+    assert(config.multiplayerAuthority.enabled == true, "multiplayer authority core must be enabled")
+    assert(config.multiplayerAuthority.currentBuildVerified == true, "multiplayer authority routes must be verified for the current Build")
+    assert(config.multiplayerAuthority.buildId == config.expectedSteamBuildId, "multiplayer authority Build ID drifted")
+    assert(config.multiplayerAuthority.objectDumpSha256 == config.uniquePalNativeDeliveryProbe.objectDumpSha256, "multiplayer authority ObjectDump hash drifted")
+    assert(config.multiplayerAuthority.postLoginHookPath == MultiplayerNativeBinding.paths.postLogin, "multiplayer post-login hook path drifted")
+    assert(config.multiplayerAuthority.logoutHookPath == MultiplayerNativeBinding.paths.logout, "multiplayer logout hook path drifted")
+    assert(type(config.multiplayerAuthority.identityRetryDelaysMs) == "table" and #config.multiplayerAuthority.identityRetryDelaysMs > 0, "multiplayer identity retry delays are required")
+    assert(config.multiplayerAuthority.remoteProfilesEnabled == true, "multiplayer remote profiles must be enabled")
+    assert(config.multiplayerAuthority.dedicatedServerHeadless == true, "multiplayer dedicated-server headless mode must be enabled")
+    assert(config.multiplayerAuthority.clientMutationEnabled == false, "multiplayer clients must not own progression mutation")
+    assert(type(registry.multiplayerAuthority) == "table", "multiplayer authority registry contract is required")
+    assert(registry.multiplayerAuthority.verifiedBuild.steamBuildId == config.expectedSteamBuildId, "multiplayer authority registry Build ID drifted")
+    assert(registry.multiplayerAuthority.nativeLifecycle.postLoginHook == config.multiplayerAuthority.postLoginHookPath, "multiplayer authority registry login route drifted")
+    assert(registry.multiplayerAuthority.nativeLifecycle.logoutHook == config.multiplayerAuthority.logoutHookPath, "multiplayer authority registry logout route drifted")
+    assert(registry.multiplayerAuthority.authorityPolicy.arbitraryClientMutationAllowed == false, "multiplayer registry must reject client mutations")
     assert(type(config.palReconciliation) == "table", "Pal reconciliation must be explicitly configured")
     assert(config.palReconciliation.enabled == true, "Pal reconciliation core must be enabled")
     assert(config.palReconciliation.normalizedRaidAdapterEnabled == true, "normalized Pal raid-result adapter must be enabled")
@@ -5967,6 +6529,16 @@ function Runtime.start(config, registry, policy)
                     outcome.guardReconciliation =
                         guard_reconciliation
                 end
+                if guard_reconciliation ~= nil then
+                    log(string.format(
+                        "FACTION_GUARD_ENTITLEMENT_RECONCILED faction=%s ok=%s reason=%s revoked=%s rank=%s",
+                        tostring(faction_id or "all"),
+                        tostring(guard_reconciliation.ok),
+                        tostring(guard_reconciliation.reason),
+                        tostring(guard_reconciliation.revoked == true),
+                        tostring(guard_reconciliation.rankId or "none")
+                    ))
+                end
                 if guard_reconciliation ~= nil
                     and guard_reconciliation.ok ~= true then
                     log(
@@ -6103,6 +6675,222 @@ function Runtime.start(config, registry, policy)
         )
     _G.PWFT_FACTION_CONSEQUENCE_API_V1 =
         state.factionConsequenceRouter
+    local function create_remote_multiplayer_context(identity)
+        local store = ProgressionStore.create({
+            enabled = true,
+            mode = config.factionProgression.persistence.mode,
+            profileKey = identity.profileKey,
+            rootPath = config.factionProgression.persistence.rootPath,
+        })
+        local restored, restore_error = store:load()
+        local snapshot = nil
+        if restored ~= nil then
+            snapshot = restored.snapshot
+        elseif restore_error
+            ~= "primary=not-found;backup=not-found" then
+            return nil,
+                "remote-sidecar-recovery-blocked:"
+                    .. tostring(restore_error)
+        end
+        local progression = FactionProgression.create(
+            registry.progression,
+            snapshot
+        )
+        local function save_remote_progression(label)
+            local saved = store:save(
+                progression:export_snapshot())
+            if not saved.ok then
+                log(string.format(
+                    "%s player=%s reason=%s",
+                    label,
+                    tostring(identity.playerUid),
+                    tostring(saved.reason)
+                ))
+            end
+            return saved
+        end
+        local api = FactionApi.create(progression, function()
+            save_remote_progression(
+                "MULTIPLAYER_REMOTE_PROFILE_SAVE_FAILED")
+        end)
+        local router = FactionConsequenceRouter.create(api, {})
+        local pal_reconciliation = PalReconciliation.create(
+            registry.palReconciliation,
+            progression,
+            {
+                onChange = function()
+                    save_remote_progression(
+                        "MULTIPLAYER_REMOTE_PAL_SAVE_FAILED")
+                end,
+            }
+        )
+        local reward_policy = RewardPolicy.create(
+            progression,
+            {
+                authority =
+                    "pwft.authoritative-reward-outcome.v1",
+                nativeAdapterEnabled =
+                    config.rewardItemNativeProduction.enabled == true,
+                onChange = function()
+                    save_remote_progression(
+                        "MULTIPLAYER_REMOTE_REWARD_POLICY_SAVE_FAILED")
+                end,
+            }
+        )
+        local reward_adapter = RewardItemNativeAdapter.create(
+            config.rewardItemNativeProduction,
+            {
+                adapters = {
+                    resolvePlayerController = function(player_uid)
+                        if state.multiplayerNativeBinding == nil then
+                            return nil,
+                                "multiplayer-native-binding-unavailable"
+                        end
+                        return state.multiplayerNativeBinding
+                            :controller_for_player(player_uid)
+                    end,
+                },
+            }
+        )
+        local reward_bus = RewardDeliveryBus.create(
+            progression,
+            reward_policy,
+            {
+                onChange = function()
+                    save_remote_progression(
+                        "MULTIPLAYER_REMOTE_REWARD_LEDGER_SAVE_FAILED")
+                end,
+                requirePersistenceFence = true,
+                persistFence = function(reward_snapshot)
+                    return store:save(reward_snapshot)
+                end,
+                identityResolver = function() return identity end,
+                retryDelayMs =
+                    config.rewardItemNativeProduction.retryDelayMs,
+                maxVerifyAttempts =
+                    config.rewardItemNativeProduction.maxVerifyAttempts,
+                schedule = function(delay_ms, callback)
+                    if type(ExecuteWithDelay) ~= "function"
+                        or type(ExecuteInGameThread) ~= "function" then
+                        return false
+                    end
+                    ExecuteWithDelay(delay_ms, function()
+                        ExecuteInGameThread(callback)
+                    end)
+                    return true
+                end,
+            }
+        )
+        local reward_provider = reward_bus:register_provider({
+            providerId =
+                config.rewardItemNativeProduction.providerId,
+            authoritySource =
+                config.rewardItemNativeProduction.authoritySource,
+            rewardKind = "item",
+            buildId = config.rewardItemNativeProduction.buildId,
+            routeKey = config.rewardItemNativeProduction.routeKey,
+            currentBuildVerified = true,
+            serverAuthoritativeGrant = true,
+            exactInventoryReadback = true,
+            stablePlayerIdentity = true,
+            modelAuthority = false,
+        }, reward_adapter)
+        if not reward_provider.ok then
+            return nil,
+                "remote-reward-provider-registration-failed:"
+                    .. tostring(reward_provider.reason)
+        end
+        local context = {
+            identity = identity,
+            playerUid = identity.playerUid,
+            factionProgression = progression,
+            factionApi = api,
+            factionConsequenceRouter = router,
+            palReconciliation = pal_reconciliation,
+            rewardPolicy = reward_policy,
+            rewardItemNativeAdapter = reward_adapter,
+            rewardDeliveryBus = reward_bus,
+            progressionStore = store,
+        }
+        local attached = state.multiplayerPlayerServices
+            :attach_context(context)
+        if not attached.ok then
+            return nil,
+                "remote-player-services-attach-failed:"
+                    .. tostring(attached.reason)
+        end
+        local initial_save = store:save(
+            progression:export_snapshot()
+        )
+        if not initial_save.ok then
+            state.multiplayerPlayerServices:detach_context(
+                identity.playerUid,
+                "remote-sidecar-initial-save-failed"
+            )
+            return nil,
+                "remote-sidecar-initial-save-failed:"
+                    .. tostring(initial_save.reason)
+        end
+        return context
+    end
+    state.multiplayerProfileAuthority =
+        MultiplayerProfileAuthority.create({
+            deferLocalContext = true,
+            contextFactory = create_remote_multiplayer_context,
+            persistContext = function(context)
+                return context.progressionStore:save(
+                    context.factionProgression:export_snapshot()
+                )
+            end,
+        })
+    if (state.nativeWorldGeneration or 0) == 0 then
+        state.nativeWorldGeneration = 1
+    end
+    state.multiplayerProfileAuthority:bind_world(
+        nil,
+        state.nativeWorldGeneration
+    )
+    state.multiplayerPlayerServices =
+        MultiplayerPlayerServices.create()
+    local multiplayer_services_bound =
+        state.multiplayerPlayerServices:bind_world(
+            state.nativeWorldGeneration)
+    assert(multiplayer_services_bound.ok,
+        multiplayer_services_bound.reason)
+    _G.PWFT_MULTIPLAYER_PLAYER_SERVICES_V1 =
+        state.multiplayerPlayerServices
+    state.multiplayerReadModel = MultiplayerReadModel.create(
+        registry,
+        {
+            contextResolver = function(player_uid)
+                return state.multiplayerProfileAuthority
+                    :context_for_player(player_uid)
+            end,
+            localIdentityResolver = function()
+                return state.progressionIdentity
+                    and state.progressionIdentity.value or nil
+            end,
+        }
+    )
+    _G.PWFT_MULTIPLAYER_READ_MODEL_V1 =
+        state.multiplayerReadModel
+    state.multiplayerNativeBinding =
+        MultiplayerNativeBinding.create(
+            state.multiplayerProfileAuthority,
+            {
+                logger = log,
+                retryDelaysMs = config.multiplayerAuthority
+                    .identityRetryDelaysMs,
+            }
+        )
+    state.multiplayerNativeBindingStart =
+        state.multiplayerNativeBinding:start(
+            state.nativeWorldGeneration
+        )
+    _G.PWFT_MULTIPLAYER_AUTHORITY_V1 =
+        state.multiplayerProfileAuthority
+    _G.PWFT_MULTIPLAYER_NATIVE_BINDING_V1 =
+        state.multiplayerNativeBinding
     state.factionConsequenceNativeBinding =
         FactionConsequenceNativeBinding.create(
             state.factionConsequenceRouter,
@@ -6112,6 +6900,10 @@ function Runtime.start(config, registry, policy)
                     local _, _, _, pawn =
                         find_local_player_transform()
                     return pawn
+                end,
+                resolvePlayerContext = function(controller)
+                    return state.multiplayerNativeBinding
+                        :resolve_controller(controller)
                 end,
             }
         )
@@ -6163,7 +6955,19 @@ function Runtime.start(config, registry, policy)
         }
     )
     state.rewardItemNativeAdapter = RewardItemNativeAdapter.create(
-        config.rewardItemNativeProduction
+        config.rewardItemNativeProduction,
+        {
+            adapters = {
+                resolvePlayerController = function(player_uid)
+                    if state.multiplayerNativeBinding == nil then
+                        return nil,
+                            "multiplayer-native-binding-unavailable"
+                    end
+                    return state.multiplayerNativeBinding
+                        :controller_for_player(player_uid)
+                end,
+            },
+        }
     )
     state.rewardDeliveryBus = RewardDeliveryBus.create(
         state.factionProgression,
@@ -6255,7 +7059,26 @@ function Runtime.start(config, registry, policy)
     state.palRaidResultAdapter =
         PalRaidResultAdapter.create(
             state.palReconciliation,
-            config.palReconciliation
+            config.palReconciliation,
+            {
+                resolvePlayerService = function(player_uid)
+                    if state.multiplayerProfileAuthority == nil then
+                        return nil,
+                            "multiplayer-authority-unavailable"
+                    end
+                    local resolved, resolve_error =
+                        state.multiplayerProfileAuthority
+                            :context_for_player(player_uid)
+                    if resolved == nil
+                        or type(resolved.context) ~= "table"
+                        or type(resolved.context.palReconciliation)
+                            ~= "table" then
+                        return nil, resolve_error
+                            or "player-pal-reconciliation-unavailable"
+                    end
+                    return resolved.context.palReconciliation
+                end,
+            }
         )
     _G.PWFT_PAL_RAID_RESULT_ADAPTER_V1 =
         state.palRaidResultAdapter
@@ -6624,6 +7447,10 @@ function Runtime.start(config, registry, policy)
     _G.PWFT_FACTION_ECONOMY_WAR_V1 = state.factionEconomyWar
     _G.PWFT_REWARD_POLICY_V1 = state.rewardPolicy
     _G.PWFT_REWARD_DELIVERY_V1 = state.rewardDeliveryBus
+    _G.PWFT_MULTIPLAYER_PLAYER_SERVICES_V1 =
+        state.multiplayerPlayerServices
+    _G.PWFT_MULTIPLAYER_READ_MODEL_V1 =
+        state.multiplayerReadModel
     _G.PWFT_REWARD_ITEM_NATIVE_ADAPTER_V1 =
         state.rewardItemNativeAdapter
     _G.PWFT_REWARD_DELIVERY_LIVE_TEST_V1 =
@@ -6675,6 +7502,9 @@ function Runtime.start(config, registry, policy)
                 state.endingEffectNativeProduction,
             rewardPolicy = state.rewardPolicy,
             rewardDeliveryBus = state.rewardDeliveryBus,
+            multiplayerPlayerServices =
+                state.multiplayerPlayerServices,
+            multiplayerReadModel = state.multiplayerReadModel,
             rewardItemNativeAdapter =
                 state.rewardItemNativeAdapter,
             factionNpcAttitudeBus = state.factionNpcAttitudeBus,
@@ -7268,10 +8098,64 @@ function Runtime.start(config, registry, policy)
         ))
         return true, reactivated.reason
     end
+    local function register_local_multiplayer_context(identity)
+        if state.multiplayerProfileAuthority == nil then
+            return true, "multiplayer-authority-disabled"
+        end
+        if identity.serverAuthoritative ~= true then
+            log(string.format(
+                "MULTIPLAYER_LOCAL_CLIENT_OBSERVER player=%s role=%s mutations=false",
+                tostring(identity.playerUid),
+                tostring(identity.connectionRole)
+            ))
+            return true, "multiplayer-client-observer-only"
+        end
+        local context = state.localMultiplayerContext or {}
+        context.identity = identity
+        context.playerUid = identity.playerUid
+        context.factionProgression = state.factionProgression
+        context.factionApi = state.factionApi
+        context.factionConsequenceRouter =
+            state.factionConsequenceRouter
+        context.palReconciliation = state.palReconciliation
+        context.rewardPolicy = state.rewardPolicy
+        context.rewardItemNativeAdapter =
+            state.rewardItemNativeAdapter
+        context.rewardDeliveryBus = state.rewardDeliveryBus
+        context.progressionStore = state.progressionStore
+        state.localMultiplayerContext = context
+        local attached = state.multiplayerPlayerServices
+            :attach_context(context)
+        if not attached.ok then
+            return false, attached.reason
+        end
+        local registered = state.multiplayerProfileAuthority
+            :register_local_context(identity, context)
+        if not registered.ok then
+            state.multiplayerPlayerServices:detach_context(
+                identity.playerUid,
+                "local-multiplayer-context-registration-failed"
+            )
+        end
+        log(string.format(
+            "MULTIPLAYER_LOCAL_CONTEXT_READY ok=%s reason=%s player=%s profile=%s sessionActive=%s",
+            tostring(registered.ok == true),
+            tostring(registered.reason),
+            tostring(identity.playerUid),
+            tostring(identity.profileKey),
+            tostring(registered.sessionActive == true)
+        ))
+        return registered.ok == true, registered.reason
+    end
     state.onProgressionIdentityReady = function(identity)
         if state.progressionStore.enabled
             and state.progressionStore.profileKey
                 == identity.profileKey then
+            local multiplayer_ok, multiplayer_reason =
+                register_local_multiplayer_context(identity)
+            if not multiplayer_ok then
+                return false, multiplayer_reason
+            end
             activate_in_game_world_services(
                 config,
                 registry,
@@ -7346,6 +8230,11 @@ function Runtime.start(config, registry, policy)
         if not save_result.ok then
             return false, save_result.reason
         end
+        local multiplayer_ok, multiplayer_reason =
+            register_local_multiplayer_context(identity)
+        if not multiplayer_ok then
+            return false, multiplayer_reason
+        end
         local ledger_ok, ledger_reason =
             state.companionLedger:activate(identity)
         if not ledger_ok then
@@ -7412,6 +8301,20 @@ function Runtime.start(config, registry, policy)
         #registry.progression.palFactionIds,
         state.progressionStore.enabled and config.factionProgression.persistence.mode or "disabled",
         restore_source
+    ))
+    local multiplayer_status = state.multiplayerNativeBinding:status()
+    log(string.format(
+        "MULTIPLAYER_AUTHORITY_READY api=%s loginHook=%s logoutHook=%s generation=%s sessions=%d local=%d remote=%d pending=%d dedicatedHeadless=%s clientMutation=false liveRemoteAccepted=false",
+        multiplayer_status.apiVersion,
+        tostring(multiplayer_status.postLoginHookReady),
+        tostring(multiplayer_status.logoutHookReady),
+        tostring(multiplayer_status.worldGeneration),
+        multiplayer_status.trackedControllerCount,
+        multiplayer_status.localSessionCount,
+        multiplayer_status.remoteSessionCount,
+        multiplayer_status.pendingContextCount,
+        tostring(multiplayer_status.capabilities
+            .dedicatedServerWithoutLocalController)
     ))
     local consequence_status = state.factionConsequenceRouter:status()
     log(string.format(

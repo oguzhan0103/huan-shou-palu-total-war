@@ -10,8 +10,9 @@ return {
         ["faction_commerce.v1.json"] = "4db023a98df2ebf45c31a9d7c82e64342f3dba7051160b3cc5895c034cb360e9",
         ["faction_economy.v1.json"] = "55cd5db5a55cfcdd043cb870e0cf305dc0ce45bebc2198aceb9d61265d876d34",
         ["faction_economy_shops.v1.json"] = "32d67b2613b2dbc9d0bbe8473bc12b27749dd1ddbb635d9d251f6aec3877d8c5",
-        ["pal_reconciliation.v1.json"] = "312a14163d9a6e2f21acc1ab5c9d15b4585a6dd8880f7386891c9dde77a66065",
-        ["faction_progression.v1.json"] = "9a8973a87035cc78786de26e4436a98e5ac6a9d467176911d2cc465fc7d3f05c",
+        ["pal_reconciliation.v1.json"] = "5452d248431cd262d43fe31a3cf3cdbf7a8c16c44de6dff8d6e53ca66d677225",
+        ["faction_progression.v1.json"] = "c0f20295235ba3d125ebd163450b78e2a79c722f637cf9cf4f56f0fb3729f206",
+        ["multiplayer_authority.v1.json"] = "4531855998f386ff9ee3233c9f1203fbb53037eeb69d9c6ba3dce8ca79e6939d",
         ["territory_assignments.v1.json"] = "0b4542014338178ab311f73a876dea640a1d393e9cd68801b3c852e2849e0f7b",
         ["fast_travel_territories.v1.json"] = "a2945338ca661ef001b1603a077209f06efae5fad2b25a43d432acde9419dbf4",
         ["island_territories.v2.json"] = "2a24d45822234f9064cdaee26c56423ab59cf074a54e780ce7aa79be1eb39e27",
@@ -1535,9 +1536,13 @@ return {
             ["attendanceOutcomeAuthority"] = "pwft-attendance-all-members-dead-v1",
             ["acceptedLeaderKillAttribution"] = {
                 "direct-local-player",
-                "local-player-owned-pal"
+                "local-player-owned-pal",
+                "exact-player",
+                "exact-player-owned-pal"
             },
-            ["remoteOrUnresolvedAttributionAwardsToken"] = false,
+            ["exactRemotePlayerAttributionAwardsToken"] = true,
+            ["settlementRoutesToExactPlayerSidecar"] = true,
+            ["unresolvedAttributionAwardsToken"] = false,
             ["timerCleanupMaySettleRaid"] = false,
             ["conflictingEvidenceBehavior"] = "block-event-fail-closed"
         },
@@ -1926,16 +1931,36 @@ return {
                     ["arbitraryClientDispatchAllowed"] = false,
                     ["nativeDamageBinding"] = {
                         ["schemaVersion"] = "1.0.0",
-                        ["sourceBuildId"] = "historical-objectdump-pre-24575825",
+                        ["sourceBuildId"] = "24575825",
                         ["currentHostBuildId"] = "24575825",
-                        ["sourceObjectDumpSha256"] = "D8864A14FB50501EF48477D27A0A6C66ED06C63A5454C2ADD1D82800C67AFE5C",
-                        ["hookPath"] = "/Script/Pal.PalCharacterParameterComponent:OnDamage",
+                        ["sourceObjectDumpSha256"] = "7B73AE341D48A18D7019D732E6B765FD85051F83BE3A76078CAAFB97888A8557",
+                        ["eventNotifyHookPath"] = "/Script/Pal.PalEventNotify_Character:OnCharacterDamaged_ServerInternal",
+                        ["actualProcessedHookPath"] = "/Script/Pal.PalDamageReactionComponent:CallOnActualDamageProcessed_ToAll",
+                        ["authoritativeHookPath"] = "/Script/Pal.PalPlayerController:DamageReactionComponent_ProcessDamage_ToServer_ToNPC",
+                        ["parameterDamageHookPath"] = "/Script/Pal.PalCharacterParameterComponent:OnDamage",
+                        ["parameterDamageHookRejected"] = true,
                         ["damageResultStruct"] = "/Script/Pal.PalDamageResult",
+                        ["damageInfoStruct"] = "/Script/Pal.PalDamageInfo",
                         ["attackerField"] = "Attacker",
                         ["defenderField"] = "Defender",
                         ["actualDamageField"] = "ActualDamage",
+                        ["authoritativeDamageField"] = "NativeDamageValue",
+                        ["noDamageField"] = "NoDamage",
+                        ["controllerPawnFields"] = {
+                            "Pawn",
+                            "AcknowledgedPawn"
+                        },
+                        ["playerActorClassTokens"] = {
+                            "PalPlayerCharacter",
+                            "BP_Player_"
+                        },
                         ["exactRegisteredDefenderOnly"] = true,
-                        ["directLocalPlayerOnly"] = true,
+                        ["directPlayerActorOnly"] = true,
+                        ["directLocalPlayerOnly"] = false,
+                        ["directControllerPawnOnly"] = true,
+                        ["remotePlayerControllerSupported"] = true,
+                        ["processedActualDamageSupported"] = false,
+                        ["serverNpcDamageSupported"] = true,
                         ["positiveActualDamageOnly"] = true,
                         ["minimumIntervalSecondsPerTarget"] = 5,
                         ["penaltyByActorRole"] = {
@@ -1943,8 +1968,10 @@ return {
                             ["civilian"] = 10
                         },
                         ["probeEnabled"] = true,
-                        ["settlementEnabled"] = false,
-                        ["settlementGate"] = "build-24575825-objectdump-and-live-attribution-required",
+                        ["liveAttributionVerified"] = true,
+                        ["liveAttributionEvidence"] = "evidence/contracts/faction-consequence-native-damage-build24575825.json",
+                        ["settlementEnabled"] = true,
+                        ["settlementGate"] = "build-24575825-server-npc-damage-live-attribution-verified",
                         ["storyContentIncluded"] = false
                     },
                     ["providers"] = {
@@ -1992,6 +2019,79 @@ return {
                 ["allHumanFactionsMustReachRank"] = "Lord",
                 ["allPalFactionsMustReachRelation"] = "Friendly"
             }
+        }
+    },
+    ["multiplayerAuthority"] = {
+        ["schemaVersion"] = "1.0.0",
+        ["apiVersion"] = "1.0.0",
+        ["workPackage"] = "technical-multiplayer-authority-foundation",
+        ["authorityApi"] = "PWFT_MULTIPLAYER_AUTHORITY_V1",
+        ["nativeBindingApi"] = "PWFT_MULTIPLAYER_NATIVE_BINDING_V1",
+        ["playerServicesApi"] = "PWFT_MULTIPLAYER_PLAYER_SERVICES_V1",
+        ["readModelApi"] = "PWFT_MULTIPLAYER_READ_MODEL_V1",
+        ["verifiedBuild"] = {
+            ["steamBuildId"] = "24575825",
+            ["objectDumpSha256"] = "3e84e8a6936b7d1c33de6cfc034c4a200655a3e762cbc2ec4c6a57516476ec78"
+        },
+        ["nativeLifecycle"] = {
+            ["postLoginHook"] = "/Script/Engine.GameModeBase:K2_PostLogin",
+            ["logoutHook"] = "/Script/Engine.GameModeBase:K2_OnLogout",
+            ["controllerIdentity"] = "PalPlayerController.GetPlayerUId",
+            ["playerStateIdentity"] = "PalPlayerState.PlayerUId",
+            ["existingControllerEnumeration"] = "FindAllOf(PalPlayerController)",
+            ["worldGenerationFencing"] = true,
+            ["worldUnloadPersistsAndClearsSessions"] = true
+        },
+        ["profilePolicy"] = {
+            ["key"] = "world-{WorldDirectory}.player-{PlayerUId}",
+            ["storage"] = "Mod-owned sidecar JSON",
+            ["oneContextPerExactPlayerUid"] = true,
+            ["listenHostUsesExistingLocalContext"] = true,
+            ["remotePlayersUseIndependentContexts"] = true,
+            ["reconnectReusesPlayerContext"] = true,
+            ["PalworldSaveMutation"] = false,
+            ["UObjectsPersisted"] = false
+        },
+        ["authorityPolicy"] = {
+            ["serverAuthoritativeControllerRequired"] = true,
+            ["nonAuthoritativeClientObserverOnly"] = true,
+            ["arbitraryClientMutationAllowed"] = false,
+            ["customClientRpcTrusted"] = false,
+            ["modelAuthority"] = false,
+            ["unknownControllerFailsClosed"] = true,
+            ["remoteFriendlyFireRoutesToExactPlayerProfile"] = true,
+            ["remoteRewardRoutesToExactPlayerLedger"] = true,
+            ["remotePalRaidCreditRoutesToExactPlayerProfile"] = true,
+            ["lateJoinContentRegistrationReplayed"] = true
+        },
+        ["supportedTopologies"] = {
+            ["standalone"] = "source-and-smoke-covered",
+            ["listenServerHost"] = "source-and-smoke-covered",
+            ["listenServerRemoteClient"] = "automated-session-attribution-reward-and-raid-routing-covered-live-required",
+            ["dedicatedServerHeadless"] = "source-and-automated-lifecycle-covered-live-required"
+        },
+        ["knownOpenIntegration"] = {
+            "A9 remote-player two-process native grant and readback acceptance",
+            "Pal raid guild-shared attribution and two-process live acceptance",
+            "remote-client native transport binding and live UI presentation",
+            "listen-server two-process live acceptance",
+            "headless dedicated-server live acceptance"
+        },
+        ["acceptanceBoundary"] = {
+            ["objectDumpRoutesInspected"] = true,
+            ["automatedAuthorityTestsPass"] = true,
+            ["automatedTestsAreLiveAcceptance"] = false,
+            ["singleProcessHostSmokeIsRemoteClientAcceptance"] = false,
+            ["remoteRewardAndRaidSourceIntegrationPass"] = true,
+            ["readOnlySnapshotProtocolSourceIntegrationPass"] = true,
+            ["realSecondClientRequired"] = true,
+            ["realDedicatedServerRequired"] = true,
+            ["userAcceptanceClaimed"] = false
+        },
+        ["contentBoundary"] = {
+            ["storyContentIncluded"] = false,
+            ["taskTextIncluded"] = false,
+            ["mechanicsFoundationOnly"] = true
         }
     },
     ["mapModes"] = {

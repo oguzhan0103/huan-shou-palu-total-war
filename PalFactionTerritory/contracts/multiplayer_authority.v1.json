@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "1.0.0",
+  "apiVersion": "1.0.0",
+  "workPackage": "technical-multiplayer-authority-foundation",
+  "authorityApi": "PWFT_MULTIPLAYER_AUTHORITY_V1",
+  "nativeBindingApi": "PWFT_MULTIPLAYER_NATIVE_BINDING_V1",
+  "playerServicesApi": "PWFT_MULTIPLAYER_PLAYER_SERVICES_V1",
+  "readModelApi": "PWFT_MULTIPLAYER_READ_MODEL_V1",
+  "verifiedBuild": {
+    "steamBuildId": "24575825",
+    "objectDumpSha256": "3e84e8a6936b7d1c33de6cfc034c4a200655a3e762cbc2ec4c6a57516476ec78"
+  },
+  "nativeLifecycle": {
+    "postLoginHook": "/Script/Engine.GameModeBase:K2_PostLogin",
+    "logoutHook": "/Script/Engine.GameModeBase:K2_OnLogout",
+    "controllerIdentity": "PalPlayerController.GetPlayerUId",
+    "playerStateIdentity": "PalPlayerState.PlayerUId",
+    "existingControllerEnumeration": "FindAllOf(PalPlayerController)",
+    "worldGenerationFencing": true,
+    "worldUnloadPersistsAndClearsSessions": true
+  },
+  "profilePolicy": {
+    "key": "world-{WorldDirectory}.player-{PlayerUId}",
+    "storage": "Mod-owned sidecar JSON",
+    "oneContextPerExactPlayerUid": true,
+    "listenHostUsesExistingLocalContext": true,
+    "remotePlayersUseIndependentContexts": true,
+    "reconnectReusesPlayerContext": true,
+    "PalworldSaveMutation": false,
+    "UObjectsPersisted": false
+  },
+  "authorityPolicy": {
+    "serverAuthoritativeControllerRequired": true,
+    "nonAuthoritativeClientObserverOnly": true,
+    "arbitraryClientMutationAllowed": false,
+    "customClientRpcTrusted": false,
+    "modelAuthority": false,
+    "unknownControllerFailsClosed": true,
+    "remoteFriendlyFireRoutesToExactPlayerProfile": true,
+    "remoteRewardRoutesToExactPlayerLedger": true,
+    "remotePalRaidCreditRoutesToExactPlayerProfile": true,
+    "lateJoinContentRegistrationReplayed": true
+  },
+  "supportedTopologies": {
+    "standalone": "source-and-smoke-covered",
+    "listenServerHost": "source-and-smoke-covered",
+    "listenServerRemoteClient": "automated-session-attribution-reward-and-raid-routing-covered-live-required",
+    "dedicatedServerHeadless": "source-and-automated-lifecycle-covered-live-required"
+  },
+  "knownOpenIntegration": [
+    "A9 remote-player two-process native grant and readback acceptance",
+    "Pal raid guild-shared attribution and two-process live acceptance",
+    "remote-client native transport binding and live UI presentation",
+    "listen-server two-process live acceptance",
+    "headless dedicated-server live acceptance"
+  ],
+  "acceptanceBoundary": {
+    "objectDumpRoutesInspected": true,
+    "automatedAuthorityTestsPass": true,
+    "automatedTestsAreLiveAcceptance": false,
+    "singleProcessHostSmokeIsRemoteClientAcceptance": false,
+    "remoteRewardAndRaidSourceIntegrationPass": true,
+    "readOnlySnapshotProtocolSourceIntegrationPass": true,
+    "realSecondClientRequired": true,
+    "realDedicatedServerRequired": true,
+    "userAcceptanceClaimed": false
+  },
+  "contentBoundary": {
+    "storyContentIncluded": false,
+    "taskTextIncluded": false,
+    "mechanicsFoundationOnly": true
+  }
+}

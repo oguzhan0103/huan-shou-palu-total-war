@@ -6,6 +6,7 @@ package.path = table.concat({
 local RewardItemNativeAdapter = require("pwft.reward_item_native_adapter")
 
 local PLAYER_UID = "11111111222222223333333344444444"
+local REMOTE_UID = "AAAAAAAA222222223333333344444444"
 local BUILD_ID = "24575825"
 local HASH = "3e84e8a6936b7d1c33de6cfc034c4a200655a3e762cbc2ec4c6a57516476ec78"
 
@@ -24,7 +25,12 @@ local function inventory(owner_uid, initial_count, add_extra)
     return object
 end
 
-local function controller(player_uid, has_authority, network_component)
+local function controller(
+    player_uid,
+    has_authority,
+    network_component,
+    is_local
+)
     local transmitter = nil
     if network_component ~= nil then
         transmitter = {}
@@ -35,11 +41,16 @@ local function controller(player_uid, has_authority, network_component)
     function object:IsValid() return true end
     function object:GetPlayerUId() return player_uid end
     function object:HasAuthority() return has_authority end
-    function object:IsLocalPlayerController() return true end
+    function object:IsLocalPlayerController()
+        return is_local ~= false
+    end
+    function object:GetFullName()
+        return "PalPlayerController " .. player_uid
+    end
     return object
 end
 
-local function create_adapter(local_controller, inventories)
+local function create_adapter(local_controller, inventories, controllers)
     return RewardItemNativeAdapter.create({
         enabled = true,
         buildId = BUILD_ID,
@@ -49,15 +60,21 @@ local function create_adapter(local_controller, inventories)
         adapters = {
             getPlayerController = function() return local_controller end,
             findAllOf = function(class_name)
-                assert(class_name == "PalPlayerInventoryData")
-                return inventories
+                if class_name == "PalPlayerInventoryData" then
+                    return inventories
+                end
+                if class_name == "PalPlayerController"
+                    or class_name == "PalPlayerController_C" then
+                    return controllers or {}
+                end
+                return nil
             end,
             makeName = function(value) return value end,
         },
     })
 end
 
-local function request(id, units)
+local function request(id, units, player_uid)
     return {
         deliveryId = id,
         attemptId = id .. ":attempt:1",
@@ -70,7 +87,7 @@ local function request(id, units)
         authoritySource = "spec.reward.authority",
         buildId = BUILD_ID,
         routeKey = "spec.reward.route",
-        playerUid = PLAYER_UID,
+        playerUid = player_uid or PLAYER_UID,
         profileKey = "spec.profile",
         worldGeneration = 1,
     }
@@ -91,6 +108,27 @@ local host_delivery = host_adapter:dispatch(host_request, host_preflight)
 assert(host_delivery.ok and host_delivery.applied == true)
 assert(host_delivery.beforeCount == 7 and host_delivery.afterCount == 10)
 assert(host_inventory.count == 10)
+
+local host_controller = controller(PLAYER_UID, true, nil, true)
+local remote_controller = controller(REMOTE_UID, true, nil, false)
+local remote_inventory = inventory(REMOTE_UID, 12)
+local remote_adapter = create_adapter(
+    host_controller,
+    { remote_inventory },
+    { host_controller, remote_controller }
+)
+assert(remote_adapter:bind_world(1).ok)
+local remote_request = request("spec.reward.remote", 5, REMOTE_UID)
+local remote_preflight = remote_adapter:preflight(remote_request)
+assert(remote_preflight.ok)
+assert(remote_preflight.controllerSource
+    == "FindAllOf(exact-player)")
+assert(remote_preflight.nativeRoute
+    == "PalPlayerInventoryData.AddItem_ServerInternal")
+local remote_delivery = remote_adapter:dispatch(
+    remote_request, remote_preflight)
+assert(remote_delivery.ok and remote_delivery.applied == true)
+assert(remote_inventory.count == 17)
 
 local network_inventory = inventory(PLAYER_UID, 20)
 local network_component = {}
@@ -156,8 +194,9 @@ assert(host_adapter:unbind_world("spec-complete").ok)
 local status = host_adapter:status()
 assert(status.worldGeneration == nil)
 assert(status.capabilities.serverAuthoritativeGrant == true)
+assert(status.capabilities.serverRemotePlayerInternalRoute == true)
 assert(status.capabilities.exactInventoryReadback == true)
 assert(status.capabilities.directCurrencyMutation == false)
 assert(status.capabilities.directSavePayloadMutation == false)
 
-print("PASS reward item adapter matches exact OwnerPlayerUId, uses host/server routes, confirms exact count deltas, and rejects ambiguous inventory state")
+print("PASS reward item adapter resolves exact host or remote server controllers, matches OwnerPlayerUId, confirms exact count deltas, and rejects ambiguous inventory state")

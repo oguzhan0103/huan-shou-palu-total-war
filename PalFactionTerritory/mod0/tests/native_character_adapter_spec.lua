@@ -54,6 +54,12 @@ local guard_controller_path =
     "/Game/Pal/Blueprint/Controller/NPC/"
         .. "BP_NPCAIController_Visitor_Guardman."
         .. "BP_NPCAIController_Visitor_Guardman_C"
+local ordinary_npc_controller_class = valid_object(
+    "BlueprintGeneratedClass BP_NPCAIController_C"
+)
+local ordinary_npc_controller_path =
+    "/Game/Pal/Blueprint/Controller/NPC/"
+        .. "BP_NPCAIController.BP_NPCAIController_C"
 local salesperson_action_class = valid_object(
     "BlueprintGeneratedClass BP_AIAction_NPC_Relax_SalesPerson_C"
 )
@@ -67,6 +73,7 @@ local class_by_path = {
     ["/Game/Pal/Blueprint/Character/NPC/Normal/BP_NPC_Believer.BP_NPC_Believer_C"] =
         guard_class,
     [guard_controller_path] = guard_controller_class,
+    [ordinary_npc_controller_path] = ordinary_npc_controller_class,
     [salesperson_action_path] = salesperson_action_class,
 }
 
@@ -588,6 +595,28 @@ provider_handle.actor:K2_DestroyActor()
 assert(provider.recall(provider_handle, "test-recall"))
 assert(not provider_handle.actor:IsValid())
 assert(adapter.records[provider_handle.runtimeId] == nil)
+
+-- Consequence live testing may override only this QA actor's controller so a
+-- real player hit reaches Pal's ordinary NPC damage route.  The provider must
+-- pass the override into the deferred native spawn without changing its
+-- configured production visitor-guard default.
+local damage_target_handle = provider.deploy(
+    "pwft.faction.rayne_syndicate",
+    "damage-target-001",
+    {
+        location = { X = 110, Y = 200, Z = 5 },
+        rotation = { Pitch = 0, Yaw = 180, Roll = 0 },
+        followTarget = local_player,
+        controllerClassPath = ordinary_npc_controller_path,
+    }
+)
+assert(
+    damage_target_handle.actor.AIControllerClass
+        == ordinary_npc_controller_class
+)
+assert(provider.recall(damage_target_handle, "qa-target-complete"))
+run_next_guard_pulse()
+assert(#delayed_callbacks == 0)
 local follow_ready_logged = false
 local combat_preserved_logged = false
 local downed_logged = false
@@ -695,6 +724,40 @@ assert(adapter.records[wrapper_handle.runtimeId] == nil)
 run_next_guard_pulse()
 assert(wrapper_controller.moveCount == wrapper_move_count)
 assert(#delayed_callbacks == 0)
+
+-- The live UE4SS route must use one durable LoopAsync callback instead of a
+-- recursive ExecuteWithDelay chain.  Both closures remain strongly referenced;
+-- recall closes the lifecycle fence and the next async tick stops cleanly
+-- without touching the destroyed actor wrapper.
+local loop_callbacks = {}
+adapter.loopAsync = function(delay_ms, callback)
+    table.insert(loop_callbacks, {
+        delayMs = delay_ms,
+        callback = callback,
+    })
+end
+local loop_handle = provider.deploy(
+    "pwft.faction.rayne_syndicate",
+    "leader-guard-loop-001",
+    {
+        location = { X = 100, Y = 200, Z = 5 },
+        rotation = { Pitch = 0, Yaw = 180, Roll = 0 },
+        followTarget = local_player,
+    }
+)
+assert(#loop_callbacks == 1)
+assert(loop_callbacks[1].delayMs == 750)
+assert(adapter.records[loop_handle.runtimeId].followScheduler == "LoopAsync")
+assert(type(adapter.guardFollowAsyncCallbacks[loop_handle.runtimeId]) == "function")
+assert(type(adapter.guardFollowGameCallbacks[loop_handle.runtimeId]) == "function")
+local loop_controller = loop_handle.actor.controller
+local loop_move_count = loop_controller.moveCount
+assert(loop_callbacks[1].callback() == false)
+assert(loop_controller.moveCount == loop_move_count + 1)
+assert(#loop_callbacks == 1)
+assert(provider.recall(loop_handle, "loop-recall"))
+assert(loop_callbacks[1].callback() == true)
+assert(adapter.guardFollowLoopActive[loop_handle.runtimeId] == false)
 
 local generated_blueprint = valid_object("Blueprint BP_NPC_Male_Trader01_v04")
 generated_blueprint.GeneratedClass = merchant_class

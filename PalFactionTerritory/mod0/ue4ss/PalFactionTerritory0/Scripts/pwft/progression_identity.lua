@@ -343,12 +343,31 @@ local function get_player_uid(controller, utility)
     return nil, "player-uid-not-ready"
 end
 
-function ProgressionIdentity.resolve_native(adapters)
+local function controller_traits(controller)
+    local has_authority = safe_call(controller, "HasAuthority") == true
+    local is_local = safe_call(
+        controller,
+        "IsLocalPlayerController"
+    ) == true
+    local role = "non-authoritative-controller"
+    if has_authority and is_local then
+        role = "listen-or-standalone-host"
+    elseif has_authority then
+        role = "server-remote-controller"
+    elseif is_local then
+        role = "remote-client-local-controller"
+    end
+    return {
+        serverAuthoritative = has_authority,
+        localController = is_local,
+        connectionRole = role,
+    }
+end
+
+function ProgressionIdentity.resolve_controller(controller, adapters)
     adapters = adapters or {}
-    local controller, controller_source =
-        get_local_controller(adapters)
-    if controller == nil then
-        return nil, controller_source
+    if not is_valid_object(controller) then
+        return nil, "player-controller-not-ready"
     end
     local utility = get_utility(adapters)
     local game_state, game_state_source =
@@ -374,19 +393,42 @@ function ProgressionIdentity.resolve_native(adapters)
     if profile_key == nil then
         return nil, profile_error
     end
+    local traits = controller_traits(controller)
     return {
         schemaVersion = "1.0.0",
         readOnly = true,
         worldDirectory = world_directory,
         playerUid = player_uid,
         profileKey = profile_key,
+        serverAuthoritative = traits.serverAuthoritative,
+        localController = traits.localController,
+        connectionRole = traits.connectionRole,
         sources = {
-            controller = controller_source,
+            controller = adapters.controllerSource
+                or "explicit-player-controller",
             gameState = game_state_source,
             world = world_source,
             player = player_source,
         },
     }, nil
+end
+
+function ProgressionIdentity.resolve_native(adapters)
+    adapters = adapters or {}
+    local controller, controller_source =
+        get_local_controller(adapters)
+    if controller == nil then
+        return nil, controller_source
+    end
+    local controller_adapters = {}
+    for key, value in pairs(adapters) do
+        controller_adapters[key] = value
+    end
+    controller_adapters.controllerSource = controller_source
+    return ProgressionIdentity.resolve_controller(
+        controller,
+        controller_adapters
+    )
 end
 
 return ProgressionIdentity

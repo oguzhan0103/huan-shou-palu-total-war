@@ -1,6 +1,6 @@
 param(
     [string]$OutputRoot = "",
-    [string]$ReleaseVersion = "1.0.5"
+    [string]$ReleaseVersion = "1.0.6"
 )
 
 $ErrorActionPreference = "Stop"
@@ -53,6 +53,15 @@ Copy-Item -LiteralPath (Join-Path $ProjectRoot "companion") `
     -Destination $StagedCompanion -Recurse
 Copy-Item -LiteralPath (Join-Path $ProjectRoot "INSTALL.md") `
     -Destination (Join-Path $StageRoot "INSTALL.md")
+$StagedCommunityTools = Join-Path $StageRoot "CommunityTestTools"
+New-Item -ItemType Directory -Path $StagedCommunityTools -Force | Out-Null
+$CommunityToolFiles = @(Get-ChildItem -LiteralPath `
+    (Join-Path $ProjectRoot "community-test-tools") -File)
+$CommunityToolNames = @($CommunityToolFiles | ForEach-Object { $_.Name })
+foreach ($CommunityTool in $CommunityToolFiles) {
+    Copy-Item -LiteralPath $CommunityTool.FullName `
+        -Destination (Join-Path $StagedCommunityTools $CommunityTool.Name)
+}
 $ReadmeCandidates = @(
     Get-ChildItem -LiteralPath $ProjectRoot -File -Filter "*v$ReleaseVersion*.md"
 )
@@ -156,6 +165,10 @@ try {
         "Mods/PalFactionTerritory0/Scripts/pwft/json.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/human_defense_result_bridge.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/native_character_adapter.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/multiplayer_profile_authority.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/multiplayer_native_binding.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/multiplayer_player_services.lua",
+        "Mods/PalFactionTerritory0/Scripts/pwft/multiplayer_read_model.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/npc_leader_guard_orchestrator.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/npc_leader_guard_native_production.lua",
         "Mods/PalFactionTerritory0/Scripts/pwft/pal_discourse_runtime.lua",
@@ -225,6 +238,9 @@ try {
         "package-manifest.json"
     )
     $RequiredEntries += $PlayerToolNames
+    $RequiredEntries += @($CommunityToolNames | ForEach-Object {
+        "CommunityTestTools/$_"
+    })
     $RequiredEntries += $ReadmeFirstName
     foreach ($RequiredEntry in $RequiredEntries) {
         if ($EntryNames -notcontains $RequiredEntry) {

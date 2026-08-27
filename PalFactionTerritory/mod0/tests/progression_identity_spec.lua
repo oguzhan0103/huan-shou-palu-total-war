@@ -71,6 +71,12 @@ local controller = {
     IsValid = function()
         return true
     end,
+    HasAuthority = function()
+        return true
+    end,
+    IsLocalPlayerController = function()
+        return true
+    end,
 }
 local game_state = {
     GetWorldSaveDirectoryName = function()
@@ -115,6 +121,52 @@ assert(
     identity.sources.player
         == "PalPlayerController.GetPlayerUId"
 )
+assert(identity.serverAuthoritative == true)
+assert(identity.localController == true)
+assert(identity.connectionRole == "listen-or-standalone-host")
+
+local remote_controller = {
+    GetPlayerUId = controller.GetPlayerUId,
+    IsValid = controller.IsValid,
+    HasAuthority = function()
+        return true
+    end,
+    IsLocalPlayerController = function()
+        return false
+    end,
+}
+local remote_identity, remote_error =
+    ProgressionIdentity.resolve_controller(remote_controller, {
+        getGameState = function(received_controller)
+            assert(received_controller == remote_controller)
+            return game_state
+        end,
+        controllerSource = "K2_PostLogin.NewPlayer",
+    })
+assert(remote_error == nil)
+assert(remote_identity.playerUid == expected_player)
+assert(remote_identity.serverAuthoritative == true)
+assert(remote_identity.localController == false)
+assert(remote_identity.connectionRole == "server-remote-controller")
+assert(remote_identity.sources.controller == "K2_PostLogin.NewPlayer")
+
+local client_controller = {
+    GetPlayerUId = controller.GetPlayerUId,
+    IsValid = controller.IsValid,
+    HasAuthority = function()
+        return false
+    end,
+    IsLocalPlayerController = function()
+        return true
+    end,
+}
+local client_identity = ProgressionIdentity.resolve_controller(
+    client_controller,
+    { getGameState = function() return game_state end }
+)
+assert(client_identity.serverAuthoritative == false)
+assert(client_identity.localController == true)
+assert(client_identity.connectionRole == "remote-client-local-controller")
 
 local not_ready, not_ready_error =
     ProgressionIdentity.resolve_native({

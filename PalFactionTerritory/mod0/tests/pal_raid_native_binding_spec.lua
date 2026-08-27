@@ -28,7 +28,22 @@ local reconciliation = PalReconciliation.create(
     { randomIndex = function() return 1 end }
 )
 local faction_id = "pwft.faction.desert_pal_tribe"
+local LOCAL_UID = "11111111222222223333333344444444"
+local REMOTE_UID = "AAAAAAAA222222223333333344444444"
 assert(reconciliation:register_content(faction_id, {
+    contentPackId = "test.native.raid",
+    contentVersion = "1.0.0",
+    tokenQuota = 3,
+    maximumAffinityPerDiscourse = 10,
+}).ok)
+
+local remote_progression = Progression.create(Registry.progression)
+local remote_reconciliation = PalReconciliation.create(
+    Registry.palReconciliation,
+    remote_progression,
+    { randomIndex = function() return 1 end }
+)
+assert(remote_reconciliation:register_content(faction_id, {
     contentPackId = "test.native.raid",
     contentVersion = "1.0.0",
     tokenQuota = 3,
@@ -40,17 +55,31 @@ local adapter = PalRaidResultAdapter.create(reconciliation, {
     nativeRaidResultBindingEnabled = true,
     attendanceRaidResultBindingEnabled = true,
     leaderDesignation = "first-spawn-of-final-wave",
+}, {
+    resolvePlayerService = function(player_uid)
+        if player_uid == LOCAL_UID then return reconciliation end
+        if player_uid == REMOTE_UID then
+            return remote_reconciliation
+        end
+        return nil, "unknown-player"
+    end,
 })
 
 local callbacks = {}
 local logs = {}
 local local_controller = object("local-controller", {
-    GetPlayerUId = function() return "uid-local" end,
+    GetPlayerUId = function() return LOCAL_UID end,
 })
 local local_pawn = object("local-pawn", {
     GetController = function() return local_controller end,
 })
 local_controller.K2_GetPawn = function() return local_pawn end
+local remote_controller = object("remote-controller", {
+    GetPlayerUId = function() return REMOTE_UID end,
+})
+local remote_pawn = object("remote-pawn", {
+    GetController = function() return remote_controller end,
+})
 
 local owned_pal = object("owned-pal")
 local utility = object("PalUtility", {
@@ -176,6 +205,40 @@ callbacks[paths.finish](parameter(object("manager")), parameter({
 }))
 assert(reconciliation:status(faction_id).tokensAwarded == 2)
 
+-- A remote controller is credited by its exact server-side PlayerUId and the
+-- token is written only to that player's reconciliation sidecar service.
+callbacks[paths.start](parameter(object("manager")), parameter({
+    ChosenInvaderData = { GroupName = "Invader_Group_Monster_Test" },
+    GroupGuid = "guid-remote",
+    WaveInfo = { CurrentWave = 1, WaveMax = 1 },
+}))
+local remote_incident = object("incident-remote", {
+    GroupGuid = "guid-remote",
+    NewVar = object("info-remote", {
+        CurrentWave = 1,
+        GetCurrentWave = function(self) return self.CurrentWave end,
+    }),
+})
+local remote_leader = object("raid-remote-leader")
+callbacks[paths.spawn](parameter(remote_incident), parameter(remote_leader))
+callbacks[paths.death](parameter(remote_incident), parameter({
+    SelfActor = remote_leader,
+    LastAttacker = remote_pawn,
+}))
+local remote_event = adapter:event_status(
+    "native-pal-raid:guid-remote")
+assert(remote_event.leaderCreditedPlayerUid == REMOTE_UID)
+callbacks[paths.finish](parameter(object("manager")), parameter({
+    GroupGuid = "guid-remote",
+    WaveInfo = {
+        CurrentWave = 1,
+        WaveMax = 1,
+        bCompleteAllWave = true,
+    },
+}))
+assert(reconciliation:status(faction_id).tokensAwarded == 2)
+assert(remote_reconciliation:status(faction_id).tokensAwarded == 1)
+
 -- Timeout/incomplete wave is an authoritative end but never a player win.
 callbacks[paths.start](parameter(object("manager")), parameter({
     ChosenInvaderData = { GroupName = "Invader_Group_Monster_Test" },
@@ -264,4 +327,4 @@ assert(delayed_binding:status().hookCount == 4)
 assert(type(delayed_callbacks[paths.spawn]) == "function")
 assert(type(delayed_callbacks[paths.death]) == "function")
 
-print("PASS native Pal raid hooks, source mapping, direct/owned-Pal leader credit, timeout, UID fail-closed, and finite token settlement")
+print("PASS native Pal raid hooks, source mapping, exact local/remote/owned-Pal leader credit, per-player settlement, timeout, UID fail-closed, and finite token settlement")

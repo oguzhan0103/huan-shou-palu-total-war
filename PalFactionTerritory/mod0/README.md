@@ -39,10 +39,13 @@ Mod 0 现在同时承载势力地图、地名颜色、敌区传送限制、雷�
 - 降到领队以下会通过统一变更回调撤回现役玩家护卫；内容包可用任务模板 `1.1` 声明人类势力、最低身份和最低好感门槛，失去权限时只暂停并保留任务进度，恢复资格后继续。
 - 提供安全的 Mod 自有 JSON 旁路持久化设施；可靠世界／玩家身份确认后启用，身份
   未就绪时失败关闭，不写 Palworld 世界存档。
+- 提供服务器权威多人会话底座：`K2_PostLogin/K2_OnLogout` 绑定精确控制器 UID，主机与每名远端玩家使用独立势力、A9 奖励和帕鲁和解侧车服务；重连复用同一玩家档案，换图先保存再清引用。`PWFT_MULTIPLAYER_PLAYER_SERVICES_V1` 可向当前／后加入玩家统一注册奖励频道与帕鲁内容并按 UID 结算；`PWFT_MULTIPLAYER_READ_MODEL_V1` 只发布严格匹配玩家和世界代际的只读 UI 快照。非权威客户端只读观察，未知控制器事件失败关闭，远端伤害、奖励或袭击战果不会误写主机档案。原生快照传输、真实第二客户端和无头独服仍需实机验收。
 - 提供 `PalCharacterParameterComponent:OnDamage` 的精确目标伤害探针：只处理已登记 Defender、匹配组件 Owner、直接本地玩家和正 `ActualDamage`；同目标 5 秒去抖。当前证据来自旧 Build 24370881，Build 24575825 正式扣分保持关闭。
 - 提供版本化公共接口，供后续粉丝任务、剧情、UI 和生成适配器调用：
   `_G.PWFT_FACTION_API_V1`、`_G.PWFT_FACTION_CONSEQUENCE_API_V1`、
   `_G.PWFT_FACTION_CONSEQUENCE_NATIVE_BINDING_V1`、
+  `_G.PWFT_MULTIPLAYER_AUTHORITY_V1`、
+  `_G.PWFT_MULTIPLAYER_NATIVE_BINDING_V1`、
   `_G.PWFT_COMMERCE_API_V1`、
   `_G.PWFT_ECONOMY_API_V1`、`_G.PWFT_ECONOMY_SHOP_API_V1`、
   `_G.PWFT_JOIN_API_V1`、
@@ -69,7 +72,7 @@ Mod 0 现在同时承载势力地图、地名颜色、敌区传送限制、雷�
 - `enableSaveWrites = false`
 - 势力进度侧车已启用，但只在可靠世界/玩家身份键就绪后开放写入；身份未就绪时失败关闭。Build 24575825 已完成两次完整重启、主文件损坏后 `active:backup` 自愈和两个世界 profile 隔离实机验收。
 - 势力进度 sidecar 载荷从 `1.0` 自动迁移到 `1.1`，保留未知扩展状态；任意控制台、客户端和 Ollama 文本均不能直接施加好感变更，旧 `pwft.progress grant` 已失败关闭。
-- 原生伤害适配器不扫描世界且只接受同一 UObject 引用。当前 `probeEnabled=true`、`settlementEnabled=false`；旧 Build Hook 注册成功或离线测试通过都不能替代 Build 24575825 的伤害来源实机确认。
+- 原生伤害适配器不扫描世界，只接受精确 UObject 全路径与类身份一致的已登记目标。Build 24575825 已于 2026-08-25 完成真实服务器 NPC 伤害回调、玩家控制器 Pawn 归因和同一 Actor 多 Lua 包装器实机确认；当前 `probeEnabled=true`、`settlementEnabled=true`，其他构建仍按签名失败关闭。
 - `nativeEconomyMerchantSpawnEnabled = true`；`FTPoint90` 泰拉瑞亚密域小岛已锁定为中立“商人商会”并从势力着色/敌对传送限制中剥离。七柜台商品资产、原生商店绑定、交互、生成、正式根坐标和朝向均已实机验收。正式运行时会在玩家接近商会时生成七柜台，离开较远后统一回收；`Ctrl+F9` 集中测试开关仍默认关闭。
 - 原生 ItemShop 可以表达商品、售价与库存，但不能覆盖玩家出售价格；需求品奖励只在
   服务器出售请求与真实背包复制确认后结算，不伪造采购金币补差。

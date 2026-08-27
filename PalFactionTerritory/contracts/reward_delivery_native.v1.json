@@ -11,16 +11,19 @@
   },
   "nativeRoutes": {
     "hostGrant": "PalPlayerInventoryData.AddItem_ServerInternal",
+    "serverRemotePlayerGrant": "PalPlayerInventoryData.AddItem_ServerInternal",
     "clientGrant": "PalNetworkPlayerComponent.RequestAddItem_ToServer",
     "readback": "PalPlayerInventoryData.CountItemNum",
     "ownerIdentity": "PalPlayerInventoryData.OwnerPlayerUId",
-    "localNetworkComponent": "PalPlayerController.Transmitter.GetPlayer"
+    "localNetworkComponent": "PalPlayerController.Transmitter.GetPlayer",
+    "exactServerController": "PWFT_MULTIPLAYER_NATIVE_BINDING_V1.controller_for_player"
   },
   "transaction": {
     "persistentOperationReplay": true,
     "deterministicDeliveryId": "operationId:channelId",
     "writeAheadSidecarFenceRequired": true,
     "exactOwnerPlayerUIdMatchRequired": true,
+    "perPlayerSidecarLedgerRequired": true,
     "exactBeforeAfterCountRequired": true,
     "duplicateSettlementEmitsNewNativeRequest": false,
     "ambiguousDispatchAutomaticallyRetries": false,
@@ -47,6 +50,8 @@
     "objectDumpAndExistingQaRouteInspected": true,
     "automatedTestsAreLiveAcceptance": false,
     "realInventoryGrantAndRestartEvidenceRequired": true,
+    "remotePlayerSourceIntegrationCovered": true,
+    "remotePlayerLiveGrantAccepted": false,
     "userAcceptanceClaimed": false
   }
 }

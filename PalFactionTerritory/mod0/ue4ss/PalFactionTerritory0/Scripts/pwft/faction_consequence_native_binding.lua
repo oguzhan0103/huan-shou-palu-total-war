@@ -116,6 +116,9 @@ function FactionConsequenceNativeBinding.create(router, dependencies)
     assert(type(router.allocate_event_identity) == "function",
         "faction consequence router lacks event identity allocation")
     dependencies = dependencies or {}
+    assert(dependencies.resolvePlayerContext == nil
+            or type(dependencies.resolvePlayerContext) == "function",
+        "native consequence player-context resolver must be a function")
     local policy = read_policy(router)
     local instance = setmetatable({
         version = API_VERSION,
@@ -123,21 +126,47 @@ function FactionConsequenceNativeBinding.create(router, dependencies)
         dependencies = dependencies,
         policy = policy,
         targetsByActor = {},
+        targetsByActorKey = {},
         targetsByBinding = {},
         lastObservedAt = {},
+        lastDiagnosticObservedAt = {},
+        eventNotifyHook = nil,
+        eventNotifyHookError = nil,
+        parameterDamageHook = nil,
+        parameterDamageHookError = nil,
         hook = nil,
+        damageDelegateAlwaysHook = nil,
+        actualProcessedHook = nil,
+        serverRpcHook = nil,
         hookError = nil,
+        damageDelegateAlwaysHookError = nil,
+        actualProcessedHookError = nil,
+        serverRpcHookError = nil,
         started = false,
         observedCount = 0,
+        authoritativeObservedCount = 0,
+        diagnosticObservedCount = 0,
         settledCount = 0,
         gatedCount = 0,
         ignoredUnregisteredCount = 0,
         rejectedSourceCount = 0,
         debouncedCount = 0,
         dispatchFailureCount = 0,
+        playerAttributionFailureCount = 0,
         capabilities = {
             exactRegisteredDefenderOnly = true,
-            directLocalPlayerOnly = true,
+            exactActorPathIdentity = true,
+            directPlayerActorOnly = true,
+            directLocalPlayerOnly = false,
+            directControllerPawnOnly = true,
+            remotePlayerControllerSupported = true,
+            exactServerPlayerContextAttribution =
+                dependencies.resolvePlayerContext ~= nil,
+            unresolvedPlayerContextFailsClosed =
+                dependencies.resolvePlayerContext ~= nil,
+            processedActualDamageSupported = false,
+            serverNpcDamageSupported = true,
+            parameterComponentDamageSupported = false,
             positiveActualDamageOnly = true,
             worldGenerationFencing = true,
             modelMayDispatch = false,
@@ -203,6 +232,32 @@ function FactionConsequenceNativeBinding:_class_key(actor)
     return class_key(actor)
 end
 
+function FactionConsequenceNativeBinding:_same_actor(left, right)
+    if left == right then return true end
+    if not valid(left) or not valid(right) then return false end
+    local left_key = self:_actor_key(left)
+    local right_key = self:_actor_key(right)
+    if not non_empty(left_key) or left_key ~= right_key then
+        return false
+    end
+    local left_class_key = self:_class_key(left)
+    local right_class_key = self:_class_key(right)
+    return non_empty(left_class_key)
+        and left_class_key == right_class_key
+end
+
+function FactionConsequenceNativeBinding:_target_for_actor(actor)
+    if actor == nil then return nil end
+    local target = self.targetsByActor[actor]
+    if target ~= nil then return target end
+    local actor_key = self:_actor_key(actor)
+    if not non_empty(actor_key) then return nil end
+    target = self.targetsByActorKey[actor_key]
+    if target == nil then return nil end
+    if self:_class_key(actor) ~= target.actorClassKey then return nil end
+    return target
+end
+
 function FactionConsequenceNativeBinding:register_actor(definition)
     if type(definition) ~= "table" then
         return result(false, "native-consequence-actor-definition-required")
@@ -234,13 +289,23 @@ function FactionConsequenceNativeBinding:register_actor(definition)
         and definition.actorClassKey ~= actor_class_key then
         return result(false, "native-consequence-actor-class-mismatch")
     end
-    local existing_actor = self.targetsByActor[actor]
+    local existing_actor = self:_target_for_actor(actor)
     if existing_actor ~= nil
         and existing_actor.bindingId ~= definition.bindingId then
         return result(false, "native-consequence-actor-already-bound")
     end
+    local existing_actor_key = self.targetsByActorKey[actor_key]
+    if existing_actor_key ~= nil
+        and existing_actor_key.actorClassKey ~= actor_class_key then
+        return result(false, "native-consequence-actor-identity-collision")
+    end
+    if existing_actor_key ~= nil
+        and existing_actor_key.bindingId ~= definition.bindingId then
+        return result(false, "native-consequence-actor-already-bound")
+    end
     local existing_binding = self.targetsByBinding[definition.bindingId]
-    if existing_binding ~= nil and existing_binding.actorRef ~= actor then
+    if existing_binding ~= nil
+        and not self:_same_actor(existing_binding.actorRef, actor) then
         return result(false, "native-consequence-binding-id-conflict")
     end
     local generation = self.router:status().worldGeneration
@@ -268,6 +333,7 @@ function FactionConsequenceNativeBinding:register_actor(definition)
         worldGeneration = generation,
     }
     self.targetsByActor[actor] = target
+    self.targetsByActorKey[actor_key] = target
     self.targetsByBinding[target.bindingId] = target
     return result(true, "native-consequence-actor-registered", {
         bindingId = target.bindingId,
@@ -293,7 +359,8 @@ function FactionConsequenceNativeBinding:unregister_actor(
             removed = false,
         })
     end
-    if actor_ref ~= nil and actor_ref ~= target.actorRef then
+    if actor_ref ~= nil
+        and not self:_same_actor(actor_ref, target.actorRef) then
         return result(false, "native-consequence-actor-reference-mismatch")
     end
     local unbound = self.router:unbind_actor(
@@ -302,8 +369,10 @@ function FactionConsequenceNativeBinding:unregister_actor(
     )
     if not unbound.ok then return unbound end
     self.targetsByActor[target.actorRef] = nil
+    self.targetsByActorKey[target.actorKey] = nil
     self.targetsByBinding[binding_id] = nil
-    self.lastObservedAt[target.actorRef] = nil
+    self.lastObservedAt[target.actorKey] = nil
+    self.lastDiagnosticObservedAt[target.actorKey] = nil
     return result(true, "native-consequence-actor-unregistered", {
         bindingId = binding_id,
         removed = true,
@@ -314,6 +383,189 @@ function FactionConsequenceNativeBinding:_component_owner(component)
     local ok, owner = call(component, "GetOwner")
     if ok and owner ~= nil then return owner end
     return property(component, "Owner")
+end
+
+function FactionConsequenceNativeBinding:_controller_pawn(controller)
+    local fields = self.policy.controllerPawnFields
+        or { "Pawn", "AcknowledgedPawn" }
+    for _, field in ipairs(fields) do
+        local pawn = property(controller, field)
+        if valid(pawn) then return pawn end
+    end
+    return nil
+end
+
+function FactionConsequenceNativeBinding:_is_direct_player_actor(actor)
+    if not valid(actor) then return false end
+    local actor_class = self:_class_key(actor)
+    if not non_empty(actor_class) then return false end
+    local tokens = self.policy.playerActorClassTokens
+        or { "PalPlayerCharacter", "BP_Player_" }
+    for _, token in ipairs(tokens) do
+        if non_empty(token)
+            and string.find(actor_class, token, 1, true) ~= nil then
+            return true
+        end
+    end
+    return false
+end
+
+function FactionConsequenceNativeBinding:_settle_damage(
+    target,
+    defender,
+    attacker,
+    actual_damage,
+    owner,
+    route,
+    authoritative
+)
+    local now = self:_clock()
+    local observation_clock = authoritative
+        and self.lastObservedAt
+        or self.lastDiagnosticObservedAt
+    local observation_key = target.actorKey
+    local previous = observation_clock[observation_key]
+    if previous ~= nil
+        and now - previous
+            < self.policy.minimumIntervalSecondsPerTarget then
+        self.debouncedCount = self.debouncedCount + 1
+        return result(false, "native-consequence-target-debounced", {
+            actualDamage = actual_damage,
+            stateChanged = false,
+            route = route,
+        })
+    end
+    observation_clock[observation_key] = now
+    self.observedCount = self.observedCount + 1
+    if authoritative then
+        self.authoritativeObservedCount =
+            self.authoritativeObservedCount + 1
+    else
+        self.diagnosticObservedCount =
+            self.diagnosticObservedCount + 1
+    end
+    if self.policy.settlementEnabled ~= true or not authoritative then
+        self.gatedCount = self.gatedCount + 1
+        local gate = self.policy.settlementGate
+        if not authoritative then
+            gate = "authoritative-server-route-required"
+        end
+        self:_log(string.format(
+            "DAMAGE_PROBE_OBSERVED binding=%s faction=%s role=%s damage=%s attacker=%s defender=%s owner=%s route=%s authoritative=%s settlement=false gate=%s",
+            target.bindingId,
+            target.factionId,
+            target.actorRole,
+            tostring(actual_damage),
+            tostring(full_name(attacker)),
+            tostring(full_name(defender)),
+            tostring(full_name(owner)),
+            tostring(route),
+            tostring(authoritative == true),
+            tostring(gate)
+        ))
+        return result(false, "native-consequence-settlement-gated", {
+            observed = true,
+            bindingId = target.bindingId,
+            actualDamage = actual_damage,
+            stateChanged = false,
+            route = route,
+            authoritative = authoritative == true,
+        })
+    end
+    local dispatch_router = self.router
+    local dispatch_generation = target.worldGeneration
+    local player_uid = "standalone-local-profile"
+    if self.dependencies.resolvePlayerContext ~= nil then
+        local called, resolved, resolve_error = pcall(
+            self.dependencies.resolvePlayerContext,
+            owner
+        )
+        if not called or type(resolved) ~= "table"
+            or type(resolved.factionConsequenceRouter) ~= "table" then
+            self.playerAttributionFailureCount =
+                self.playerAttributionFailureCount + 1
+            self.dispatchFailureCount = self.dispatchFailureCount + 1
+            return result(false,
+                "native-consequence-player-context-unavailable", {
+                stateChanged = false,
+                route = route,
+                playerContextError = tostring(called
+                    and resolve_error or resolved),
+            })
+        end
+        dispatch_router = resolved.factionConsequenceRouter
+        player_uid = tostring(resolved.playerUid)
+        local router_status = dispatch_router:status()
+        dispatch_generation = router_status.worldGeneration
+        local rebound = dispatch_router:bind_actor({
+            schemaVersion = "1.0.0",
+            bindingId = target.bindingId,
+            providerId = PROVIDER_ID,
+            reasonCode = target.reasonCode,
+            factionId = target.factionId,
+            actorRole = target.actorRole,
+            actorKey = target.actorKey,
+            actorClassKey = target.actorClassKey,
+            worldGeneration = dispatch_generation,
+            actorRef = defender,
+        })
+        if not rebound.ok then
+            self.playerAttributionFailureCount =
+                self.playerAttributionFailureCount + 1
+            self.dispatchFailureCount = self.dispatchFailureCount + 1
+            return result(false,
+                "native-consequence-player-router-bind-failed", {
+                stateChanged = false,
+                route = route,
+                playerUid = player_uid,
+                playerRouterReason = rebound.reason,
+            })
+        end
+    end
+    local identity = dispatch_router:allocate_event_identity(
+        "native-damage"
+    )
+    local penalty = self.policy.penaltyByActorRole[target.actorRole]
+    local dispatched = dispatch_router:dispatch({
+        schemaVersion = "1.0.0",
+        authoritative = true,
+        eventId = identity.eventId,
+        operationId = identity.operationId,
+        providerId = PROVIDER_ID,
+        authoritySource = AUTHORITY_SOURCE,
+        reasonCode = target.reasonCode,
+        factionId = target.factionId,
+        penalty = penalty,
+        contextId = identity.nativeEventId,
+        nativeConfirmed = true,
+        playerInitiated = true,
+        worldGeneration = dispatch_generation,
+        bindingId = target.bindingId,
+        actorRef = defender,
+        actorKey = target.actorKey,
+        actorClassKey = target.actorClassKey,
+        nativeEventId = identity.nativeEventId,
+        damageRoute = route,
+    })
+    dispatched.playerUid = player_uid
+    if dispatched.ok then
+        self.settledCount = self.settledCount + 1
+        self:_log(string.format(
+            "DAMAGE_SETTLED binding=%s faction=%s role=%s damage=%s penalty=%s operation=%s actor=%s route=%s player=%s",
+            target.bindingId,
+            target.factionId,
+            target.actorRole,
+            tostring(actual_damage),
+            tostring(penalty),
+            tostring(identity.operationId),
+            tostring(target.actorKey),
+            tostring(route),
+            player_uid
+        ))
+    else
+        self.dispatchFailureCount = self.dispatchFailureCount + 1
+    end
+    return dispatched
 end
 
 function FactionConsequenceNativeBinding:_on_damage(
@@ -327,7 +579,7 @@ function FactionConsequenceNativeBinding:_on_damage(
         damage_result,
         self.policy.defenderField
     )
-    local target = self.targetsByActor[defender]
+    local target = self:_target_for_actor(defender)
     if target == nil then
         self.ignoredUnregisteredCount =
             self.ignoredUnregisteredCount + 1
@@ -338,7 +590,7 @@ function FactionConsequenceNativeBinding:_on_damage(
         return result(false, "native-consequence-target-generation-stale")
     end
     local owner = self:_component_owner(component)
-    if owner ~= nil and owner ~= defender then
+    if owner ~= nil and not self:_same_actor(owner, defender) then
         self.rejectedSourceCount = self.rejectedSourceCount + 1
         return result(false, "native-consequence-component-owner-mismatch")
     end
@@ -354,115 +606,311 @@ function FactionConsequenceNativeBinding:_on_damage(
         damage_result,
         self.policy.attackerField
     )
-    local local_player = self:_local_player_actor()
-    if not valid(local_player) or attacker ~= local_player then
+    if not self:_is_direct_player_actor(attacker) then
         self.rejectedSourceCount = self.rejectedSourceCount + 1
-        return result(false, "native-consequence-direct-local-player-required")
-    end
-    local now = self:_clock()
-    local previous = self.lastObservedAt[defender]
-    if previous ~= nil
-        and now - previous
-            < self.policy.minimumIntervalSecondsPerTarget then
-        self.debouncedCount = self.debouncedCount + 1
-        return result(false, "native-consequence-target-debounced", {
-            actualDamage = actual_damage,
-            stateChanged = false,
-        })
-    end
-    self.lastObservedAt[defender] = now
-    self.observedCount = self.observedCount + 1
-    if self.policy.settlementEnabled ~= true then
-        self.gatedCount = self.gatedCount + 1
         self:_log(string.format(
-            "DAMAGE_PROBE_OBSERVED binding=%s faction=%s role=%s damage=%s attacker=direct-local-player settlement=false gate=%s",
+            "PARAMETER_DAMAGE_REJECTED binding=%s reason=direct-player-actor-required attacker=%s attackerClass=%s defender=%s damage=%s",
             target.bindingId,
-            target.factionId,
-            target.actorRole,
-            tostring(actual_damage),
-            tostring(self.policy.settlementGate)
+            tostring(full_name(attacker)),
+            tostring(self:_class_key(attacker)),
+            tostring(full_name(defender)),
+            tostring(actual_damage)
         ))
-        return result(false, "native-consequence-settlement-gated", {
-            observed = true,
-            bindingId = target.bindingId,
-            actualDamage = actual_damage,
-            stateChanged = false,
-        })
+        return result(false,
+            "native-consequence-direct-player-actor-required")
     end
-    local identity = self.router:allocate_event_identity(
-        "native-damage"
+    return self:_settle_damage(
+        target,
+        defender,
+        attacker,
+        actual_damage,
+        owner,
+        "parameter-component-on-damage",
+        false
     )
-    local penalty = self.policy.penaltyByActorRole[target.actorRole]
-    local dispatched = self.router:dispatch({
-        schemaVersion = "1.0.0",
-        authoritative = true,
-        eventId = identity.eventId,
-        operationId = identity.operationId,
-        providerId = PROVIDER_ID,
-        authoritySource = AUTHORITY_SOURCE,
-        reasonCode = target.reasonCode,
-        factionId = target.factionId,
-        penalty = penalty,
-        contextId = identity.nativeEventId,
-        nativeConfirmed = true,
-        playerInitiated = true,
-        worldGeneration = target.worldGeneration,
-        bindingId = target.bindingId,
-        actorRef = defender,
-        actorKey = target.actorKey,
-        actorClassKey = target.actorClassKey,
-        nativeEventId = identity.nativeEventId,
-    })
-    if dispatched.ok then
-        self.settledCount = self.settledCount + 1
-    else
-        self.dispatchFailureCount = self.dispatchFailureCount + 1
+end
+
+function FactionConsequenceNativeBinding:_on_character_damaged_server_event(
+    event_context,
+    damage_result
+)
+    if damage_result == nil then
+        return result(false, "native-consequence-damage-result-missing")
     end
-    return dispatched
+    local defender = property(
+        damage_result,
+        self.policy.defenderField
+    )
+    local target = self:_target_for_actor(defender)
+    if target == nil then
+        self.ignoredUnregisteredCount =
+            self.ignoredUnregisteredCount + 1
+        return result(false, "native-consequence-defender-unregistered")
+    end
+    if target.worldGeneration ~= self.router:status().worldGeneration then
+        self.rejectedSourceCount = self.rejectedSourceCount + 1
+        return result(false, "native-consequence-target-generation-stale")
+    end
+    local actual_damage = tonumber(property(
+        damage_result,
+        self.policy.actualDamageField
+    ))
+    if actual_damage == nil or actual_damage <= 0 then
+        self.rejectedSourceCount = self.rejectedSourceCount + 1
+        return result(false, "native-consequence-positive-damage-required")
+    end
+    local attacker = property(
+        damage_result,
+        self.policy.attackerField
+    )
+    if not self:_is_direct_player_actor(attacker) then
+        self.rejectedSourceCount = self.rejectedSourceCount + 1
+        self:_log(string.format(
+            "CHARACTER_DAMAGE_EVENT_REJECTED binding=%s reason=direct-player-actor-required attacker=%s attackerClass=%s defender=%s damage=%s",
+            target.bindingId,
+            tostring(full_name(attacker)),
+            tostring(self:_class_key(attacker)),
+            tostring(full_name(defender)),
+            tostring(actual_damage)
+        ))
+        return result(false,
+            "native-consequence-direct-player-actor-required")
+    end
+    return self:_settle_damage(
+        target,
+        defender,
+        attacker,
+        actual_damage,
+        event_context,
+        "character-damaged-server-event",
+        false
+    )
+end
+
+function FactionConsequenceNativeBinding:_on_actual_damage_processed(
+    component,
+    attacker,
+    defender,
+    actual_damage
+)
+    local target = self:_target_for_actor(defender)
+    if target == nil then
+        self.ignoredUnregisteredCount =
+            self.ignoredUnregisteredCount + 1
+        return result(false, "native-consequence-defender-unregistered")
+    end
+    if target.worldGeneration ~= self.router:status().worldGeneration then
+        self.rejectedSourceCount = self.rejectedSourceCount + 1
+        return result(false, "native-consequence-target-generation-stale")
+    end
+    local owner = self:_component_owner(component)
+    if not self:_same_actor(owner, defender) then
+        self.rejectedSourceCount = self.rejectedSourceCount + 1
+        return result(false, "native-consequence-component-owner-mismatch")
+    end
+    local normalized_damage = tonumber(actual_damage)
+    if normalized_damage == nil or normalized_damage <= 0 then
+        self.rejectedSourceCount = self.rejectedSourceCount + 1
+        return result(false, "native-consequence-positive-damage-required")
+    end
+    if not self:_is_direct_player_actor(attacker) then
+        self.rejectedSourceCount = self.rejectedSourceCount + 1
+        self:_log(string.format(
+            "ACTUAL_DAMAGE_REJECTED binding=%s reason=direct-player-actor-required attacker=%s attackerClass=%s defender=%s damage=%s",
+            target.bindingId,
+            tostring(full_name(attacker)),
+            tostring(self:_class_key(attacker)),
+            tostring(full_name(defender)),
+            tostring(normalized_damage)
+        ))
+        return result(false,
+            "native-consequence-direct-player-actor-required")
+    end
+    return self:_settle_damage(
+        target,
+        defender,
+        attacker,
+        normalized_damage,
+        owner,
+        "damage-component-actual-processed",
+        false
+    )
+end
+
+function FactionConsequenceNativeBinding:_on_damage_delegate_always(
+    component,
+    damage_result
+)
+    if damage_result == nil then
+        return result(false, "native-consequence-damage-result-missing")
+    end
+    local defender = property(
+        damage_result,
+        self.policy.defenderField
+    )
+    local target = self:_target_for_actor(defender)
+    if target == nil then
+        self.ignoredUnregisteredCount =
+            self.ignoredUnregisteredCount + 1
+        return result(false, "native-consequence-defender-unregistered")
+    end
+    if target.worldGeneration ~= self.router:status().worldGeneration then
+        self.rejectedSourceCount = self.rejectedSourceCount + 1
+        return result(false, "native-consequence-target-generation-stale")
+    end
+    local owner = self:_component_owner(component)
+    if not self:_same_actor(owner, defender) then
+        self.rejectedSourceCount = self.rejectedSourceCount + 1
+        return result(false, "native-consequence-component-owner-mismatch")
+    end
+    local actual_damage = tonumber(property(
+        damage_result,
+        self.policy.actualDamageField
+    ))
+    if actual_damage == nil or actual_damage <= 0 then
+        self.rejectedSourceCount = self.rejectedSourceCount + 1
+        return result(false, "native-consequence-positive-damage-required")
+    end
+    local attacker = property(
+        damage_result,
+        self.policy.attackerField
+    )
+    if not self:_is_direct_player_actor(attacker) then
+        self.rejectedSourceCount = self.rejectedSourceCount + 1
+        self:_log(string.format(
+            "DAMAGE_DELEGATE_ALWAYS_REJECTED binding=%s reason=direct-player-actor-required attacker=%s attackerClass=%s defender=%s damage=%s",
+            target.bindingId,
+            tostring(full_name(attacker)),
+            tostring(self:_class_key(attacker)),
+            tostring(full_name(defender)),
+            tostring(actual_damage)
+        ))
+        return result(false,
+            "native-consequence-direct-player-actor-required")
+    end
+    return self:_settle_damage(
+        target,
+        defender,
+        attacker,
+        actual_damage,
+        owner,
+        "damage-component-delegate-always",
+        false
+    )
+end
+
+function FactionConsequenceNativeBinding:_on_server_npc_damage(
+    controller,
+    damage_info,
+    defender
+)
+    if damage_info == nil then
+        return result(false, "native-consequence-damage-info-missing")
+    end
+    local target = self:_target_for_actor(defender)
+    if target == nil then
+        self.ignoredUnregisteredCount =
+            self.ignoredUnregisteredCount + 1
+        return result(false, "native-consequence-defender-unregistered")
+    end
+    if target.worldGeneration ~= self.router:status().worldGeneration then
+        self.rejectedSourceCount = self.rejectedSourceCount + 1
+        return result(false, "native-consequence-target-generation-stale")
+    end
+    if property(damage_info, self.policy.noDamageField) == true then
+        self.rejectedSourceCount = self.rejectedSourceCount + 1
+        return result(false, "native-consequence-no-damage-rejected")
+    end
+    local actual_damage = tonumber(property(
+        damage_info,
+        self.policy.authoritativeDamageField
+    ))
+    if actual_damage == nil or actual_damage <= 0 then
+        self.rejectedSourceCount = self.rejectedSourceCount + 1
+        return result(false, "native-consequence-positive-damage-required")
+    end
+    local attacker = property(damage_info, self.policy.attackerField)
+    local controller_pawn = self:_controller_pawn(controller)
+    if not valid(controller_pawn)
+        or not self:_same_actor(attacker, controller_pawn) then
+        self.rejectedSourceCount = self.rejectedSourceCount + 1
+        self:_log(string.format(
+            "SERVER_DAMAGE_REJECTED binding=%s reason=direct-controller-pawn-required attacker=%s controllerPawn=%s defender=%s damage=%s",
+            target.bindingId,
+            tostring(full_name(attacker)),
+            tostring(full_name(controller_pawn)),
+            tostring(full_name(defender)),
+            tostring(actual_damage)
+        ))
+        return result(false,
+            "native-consequence-direct-controller-pawn-required")
+    end
+    return self:_settle_damage(
+        target,
+        defender,
+        attacker,
+        actual_damage,
+        controller,
+        "player-controller-server-npc-damage",
+        true
+    )
 end
 
 function FactionConsequenceNativeBinding:_register_hook()
-    if self.hook ~= nil then return true end
+    if self.serverRpcHook ~= nil then
+        return true
+    end
     local provider = self.dependencies.registerHook or RegisterHook
     if type(provider) ~= "function" then
-        self.hookError = "RegisterHook-unavailable"
+        self.serverRpcHookError = "RegisterHook-unavailable"
         return false
     end
-    local callback = function(context, damage_parameter)
+    local server_rpc_callback = function(
+        context,
+        damage_info_parameter,
+        defender_parameter
+    )
         local ok, response = pcall(function()
-            return self:_on_damage(
+            return self:_on_server_npc_damage(
                 hook_value(context),
-                hook_value(damage_parameter)
+                hook_value(damage_info_parameter),
+                hook_value(defender_parameter)
             )
         end)
         if not ok then
             self.dispatchFailureCount =
                 self.dispatchFailureCount + 1
-            self:_log("DAMAGE_HOOK_EXCEPTION error="
+            self:_log("SERVER_NPC_DAMAGE_HOOK_EXCEPTION error="
                 .. tostring(response))
         end
     end
-    local ok, first, second = pcall(
+    local hook_ok, hook_first, hook_second = pcall(
         provider,
-        self.policy.hookPath,
-        callback
+        self.policy.authoritativeHookPath,
+        server_rpc_callback
     )
-    if not ok then
-        self.hookError = tostring(first)
-        self:_log("DAMAGE_HOOK_FAILED path="
-            .. self.policy.hookPath
-            .. " error=" .. tostring(first))
+    if not hook_ok or hook_first == nil then
+        self.serverRpcHookError = tostring(hook_first)
+        self:_log("SERVER_NPC_DAMAGE_HOOK_FAILED path="
+            .. tostring(self.policy.authoritativeHookPath)
+            .. " error=" .. tostring(hook_first))
         return false
     end
-    self.hook = {
-        firstId = first,
-        secondId = second,
-        callback = callback,
+    self.serverRpcHook = {
+        firstId = hook_first,
+        secondId = hook_second,
+        callback = server_rpc_callback,
     }
-    self.hookError = nil
-    self:_log("DAMAGE_HOOK_READY path="
-        .. self.policy.hookPath
-        .. " probe=true settlement="
+    self.serverRpcHookError = nil
+    self.eventNotifyHookError =
+        "diagnostic-only-not-registered"
+    self.actualProcessedHookError =
+        "rejected-build-24575825-wrapper-not-observed"
+    self.parameterDamageHookError =
+        "rejected-build-24575825-stable-but-ineffective"
+    self:_log("SERVER_NPC_DAMAGE_HOOK_READY path="
+        .. tostring(self.policy.authoritativeHookPath)
+        .. " settlement="
         .. tostring(self.policy.settlementEnabled == true))
     return true
 end
@@ -492,8 +940,10 @@ function FactionConsequenceNativeBinding:unbind_world(reason)
         self.router:unbind_actor(binding_id, target.actorRef)
     end
     self.targetsByActor = {}
+    self.targetsByActorKey = {}
     self.targetsByBinding = {}
     self.lastObservedAt = {}
+    self.lastDiagnosticObservedAt = {}
     return result(true, "native-consequence-world-unbound", {
         removedBindingCount = removed,
         detail = reason or "world-unload",
@@ -504,9 +954,35 @@ function FactionConsequenceNativeBinding:status()
     return {
         apiVersion = self.version,
         started = self.started,
-        hookReady = self.hook ~= nil,
-        hookPath = self.policy.hookPath,
-        hookError = self.hookError,
+        hookReady = self.serverRpcHook ~= nil,
+        authoritativeHookReady = self.serverRpcHook ~= nil,
+        eventNotifyHookReady = self.eventNotifyHook ~= nil,
+        parameterDamageHookReady =
+            self.parameterDamageHook ~= nil,
+        damageDelegateAlwaysHookReady =
+            self.damageDelegateAlwaysHook ~= nil,
+        actualProcessedHookReady = self.actualProcessedHook ~= nil,
+        serverRpcHookReady = self.serverRpcHook ~= nil,
+        diagnosticHookReady = self.hook ~= nil,
+        hookPath = self.policy.authoritativeHookPath,
+        authoritativeHookPath =
+            self.policy.authoritativeHookPath,
+        eventNotifyHookPath = self.policy.eventNotifyHookPath,
+        parameterDamageHookPath =
+            self.policy.parameterDamageHookPath,
+        damageDelegateAlwaysHookPath =
+            self.policy.damageDelegateAlwaysHookPath,
+        actualProcessedHookPath = self.policy.actualProcessedHookPath,
+        serverRpcHookPath = self.policy.authoritativeHookPath,
+        hookError = self.serverRpcHookError,
+        authoritativeHookError = self.serverRpcHookError,
+        eventNotifyHookError = self.eventNotifyHookError,
+        parameterDamageHookError =
+            self.parameterDamageHookError,
+        damageDelegateAlwaysHookError =
+            self.damageDelegateAlwaysHookError,
+        actualProcessedHookError = self.actualProcessedHookError,
+        serverRpcHookError = self.serverRpcHookError,
         sourceBuildId = self.policy.sourceBuildId,
         currentHostBuildId = self.policy.currentHostBuildId,
         currentHostSignatureVerified =
@@ -517,14 +993,29 @@ function FactionConsequenceNativeBinding:status()
         settlementGate = self.policy.settlementGate,
         registeredActorCount = count(self.targetsByBinding),
         observedCount = self.observedCount,
+        authoritativeObservedCount = self.authoritativeObservedCount,
+        diagnosticObservedCount = self.diagnosticObservedCount,
         settledCount = self.settledCount,
         gatedCount = self.gatedCount,
         ignoredUnregisteredCount = self.ignoredUnregisteredCount,
         rejectedSourceCount = self.rejectedSourceCount,
         debouncedCount = self.debouncedCount,
         dispatchFailureCount = self.dispatchFailureCount,
+        playerAttributionFailureCount =
+            self.playerAttributionFailureCount,
         exactRegisteredDefenderOnly = true,
-        directLocalPlayerOnly = true,
+        exactActorPathIdentity = true,
+        directPlayerActorOnly = true,
+        directLocalPlayerOnly = false,
+        directControllerPawnOnly = true,
+        remotePlayerControllerSupported = true,
+        exactServerPlayerContextAttribution =
+            self.capabilities.exactServerPlayerContextAttribution,
+        unresolvedPlayerContextFailsClosed =
+            self.capabilities.unresolvedPlayerContextFailsClosed,
+        processedActualDamageSupported = false,
+        serverNpcDamageSupported = true,
+        parameterComponentDamageSupported = false,
         broadActorScan = false,
         modelMayDispatch = false,
         PalworldSaveMutation = false,
@@ -532,7 +1023,14 @@ function FactionConsequenceNativeBinding:status()
 end
 
 FactionConsequenceNativeBinding.paths = {
+    characterDamagedServerEvent =
+        "/Script/Pal.PalEventNotify_Character:OnCharacterDamaged_ServerInternal",
+    parameterComponentDamage =
+        "/Script/Pal.PalCharacterParameterComponent:OnDamage",
     damage = "/Script/Pal.PalCharacterParameterComponent:OnDamage",
+    damageDelegateAlways = "/Script/Pal.PalDamageReactionComponent:CallOnDamageDelegateAlways",
+    actualProcessedDamage = "/Script/Pal.PalDamageReactionComponent:CallOnActualDamageProcessed_ToAll",
+    authoritativeDamage = "/Script/Pal.PalPlayerController:DamageReactionComponent_ProcessDamage_ToServer_ToNPC",
 }
 
 return FactionConsequenceNativeBinding
